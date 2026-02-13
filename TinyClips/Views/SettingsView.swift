@@ -66,6 +66,8 @@ struct SettingsView: View {
                     Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
                         .foregroundStyle(.secondary)
                 }
+                Link("GitHub Repository", destination: URL(string: "https://github.com/jamesmontemagno/tiny-clips-mac")!)
+                Link("Report an Issue", destination: URL(string: "https://github.com/jamesmontemagno/tiny-clips-mac/issues/new")!)
             }
         }
         .formStyle(.grouped)

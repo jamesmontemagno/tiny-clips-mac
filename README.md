@@ -1,22 +1,26 @@
 # TinyClips for macOS
 
+[![Build](https://github.com/jamesmontemagno/tiny-clips-mac/actions/workflows/build.yml/badge.svg)](https://github.com/jamesmontemagno/tiny-clips-mac/actions/workflows/build.yml)
+[![Release](https://github.com/jamesmontemagno/tiny-clips-mac/actions/workflows/release.yml/badge.svg)](https://github.com/jamesmontemagno/tiny-clips-mac/actions/workflows/release.yml)
+[![GitHub release](https://img.shields.io/github/v/release/jamesmontemagno/tiny-clips-mac?style=flat-square)](https://github.com/jamesmontemagno/tiny-clips-mac/releases/latest)
+![macOS](https://img.shields.io/badge/macOS-15.0+-blue?style=flat-square&logo=apple)
+![Swift](https://img.shields.io/badge/Swift-5.9-orange?style=flat-square&logo=swift)
+[![License: MIT](https://img.shields.io/github/license/jamesmontemagno/tiny-clips-mac?style=flat-square)](LICENSE)
+
 A lightweight macOS menu bar app for capturing screenshots (PNG), video (MP4), and animated GIFs of a selected screen region.
 
 ![](./docs/tinyclips.png)
-
-![macOS](https://img.shields.io/badge/macOS-15.0+-blue?style=flat-square&logo=apple)
-![Swift](https://img.shields.io/badge/Swift-5.9-orange?style=flat-square&logo=swift)
-
 
 ## Features
 
 - **Screenshot** — Select a region and capture a PNG screenshot
 - **Video Recording** — Record a screen region to MP4 with H.264 encoding
 - **GIF Recording** — Record a screen region as an animated GIF
+- **Video Trimmer** — Built-in trim editor to cut the start/end before saving
 - **Menu Bar App** — Lives in the menu bar with no Dock icon
 - **Region Selection** — Drag to select any portion of any screen
 - **Auto-Updates** — Built-in Sparkle integration for seamless updates
-- **Configurable** — Save location, clipboard, Finder reveal, GIF quality settings
+- **Configurable** — Save location, clipboard, Finder reveal, GIF quality, trimmer toggle
 
 ## Requirements
 
@@ -73,6 +77,7 @@ Download the latest release from the [Releases](https://github.com/jamesmontemag
 | GIF Frame Rate | 5–30 fps (default: 10) |
 | GIF Max Width | 320–1920 px (default: 640) |
 | Video Frame Rate | 24, 30, or 60 fps |
+| Open Trimmer | Show trim editor after video recording |
 
 ## Permissions
 
@@ -109,6 +114,7 @@ ScreenCaptureKit (SCStream / SCScreenshotManager)
 | `ScreenshotCapture.swift` | SCScreenshotManager → PNG |
 | `VideoRecorder.swift` | SCStream → AVAssetWriter → MP4 |
 | `GifWriter.swift` | SCStream → CGImageDestination → GIF |
+| `VideoTrimmerWindow.swift` | Post-recording trim editor for videos |
 | `CaptureSettings.swift` | Shared types + @AppStorage settings model |
 | `SaveService.swift` | File saving, clipboard, Finder, notifications |
 | `PermissionManager.swift` | Screen recording permission handling |
@@ -120,4 +126,6 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please feel free to submit a [Pull Request](https://github.com/jamesmontemagno/tiny-clips-mac/pulls).
+
+Found a bug or have a feature request? [Open an issue](https://github.com/jamesmontemagno/tiny-clips-mac/issues/new).
