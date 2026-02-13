@@ -42,6 +42,10 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Screenshot") {
+                Toggle("Open editor after capture", isOn: $settings.showScreenshotEditor)
+            }
+
             Section("Video") {
                 Picker("Frame rate:", selection: $settings.videoFrameRate) {
                     Text("24 fps").tag(24)
@@ -49,6 +53,7 @@ struct SettingsView: View {
                     Text("60 fps").tag(60)
                 }
                 Toggle("Record system audio", isOn: $settings.recordAudio)
+                Toggle("Record microphone", isOn: $settings.recordMicrophone)
                 Toggle("Open trimmer after recording", isOn: $settings.showTrimmer)
             }
 

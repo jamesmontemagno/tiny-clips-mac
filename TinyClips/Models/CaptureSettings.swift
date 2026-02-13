@@ -85,4 +85,6 @@ class CaptureSettings: ObservableObject {
     @AppStorage("videoFrameRate") var videoFrameRate: Int = 30
     @AppStorage("showTrimmer") var showTrimmer: Bool = true
     @AppStorage("recordAudio") var recordAudio: Bool = false
+    @AppStorage("recordMicrophone") var recordMicrophone: Bool = false
+    @AppStorage("showScreenshotEditor") var showScreenshotEditor: Bool = true
 }

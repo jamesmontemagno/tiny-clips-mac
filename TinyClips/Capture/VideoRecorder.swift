@@ -7,9 +7,12 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     private var stream: SCStream?
     private var writer: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
-    private var audioInput: AVAssetWriterInput?
+    private var systemAudioInput: AVAssetWriterInput?
+    private var micAudioInput: AVAssetWriterInput?
+    private var audioEngine: AVAudioEngine?
     private var hasStartedWriting = false
-    private var recordAudio = false
+    private var recordSystemAudio = false
+    private var recordMicrophone = false
     private var outputURL: URL?
     private let writingQueue = DispatchQueue(label: "com.tinyclips.video-writing")
 
@@ -23,8 +26,10 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         config.queueDepth = 8
         config.pixelFormat = kCVPixelFormatType_32BGRA
 
-        self.recordAudio = settings.recordAudio
-        if recordAudio {
+        self.recordSystemAudio = settings.recordAudio
+        self.recordMicrophone = settings.recordMicrophone
+
+        if recordSystemAudio {
             config.capturesAudio = true
             config.sampleRate = 48000
             config.channelCount = 2
@@ -44,7 +49,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         videoInput.expectsMediaDataInRealTime = true
         writer.add(videoInput)
 
-        if recordAudio {
+        if recordSystemAudio {
             let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: [
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
                 AVSampleRateKey: 48000,
@@ -53,7 +58,19 @@ class VideoRecorder: NSObject, @unchecked Sendable {
             ])
             audioInput.expectsMediaDataInRealTime = true
             writer.add(audioInput)
-            self.audioInput = audioInput
+            self.systemAudioInput = audioInput
+        }
+
+        if recordMicrophone {
+            let micInput = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: 48000,
+                AVNumberOfChannelsKey: 1,
+                AVEncoderBitRateKey: 128000,
+            ])
+            micInput.expectsMediaDataInRealTime = true
+            writer.add(micInput)
+            self.micAudioInput = micInput
         }
 
         self.writer = writer
@@ -62,14 +79,131 @@ class VideoRecorder: NSObject, @unchecked Sendable {
 
         let stream = SCStream(filter: filter, configuration: config, delegate: nil)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: writingQueue)
-        if recordAudio {
+        if recordSystemAudio {
             try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: writingQueue)
         }
         try await stream.startCapture()
         self.stream = stream
+
+        if recordMicrophone {
+            try startMicCapture()
+        }
+    }
+
+    private func startMicCapture() throws {
+        let engine = AVAudioEngine()
+        let inputNode = engine.inputNode
+        let inputFormat = inputNode.outputFormat(forBus: 0)
+
+        // Convert mic to 48kHz mono for AAC encoding
+        guard let targetFormat = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 48000,
+            channels: 1,
+            interleaved: false
+        ) else { return }
+
+        let converter = AVAudioConverter(from: inputFormat, to: targetFormat)
+
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, time in
+            guard let self, let micInput = self.micAudioInput, self.hasStartedWriting else { return }
+
+            // Convert to target format
+            let frameCount = AVAudioFrameCount(Double(buffer.frameLength) * 48000.0 / inputFormat.sampleRate)
+            guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) else { return }
+
+            var error: NSError?
+            converter?.convert(to: convertedBuffer, error: &error) { _, outStatus in
+                outStatus.pointee = .haveData
+                return buffer
+            }
+            guard error == nil else { return }
+
+            // Create CMSampleBuffer from the converted PCM buffer
+            guard let sampleBuffer = self.createSampleBuffer(from: convertedBuffer, presentationTime: time) else { return }
+
+            self.writingQueue.async {
+                if micInput.isReadyForMoreMediaData {
+                    micInput.append(sampleBuffer)
+                }
+            }
+        }
+
+        engine.prepare()
+        try engine.start()
+        self.audioEngine = engine
+    }
+
+    private func createSampleBuffer(from buffer: AVAudioPCMBuffer, presentationTime: AVAudioTime) -> CMSampleBuffer? {
+        guard let formatDesc = buffer.format.formatDescription as CMFormatDescription? else { return nil }
+
+        let frameCount = CMItemCount(buffer.frameLength)
+        let sampleRate = buffer.format.sampleRate
+
+        var timing = CMSampleTimingInfo(
+            duration: CMTime(value: CMTimeValue(frameCount), timescale: CMTimeScale(sampleRate)),
+            presentationTimeStamp: CMTime(seconds: Double(presentationTime.sampleTime) / sampleRate, preferredTimescale: CMTimeScale(sampleRate)),
+            decodeTimeStamp: .invalid
+        )
+
+        var sampleBuffer: CMSampleBuffer?
+        guard let audioBufferList = buffer.audioBufferList.pointee.mBuffers.mData else { return nil }
+
+        let dataSize = Int(buffer.audioBufferList.pointee.mBuffers.mDataByteSize)
+        let data = Data(bytes: audioBufferList, count: dataSize)
+
+        let blockBuffer: CMBlockBuffer?
+        var block: CMBlockBuffer?
+        data.withUnsafeBytes { rawPtr in
+            guard let baseAddress = rawPtr.baseAddress else { return }
+            CMBlockBufferCreateWithMemoryBlock(
+                allocator: kCFAllocatorDefault,
+                memoryBlock: nil,
+                blockLength: dataSize,
+                blockAllocator: kCFAllocatorDefault,
+                customBlockSource: nil,
+                offsetToData: 0,
+                dataLength: dataSize,
+                flags: 0,
+                blockBufferOut: &block
+            )
+            if let block {
+                CMBlockBufferReplaceDataBytes(
+                    with: baseAddress,
+                    blockBuffer: block,
+                    offsetIntoDestination: 0,
+                    dataLength: dataSize
+                )
+            }
+        }
+        blockBuffer = block
+
+        guard let blockBuffer else { return nil }
+
+        CMSampleBufferCreate(
+            allocator: kCFAllocatorDefault,
+            dataBuffer: blockBuffer,
+            dataReady: true,
+            makeDataReadyCallback: nil,
+            refcon: nil,
+            formatDescription: formatDesc,
+            sampleCount: frameCount,
+            sampleTimingEntryCount: 1,
+            sampleTimingArray: &timing,
+            sampleSizeEntryCount: 0,
+            sampleSizeArray: nil,
+            sampleBufferOut: &sampleBuffer
+        )
+
+        return sampleBuffer
     }
 
     func stop() async throws -> URL {
+        // Stop mic capture first
+        audioEngine?.inputNode.removeTap(onBus: 0)
+        audioEngine?.stop()
+        audioEngine = nil
+
         try await stream?.stopCapture()
         stream = nil
 
@@ -81,12 +215,14 @@ class VideoRecorder: NSObject, @unchecked Sendable {
             throw CaptureError.noFrames
         }
 
-        let audioInput = self.audioInput
+        let systemAudioInput = self.systemAudioInput
+        let micAudioInput = self.micAudioInput
 
         return try await withCheckedThrowingContinuation { continuation in
             writingQueue.async {
                 videoInput.markAsFinished()
-                audioInput?.markAsFinished()
+                systemAudioInput?.markAsFinished()
+                micAudioInput?.markAsFinished()
                 writer.finishWriting {
                     if writer.status == .completed {
                         continuation.resume(returning: outputURL)
@@ -127,8 +263,8 @@ extension VideoRecorder: SCStreamOutput {
             }
 
         case .audio:
-            guard hasStartedWriting, let audioInput, audioInput.isReadyForMoreMediaData else { return }
-            audioInput.append(sampleBuffer)
+            guard hasStartedWriting, let systemAudioInput, systemAudioInput.isReadyForMoreMediaData else { return }
+            systemAudioInput.append(sampleBuffer)
 
         @unknown default:
             break

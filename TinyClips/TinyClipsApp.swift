@@ -68,6 +68,7 @@ class CaptureManager: ObservableObject {
     private var gifWriter: GifWriter?
     private var stopPanel: StopRecordingPanel?
     private var trimmerWindow: VideoTrimmerWindow?
+    private var screenshotEditorWindow: ScreenshotEditorWindow?
 
     func takeScreenshot() {
         Task {
@@ -76,7 +77,11 @@ class CaptureManager: ObservableObject {
 
             do {
                 let url = try await ScreenshotCapture.capture(region: region)
-                SaveService.shared.handleSavedFile(url: url, type: .screenshot)
+                if CaptureSettings.shared.showScreenshotEditor {
+                    showScreenshotEditor(for: url)
+                } else {
+                    SaveService.shared.handleSavedFile(url: url, type: .screenshot)
+                }
             } catch {
                 SaveService.shared.showError("Screenshot failed: \(error.localizedDescription)")
             }
@@ -152,6 +157,25 @@ class CaptureManager: ObservableObject {
 
             isRecording = false
             dismissStopPanel()
+        }
+    }
+
+    private func showScreenshotEditor(for url: URL) {
+        let window = ScreenshotEditorWindow(imageURL: url) { [weak self] resultURL in
+            guard let self else { return }
+            if let resultURL {
+                SaveService.shared.handleSavedFile(url: resultURL, type: .screenshot)
+            } else {
+                try? FileManager.default.removeItem(at: url)
+            }
+            DispatchQueue.main.async {
+                self.screenshotEditorWindow = nil
+            }
+        }
+        self.screenshotEditorWindow = window
+        DispatchQueue.main.async {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate()
         }
     }
 

@@ -20,6 +20,8 @@
 		B1000000000000000000000B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000B /* Assets.xcassets */; };
 		B1000000000000000000000C /* SparkleController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000F /* SparkleController.swift */; };
 		B1000000000000000000000D /* VideoTrimmerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000010 /* VideoTrimmerWindow.swift */; };
+		B1000000000000000000000E /* ScreenshotEditorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* ScreenshotEditorWindow.swift */; };
+		B3EB92CF2F3FCA0B002723CD /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B3EB92CE2F3FCA0B002723CD /* Sparkle */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,6 +41,7 @@
 		A1000000000000000000000E /* TinyClips.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TinyClips.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000000F /* SparkleController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleController.swift; sourceTree = "<group>"; };
 		A10000000000000000000010 /* VideoTrimmerWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTrimmerWindow.swift; sourceTree = "<group>"; };
+		A10000000000000000000011 /* ScreenshotEditorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotEditorWindow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -46,6 +49,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B3EB92CF2F3FCA0B002723CD /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -89,6 +93,7 @@
 				A10000000000000000000003 /* SettingsView.swift */,
 				A10000000000000000000004 /* StopRecordingPanel.swift */,
 				A10000000000000000000010 /* VideoTrimmerWindow.swift */,
+			A10000000000000000000011 /* ScreenshotEditorWindow.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -166,6 +171,9 @@
 				Base,
 			);
 			mainGroup = C10000000000000000000001;
+			packageReferences = (
+				B3EB92CD2F3FCA0B002723CD /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			productRefGroup = C10000000000000000000007 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -203,6 +211,7 @@
 				B1000000000000000000000A /* PermissionManager.swift in Sources */,
 				B1000000000000000000000C /* SparkleController.swift in Sources */,
 				B1000000000000000000000D /* VideoTrimmerWindow.swift in Sources */,
+				B1000000000000000000000E /* ScreenshotEditorWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -391,6 +400,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B3EB92CD2F3FCA0B002723CD /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.8.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B3EB92CE2F3FCA0B002723CD /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B3EB92CD2F3FCA0B002723CD /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F10000000000000000000007 /* Project object */;
 }
