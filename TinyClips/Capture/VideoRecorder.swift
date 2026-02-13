@@ -86,7 +86,13 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         self.stream = stream
 
         if recordMicrophone {
-            try startMicCapture()
+            let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
+            if micGranted {
+                try startMicCapture()
+            } else {
+                self.recordMicrophone = false
+                self.micAudioInput = nil
+            }
         }
     }
 
