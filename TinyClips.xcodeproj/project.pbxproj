@@ -97,9 +97,9 @@
 				A10000000000000000000003 /* SettingsView.swift */,
 				A10000000000000000000004 /* StopRecordingPanel.swift */,
 				A10000000000000000000010 /* VideoTrimmerWindow.swift */,
-			A10000000000000000000011 /* ScreenshotEditorWindow.swift */,
-			A10000000000000000000012 /* GifTrimmerWindow.swift */,
-			A10000000000000000000013 /* StartRecordingPanel.swift */,
+				A10000000000000000000011 /* ScreenshotEditorWindow.swift */,
+				A10000000000000000000012 /* GifTrimmerWindow.swift */,
+				A10000000000000000000013 /* StartRecordingPanel.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -350,6 +350,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TinyClips/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Tiny Clips";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -374,6 +376,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TinyClips/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Tiny Clips";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

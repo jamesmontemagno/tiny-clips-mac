@@ -80,6 +80,7 @@ private struct Annotation: Identifiable {
     var lineWidth: CGFloat
     var text: String
     var points: [CGPoint] // for pencil
+    var fontSize: CGFloat = 16 // for text annotations
 }
 
 // MARK: - Editor View
@@ -125,9 +126,6 @@ private struct ScreenshotEditorView: View {
             ForEach(EditTool.allCases, id: \.self) { tool in
                 Button {
                     viewModel.selectedTool = tool
-                    if tool == .text {
-                        viewModel.isEditingText = true
-                    }
                 } label: {
                     VStack(spacing: 2) {
                         Image(systemName: tool.rawValue)
@@ -265,10 +263,30 @@ private struct CanvasView: View {
                 ForEach(viewModel.annotations.filter { $0.tool == .text }) { annotation in
                     let scaledRect = viewModel.scaledRect(annotation.rect, imageSize: imageSize, origin: origin)
                     Text(annotation.text)
-                        .font(.system(size: max(12, scaledRect.height * 0.6)))
+                        .font(.system(size: annotation.fontSize))
                         .foregroundColor(annotation.color)
                         .position(x: scaledRect.midX, y: scaledRect.midY)
                         .allowsHitTesting(false)
+                }
+
+                // Inline text editing field
+                if let textPos = viewModel.textEditPosition {
+                    let screenPos = CGPoint(
+                        x: origin.x + textPos.x * imageSize.width,
+                        y: origin.y + textPos.y * imageSize.height
+                    )
+                    InlineTextEditor(
+                        text: $viewModel.textEditValue,
+                        fontSize: $viewModel.textFontSize,
+                        color: viewModel.selectedColor,
+                        onCommit: {
+                            viewModel.commitTextAnnotation()
+                        },
+                        onCancel: {
+                            viewModel.cancelTextAnnotation()
+                        }
+                    )
+                    .position(x: screenPos.x, y: screenPos.y)
                 }
 
                 // Selection highlight for move tool
@@ -305,24 +323,43 @@ private struct CanvasView: View {
                     }
                 }
 
-                // Interaction overlay
+                // Interaction overlay — gestures must be before .position()
+                // so coordinates are in the overlay's local space (0..imageSize)
                 Color.clear
                     .contentShape(Rectangle())
                     .frame(width: imageSize.width, height: imageSize.height)
-                    .position(x: containerSize.width / 2, y: containerSize.height / 2)
                     .gesture(
                         DragGesture(minimumDistance: 1)
                             .onChanged { value in
-                                let normalizedStart = viewModel.normalizePoint(value.startLocation, imageSize: imageSize, origin: origin)
-                                let normalizedCurrent = viewModel.normalizePoint(value.location, imageSize: imageSize, origin: origin)
+                                let normalizedStart = viewModel.normalizePoint(value.startLocation, imageSize: imageSize)
+                                let normalizedCurrent = viewModel.normalizePoint(value.location, imageSize: imageSize)
                                 viewModel.handleDrag(start: normalizedStart, current: normalizedCurrent)
                             }
                             .onEnded { value in
-                                let normalizedStart = viewModel.normalizePoint(value.startLocation, imageSize: imageSize, origin: origin)
-                                let normalizedEnd = viewModel.normalizePoint(value.location, imageSize: imageSize, origin: origin)
+                                let normalizedStart = viewModel.normalizePoint(value.startLocation, imageSize: imageSize)
+                                let normalizedEnd = viewModel.normalizePoint(value.location, imageSize: imageSize)
                                 viewModel.handleDragEnd(start: normalizedStart, end: normalizedEnd)
                             }
                     )
+                    .simultaneousGesture(
+                        SpatialTapGesture()
+                            .onEnded { value in
+                                let normalized = viewModel.normalizePoint(value.location, imageSize: imageSize)
+                                if viewModel.selectedTool == .text && viewModel.textEditPosition == nil {
+                                    viewModel.textEditPosition = normalized
+                                    viewModel.textEditValue = ""
+                                    viewModel.isEditingText = true
+                                } else if viewModel.selectedTool == .move {
+                                    // Tap to select/deselect annotations
+                                    if let idx = viewModel.annotationIndex(at: normalized) {
+                                        viewModel.selectedAnnotationIndex = idx
+                                    } else {
+                                        viewModel.selectedAnnotationIndex = nil
+                                    }
+                                }
+                            }
+                    )
+                    .position(x: containerSize.width / 2, y: containerSize.height / 2)
             }
         }
     }
@@ -428,6 +465,9 @@ private class EditorViewModel: ObservableObject {
     @Published var currentAnnotation: Annotation?
     @Published var cropRect: CGRect?
     @Published var isEditingText = false
+    @Published var textEditPosition: CGPoint? // normalized click position
+    @Published var textEditValue: String = ""
+    @Published var textFontSize: CGFloat = 16
     @Published var selectedAnnotationIndex: Int?
 
     private var pencilPoints: [CGPoint] = []
@@ -449,11 +489,11 @@ private class EditorViewModel: ObservableObject {
         }
     }
 
-    // Convert screen point to 0..1 normalized coordinate within image bounds
-    func normalizePoint(_ point: CGPoint, imageSize: CGSize, origin: CGPoint) -> CGPoint {
+    // Convert point in overlay-local space to 0..1 normalized coordinate
+    func normalizePoint(_ point: CGPoint, imageSize: CGSize) -> CGPoint {
         CGPoint(
-            x: max(0, min(1, (point.x - origin.x) / imageSize.width)),
-            y: max(0, min(1, (point.y - origin.y) / imageSize.height))
+            x: max(0, min(1, point.x / imageSize.width)),
+            y: max(0, min(1, point.y / imageSize.height))
         )
     }
 
@@ -502,6 +542,10 @@ private class EditorViewModel: ObservableObject {
                         width: abs(ann.rect.width),
                         height: abs(ann.rect.height)
                     ).insetBy(dx: -0.02, dy: -0.02)
+                } else if ann.tool == .text {
+                    // Text annotations need a larger hit area since the visual text
+                    // size doesn't scale with the normalized rect
+                    hitRect = ann.rect.insetBy(dx: -0.03, dy: -0.03)
                 } else {
                     hitRect = ann.rect.insetBy(dx: -0.01, dy: -0.01)
                 }
@@ -618,15 +662,7 @@ private class EditorViewModel: ObservableObject {
             )
 
         case .text:
-            let rect = makeRect(from: start, to: current)
-            currentAnnotation = Annotation(
-                tool: .text,
-                rect: rect,
-                color: selectedColor,
-                lineWidth: lineWidth,
-                text: "Text",
-                points: []
-            )
+            break // text uses click, not drag
 
         default:
             let rect = makeRect(from: start, to: current)
@@ -666,21 +702,7 @@ private class EditorViewModel: ObservableObject {
             currentAnnotation = nil
 
         case .text:
-            let rect = makeRect(from: start, to: end)
-            if rect.width > 0.01 && rect.height > 0.01 {
-                promptForText { [weak self] text in
-                    guard let self, !text.isEmpty else { return }
-                    self.annotations.append(Annotation(
-                        tool: .text,
-                        rect: rect,
-                        color: self.selectedColor,
-                        lineWidth: self.lineWidth,
-                        text: text,
-                        points: []
-                    ))
-                }
-            }
-            currentAnnotation = nil
+            break // handled by SpatialTapGesture
 
         default:
             let rect = makeRect(from: start, to: end)
@@ -761,25 +783,33 @@ private class EditorViewModel: ObservableObject {
         )
     }
 
-    private func promptForText(completion: @escaping (String) -> Void) {
-        DispatchQueue.main.async {
-            let alert = NSAlert()
-            alert.messageText = "Add Text"
-            alert.informativeText = "Enter the text for the annotation:"
-            alert.addButton(withTitle: "Add")
-            alert.addButton(withTitle: "Cancel")
-
-            let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
-            textField.placeholderString = "Type here..."
-            alert.accessoryView = textField
-            alert.window.initialFirstResponder = textField
-
-            if alert.runModal() == .alertFirstButtonReturn {
-                completion(textField.stringValue)
-            } else {
-                completion("")
-            }
+    func commitTextAnnotation() {
+        guard let pos = textEditPosition, !textEditValue.isEmpty else {
+            cancelTextAnnotation()
+            return
         }
+        // Size the rect based on the chosen font size (normalized to image)
+        let normFontHeight = textFontSize / 500.0 // approximate normalized height
+        let textWidth = max(0.05, CGFloat(textEditValue.count) * normFontHeight * 0.6)
+        let rect = CGRect(x: pos.x, y: pos.y - normFontHeight / 2, width: textWidth, height: normFontHeight)
+        annotations.append(Annotation(
+            tool: .text,
+            rect: rect,
+            color: selectedColor,
+            lineWidth: lineWidth,
+            text: textEditValue,
+            points: [],
+            fontSize: textFontSize
+        ))
+        textEditPosition = nil
+        textEditValue = ""
+        isEditingText = false
+    }
+
+    func cancelTextAnnotation() {
+        textEditPosition = nil
+        textEditValue = ""
+        isEditingText = false
     }
 
     private func renderFinalImage() -> NSImage? {
@@ -937,7 +967,7 @@ private class EditorViewModel: ObservableObject {
 
         case .text:
             let str = annotation.text as NSString
-            let fontSize = max(14, pixelRect.height * 0.6)
+            let fontSize = annotation.fontSize * (fullSize.width / 800.0) // scale to pixel density
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: fontSize),
                 .foregroundColor: nsColor,
@@ -958,5 +988,73 @@ private class EditorViewModel: ObservableObject {
         case .crop, .move:
             break
         }
+    }
+}
+
+// MARK: - Inline Text Editor
+
+private struct InlineTextEditor: View {
+    @Binding var text: String
+    @Binding var fontSize: CGFloat
+    let color: Color
+    let onCommit: () -> Void
+    let onCancel: () -> Void
+
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 4) {
+            TextField("Type text…", text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: fontSize, weight: .medium))
+                .foregroundColor(color)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .frame(width: 180)
+                .focused($isFocused)
+                .onAppear { isFocused = true }
+                .onSubmit { onCommit() }
+                .onExitCommand { onCancel() }
+
+            // Font size control
+            HStack(spacing: 6) {
+                Button {
+                    fontSize = max(10, fontSize - 2)
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
+
+                Text("\(Int(fontSize))pt")
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32)
+
+                Button {
+                    fontSize = min(72, fontSize + 2)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 20, height: 20)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background {
+            RoundedRectangle(cornerRadius: 4)
+                .fill(.background)
+                .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(color.opacity(0.5), lineWidth: 1.5)
+                }
+        }
+            .onSubmit { onCommit() }
+            .onExitCommand { onCancel() }
     }
 }
