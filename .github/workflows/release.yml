@@ -1,0 +1,232 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+env:
+  SCHEME: TinyClips
+  PRODUCT_NAME: TinyClips
+  SPARKLE_VERSION: "2.8.1"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-26
+    environment: ci
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.2'
+
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: ${{ runner.os }}-deriveddata-${{ hashFiles('**/*.xcodeproj/project.pbxproj') }}
+          restore-keys: |
+            ${{ runner.os }}-deriveddata-
+
+      - name: Install Apple Developer ID certificate
+        env:
+          DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo -n "$DEVELOPER_ID_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $CERTIFICATE_PATH -P "$DEVELOPER_ID_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security list-keychain -d user -s $KEYCHAIN_PATH login.keychain
+
+          security find-identity -v -p codesigning $KEYCHAIN_PATH
+
+      - name: Resolve Swift packages
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project ${{ env.SCHEME }}.xcodeproj \
+            -scheme ${{ env.SCHEME }}
+
+      - name: Set Version Numbers
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            TAG="${{ github.event.inputs.version }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+
+          VERSION="${TAG#v}"
+          BUILD_NUMBER="${{ github.run_number }}"
+
+          echo "Setting MARKETING_VERSION to: $VERSION"
+          echo "Setting CURRENT_PROJECT_VERSION to: $BUILD_NUMBER"
+
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" TinyClips/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" TinyClips/Info.plist
+
+          echo "MARKETING_VERSION=$VERSION" >> $GITHUB_ENV
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Build and Archive
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild archive \
+            -project ${{ env.SCHEME }}.xcodeproj \
+            -scheme ${{ env.SCHEME }} \
+            -configuration Release \
+            -archivePath $RUNNER_TEMP/${{ env.PRODUCT_NAME }}.xcarchive \
+            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_IDENTITY=- \
+            DEVELOPMENT_TEAM=$APPLE_TEAM_ID \
+            MARKETING_VERSION=${{ env.MARKETING_VERSION }} \
+            CURRENT_PROJECT_VERSION=${{ env.BUILD_NUMBER }} \
+            OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime"
+
+      - name: Export Archive
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat > $RUNNER_TEMP/ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>developer-id</string>
+              <key>teamID</key>
+              <string>$APPLE_TEAM_ID</string>
+          </dict>
+          </plist>
+          EOF
+
+          xcodebuild -exportArchive \
+            -archivePath $RUNNER_TEMP/${{ env.PRODUCT_NAME }}.xcarchive \
+            -exportPath $RUNNER_TEMP/Export \
+            -exportOptionsPlist $RUNNER_TEMP/ExportOptions.plist \
+            -allowProvisioningUpdates
+
+      - name: Notarize App
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$RUNNER_TEMP/Export/${{ env.PRODUCT_NAME }}.app" \
+            "$RUNNER_TEMP/${{ env.PRODUCT_NAME }}-notarize.zip"
+
+          SUBMISSION_OUTPUT=$(xcrun notarytool submit "$RUNNER_TEMP/${{ env.PRODUCT_NAME }}-notarize.zip" \
+            --apple-id "$APPLE_ID" \
+            --password "$APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait \
+            --output-format json)
+
+          echo "$SUBMISSION_OUTPUT"
+
+          SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | jq -r '.id')
+          STATUS=$(echo "$SUBMISSION_OUTPUT" | jq -r '.status')
+
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "Notarization failed with status: $STATUS"
+            echo "Fetching notarization log..."
+            xcrun notarytool log "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APP_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID"
+            exit 1
+          fi
+
+          echo "Notarization succeeded!"
+          xcrun stapler staple "$RUNNER_TEMP/Export/${{ env.PRODUCT_NAME }}.app"
+
+      - name: Create Distribution ZIP
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$RUNNER_TEMP/Export/${{ env.PRODUCT_NAME }}.app" \
+            "$RUNNER_TEMP/${{ env.PRODUCT_NAME }}-${{ env.RELEASE_TAG }}.zip"
+
+      - name: Verify Signature
+        run: |
+          spctl -a -vv "$RUNNER_TEMP/Export/${{ env.PRODUCT_NAME }}.app"
+          codesign -dvv "$RUNNER_TEMP/Export/${{ env.PRODUCT_NAME }}.app"
+
+      - name: Download Sparkle
+        run: |
+          curl -L -o $RUNNER_TEMP/Sparkle.tar.xz \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${{ env.SPARKLE_VERSION }}/Sparkle-${{ env.SPARKLE_VERSION }}.tar.xz"
+          mkdir -p $RUNNER_TEMP/Sparkle
+          tar -xf $RUNNER_TEMP/Sparkle.tar.xz -C $RUNNER_TEMP/Sparkle
+
+      - name: Generate Appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          mkdir -p $RUNNER_TEMP/release-files
+          cp "$RUNNER_TEMP/${{ env.PRODUCT_NAME }}-${{ env.RELEASE_TAG }}.zip" $RUNNER_TEMP/release-files/
+
+          echo "$SPARKLE_PRIVATE_KEY" > $RUNNER_TEMP/sparkle_private_key
+
+          $RUNNER_TEMP/Sparkle/bin/generate_appcast \
+            --ed-key-file $RUNNER_TEMP/sparkle_private_key \
+            --download-url-prefix "https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/${{ env.RELEASE_TAG }}/" \
+            $RUNNER_TEMP/release-files
+
+          mv $RUNNER_TEMP/release-files/appcast.xml $RUNNER_TEMP/appcast.xml
+
+          rm -f $RUNNER_TEMP/sparkle_private_key
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: |
+            ${{ runner.temp }}/${{ env.PRODUCT_NAME }}-${{ env.RELEASE_TAG }}.zip
+            ${{ runner.temp }}/release-files/*.delta
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(env.RELEASE_TAG, 'beta') || contains(env.RELEASE_TAG, 'alpha') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update docs/appcast.xml
+        run: |
+          cp $RUNNER_TEMP/appcast.xml docs/appcast.xml
+
+      - name: Commit Updated Appcast
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update appcast.xml for ${{ env.RELEASE_TAG }}"
+          file_pattern: docs/appcast.xml
+          branch: main
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
