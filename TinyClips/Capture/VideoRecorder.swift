@@ -146,9 +146,17 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         let frameCount = CMItemCount(buffer.frameLength)
         let sampleRate = buffer.format.sampleRate
 
+        // Use host time to align with SCStream's clock (both based on mach_absolute_time)
+        let hostSeconds: Double
+        if presentationTime.isHostTimeValid {
+            hostSeconds = AVAudioTime.seconds(forHostTime: presentationTime.hostTime)
+        } else {
+            hostSeconds = CACurrentMediaTime()
+        }
+
         var timing = CMSampleTimingInfo(
             duration: CMTime(value: CMTimeValue(frameCount), timescale: CMTimeScale(sampleRate)),
-            presentationTimeStamp: CMTime(seconds: Double(presentationTime.sampleTime) / sampleRate, preferredTimescale: CMTimeScale(sampleRate)),
+            presentationTimeStamp: CMTime(seconds: hostSeconds, preferredTimescale: CMTimeScale(sampleRate)),
             decodeTimeStamp: .invalid
         )
 

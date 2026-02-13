@@ -40,6 +40,7 @@ struct SettingsView: View {
                         .monospacedDigit()
                         .frame(width: 60, alignment: .trailing)
                 }
+                Toggle("Open trimmer after recording", isOn: $settings.showGifTrimmer)
             }
 
             Section("Screenshot") {

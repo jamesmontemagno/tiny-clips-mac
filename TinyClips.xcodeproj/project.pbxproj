@@ -21,6 +21,8 @@
 		B1000000000000000000000C /* SparkleController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000000F /* SparkleController.swift */; };
 		B1000000000000000000000D /* VideoTrimmerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000010 /* VideoTrimmerWindow.swift */; };
 		B1000000000000000000000E /* ScreenshotEditorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* ScreenshotEditorWindow.swift */; };
+		B1000000000000000000000F /* GifTrimmerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* GifTrimmerWindow.swift */; };
+		B10000000000000000000010 /* StartRecordingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* StartRecordingPanel.swift */; };
 		B3EB92CF2F3FCA0B002723CD /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B3EB92CE2F3FCA0B002723CD /* Sparkle */; };
 /* End PBXBuildFile section */
 
@@ -42,6 +44,8 @@
 		A1000000000000000000000F /* SparkleController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SparkleController.swift; sourceTree = "<group>"; };
 		A10000000000000000000010 /* VideoTrimmerWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTrimmerWindow.swift; sourceTree = "<group>"; };
 		A10000000000000000000011 /* ScreenshotEditorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotEditorWindow.swift; sourceTree = "<group>"; };
+		A10000000000000000000012 /* GifTrimmerWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GifTrimmerWindow.swift; sourceTree = "<group>"; };
+		A10000000000000000000013 /* StartRecordingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartRecordingPanel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -94,6 +98,8 @@
 				A10000000000000000000004 /* StopRecordingPanel.swift */,
 				A10000000000000000000010 /* VideoTrimmerWindow.swift */,
 			A10000000000000000000011 /* ScreenshotEditorWindow.swift */,
+			A10000000000000000000012 /* GifTrimmerWindow.swift */,
+			A10000000000000000000013 /* StartRecordingPanel.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -212,6 +218,8 @@
 				B1000000000000000000000C /* SparkleController.swift in Sources */,
 				B1000000000000000000000D /* VideoTrimmerWindow.swift in Sources */,
 				B1000000000000000000000E /* ScreenshotEditorWindow.swift in Sources */,
+				B1000000000000000000000F /* GifTrimmerWindow.swift in Sources */,
+				B10000000000000000000010 /* StartRecordingPanel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

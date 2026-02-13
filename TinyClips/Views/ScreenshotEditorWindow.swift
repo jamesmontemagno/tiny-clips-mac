@@ -684,7 +684,9 @@ private class EditorViewModel: ObservableObject {
 
         default:
             let rect = makeRect(from: start, to: end)
-            if rect.width > 0.005 || rect.height > 0.005 {
+            let w = abs(rect.width)
+            let h = abs(rect.height)
+            if w > 0.005 || h > 0.005 {
                 annotations.append(Annotation(
                     tool: selectedTool,
                     rect: rect,

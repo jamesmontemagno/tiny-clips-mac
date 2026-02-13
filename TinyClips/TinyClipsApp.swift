@@ -66,8 +66,11 @@ class CaptureManager: ObservableObject {
 
     private var videoRecorder: VideoRecorder?
     private var gifWriter: GifWriter?
+    private var startPanel: StartRecordingPanel?
     private var stopPanel: StopRecordingPanel?
+    private var pendingVideoRegion: CaptureRegion?
     private var trimmerWindow: VideoTrimmerWindow?
+    private var gifTrimmerWindow: GifTrimmerWindow?
     private var screenshotEditorWindow: ScreenshotEditorWindow?
 
     func takeScreenshot() {
@@ -92,6 +95,17 @@ class CaptureManager: ObservableObject {
         Task {
             guard PermissionManager.shared.checkPermission() else { return }
             guard let region = await RegionSelector.selectRegion() else { return }
+
+            self.pendingVideoRegion = region
+            showStartPanel()
+        }
+    }
+
+    private func beginVideoRecording(region: CaptureRegion, systemAudio: Bool, microphone: Bool) {
+        Task {
+            let settings = CaptureSettings.shared
+            settings.recordAudio = systemAudio
+            settings.recordMicrophone = microphone
 
             let url = SaveService.shared.generateURL(for: .video)
 
@@ -147,8 +161,13 @@ class CaptureManager: ObservableObject {
             if let writer = gifWriter {
                 let url = SaveService.shared.generateURL(for: .gif)
                 do {
-                    try await writer.stop(outputURL: url)
-                    SaveService.shared.handleSavedFile(url: url, type: .gif)
+                    if CaptureSettings.shared.showGifTrimmer {
+                        let gifData = try await writer.stopAndReturnData()
+                        showGifTrimmer(gifData: gifData, outputURL: url)
+                    } else {
+                        try await writer.stop(outputURL: url)
+                        SaveService.shared.handleSavedFile(url: url, type: .gif)
+                    }
                 } catch {
                     SaveService.shared.showError("GIF save failed: \(error.localizedDescription)")
                 }
@@ -199,6 +218,45 @@ class CaptureManager: ObservableObject {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate()
         }
+    }
+
+    private func showGifTrimmer(gifData: GifCaptureData, outputURL: URL) {
+        let window = GifTrimmerWindow(gifData: gifData, outputURL: outputURL) { [weak self] resultURL in
+            guard let self else { return }
+            if let resultURL {
+                SaveService.shared.handleSavedFile(url: resultURL, type: .gif)
+            }
+            DispatchQueue.main.async {
+                self.gifTrimmerWindow = nil
+            }
+        }
+        self.gifTrimmerWindow = window
+        DispatchQueue.main.async {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate()
+        }
+    }
+
+    private func showStartPanel() {
+        let panel = StartRecordingPanel(
+            onStart: { [weak self] systemAudio, mic in
+                guard let self, let region = self.pendingVideoRegion else { return }
+                self.pendingVideoRegion = nil
+                self.dismissStartPanel()
+                self.beginVideoRecording(region: region, systemAudio: systemAudio, microphone: mic)
+            },
+            onCancel: { [weak self] in
+                self?.pendingVideoRegion = nil
+                self?.dismissStartPanel()
+            }
+        )
+        panel.show()
+        self.startPanel = panel
+    }
+
+    private func dismissStartPanel() {
+        startPanel?.dismiss()
+        startPanel = nil
     }
 
     private func showStopPanel() {

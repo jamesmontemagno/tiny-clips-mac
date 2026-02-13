@@ -87,4 +87,5 @@ class CaptureSettings: ObservableObject {
     @AppStorage("recordAudio") var recordAudio: Bool = false
     @AppStorage("recordMicrophone") var recordMicrophone: Bool = false
     @AppStorage("showScreenshotEditor") var showScreenshotEditor: Bool = true
+    @AppStorage("showGifTrimmer") var showGifTrimmer: Bool = true
 }

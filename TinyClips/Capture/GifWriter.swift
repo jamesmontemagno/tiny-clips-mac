@@ -44,6 +44,18 @@ class GifWriter: NSObject, @unchecked Sendable {
         try writeGIF(frames: capturedFrames, to: outputURL)
     }
 
+    func stopAndReturnData() async throws -> GifCaptureData {
+        try await stream?.stopCapture()
+        stream = nil
+
+        let capturedFrames = processingQueue.sync { self.frames }
+        guard !capturedFrames.isEmpty else {
+            throw CaptureError.noFrames
+        }
+
+        return GifCaptureData(frames: capturedFrames, frameDelay: frameDelay, maxWidth: maxWidth)
+    }
+
     private func writeGIF(frames: [CGImage], to url: URL) throws {
         let processedFrames: [CGImage]
         if CGFloat(frames[0].width) > maxWidth {
