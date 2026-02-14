@@ -83,6 +83,7 @@ class CaptureManager: ObservableObject {
     private var trimmerWindow: VideoTrimmerWindow?
     private var gifTrimmerWindow: GifTrimmerWindow?
     private var screenshotEditorWindow: ScreenshotEditorWindow?
+    private var countdownWindow: CountdownWindow?
 
     func takeScreenshot() {
         Task {
@@ -113,25 +114,30 @@ class CaptureManager: ObservableObject {
     }
 
     private func beginVideoRecording(region: CaptureRegion, systemAudio: Bool, microphone: Bool) {
-        Task {
-            let settings = CaptureSettings.shared
-            settings.recordAudio = systemAudio
-            settings.recordMicrophone = microphone
+        let settings = CaptureSettings.shared
+        settings.recordAudio = systemAudio
+        settings.recordMicrophone = microphone
 
-            let url = SaveService.shared.generateURL(for: .video)
+        let doRecord = { [weak self] in
+            guard let self else { return }
+            Task {
+                let url = SaveService.shared.generateURL(for: .video)
 
-            do {
-                let recorder = VideoRecorder()
-                self.videoRecorder = recorder
-                self.isRecording = true
+                do {
+                    let recorder = VideoRecorder()
+                    self.videoRecorder = recorder
+                    self.isRecording = true
 
-                try await recorder.start(region: region, outputURL: url)
-                showStopPanel()
-            } catch {
-                self.isRecording = false
-                SaveService.shared.showError("Video recording failed: \(error.localizedDescription)")
+                    try await recorder.start(region: region, outputURL: url)
+                    self.showStopPanel()
+                } catch {
+                    self.isRecording = false
+                    SaveService.shared.showError("Video recording failed: \(error.localizedDescription)")
+                }
             }
         }
+
+        showCountdownThen(for: .video, action: doRecord)
     }
 
     func startGifRecording() {
@@ -139,17 +145,24 @@ class CaptureManager: ObservableObject {
             guard PermissionManager.shared.checkPermission() else { return }
             guard let region = await RegionSelector.selectRegion() else { return }
 
-            do {
-                let writer = GifWriter()
-                self.gifWriter = writer
-                self.isRecording = true
+            let doRecord = { [weak self] in
+                guard let self else { return }
+                Task {
+                    do {
+                        let writer = GifWriter()
+                        self.gifWriter = writer
+                        self.isRecording = true
 
-                try await writer.start(region: region)
-                showStopPanel()
-            } catch {
-                self.isRecording = false
-                SaveService.shared.showError("GIF recording failed: \(error.localizedDescription)")
+                        try await writer.start(region: region)
+                        self.showStopPanel()
+                    } catch {
+                        self.isRecording = false
+                        SaveService.shared.showError("GIF recording failed: \(error.localizedDescription)")
+                    }
+                }
             }
+
+            showCountdownThen(for: .gif, action: doRecord)
         }
     }
 
@@ -290,5 +303,33 @@ class CaptureManager: ObservableObject {
     private func dismissStopPanel() {
         stopPanel?.close()
         stopPanel = nil
+    }
+
+    private func showCountdownThen(for type: CaptureType, action: @escaping () -> Void) {
+        let settings = CaptureSettings.shared
+        let enabled: Bool
+        let duration: Int
+
+        switch type {
+        case .video:
+            enabled = settings.videoCountdownEnabled
+            duration = settings.videoCountdownDuration
+        case .gif:
+            enabled = settings.gifCountdownEnabled
+            duration = settings.gifCountdownDuration
+        default:
+            action()
+            return
+        }
+
+        guard enabled else {
+            action()
+            return
+        }
+        let window = CountdownWindow(duration: duration) {
+            action()
+        }
+        self.countdownWindow = window
+        window.show()
     }
 }

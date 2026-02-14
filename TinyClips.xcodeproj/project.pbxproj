@@ -23,6 +23,7 @@
 		B1000000000000000000000E /* ScreenshotEditorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* ScreenshotEditorWindow.swift */; };
 		B1000000000000000000000F /* GifTrimmerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* GifTrimmerWindow.swift */; };
 		B10000000000000000000010 /* StartRecordingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* StartRecordingPanel.swift */; };
+		B10000000000000000000011 /* CountdownWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000014 /* CountdownWindow.swift */; };
 		B3EB92CF2F3FCA0B002723CD /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B3EB92CE2F3FCA0B002723CD /* Sparkle */; };
 /* End PBXBuildFile section */
 
@@ -46,6 +47,7 @@
 		A10000000000000000000011 /* ScreenshotEditorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotEditorWindow.swift; sourceTree = "<group>"; };
 		A10000000000000000000012 /* GifTrimmerWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GifTrimmerWindow.swift; sourceTree = "<group>"; };
 		A10000000000000000000013 /* StartRecordingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartRecordingPanel.swift; sourceTree = "<group>"; };
+		A10000000000000000000014 /* CountdownWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CountdownWindow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -100,6 +102,7 @@
 				A10000000000000000000011 /* ScreenshotEditorWindow.swift */,
 				A10000000000000000000012 /* GifTrimmerWindow.swift */,
 				A10000000000000000000013 /* StartRecordingPanel.swift */,
+				A10000000000000000000014 /* CountdownWindow.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -220,6 +223,7 @@
 				B1000000000000000000000E /* ScreenshotEditorWindow.swift in Sources */,
 				B1000000000000000000000F /* GifTrimmerWindow.swift in Sources */,
 				B10000000000000000000010 /* StartRecordingPanel.swift in Sources */,
+				B10000000000000000000011 /* CountdownWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -113,6 +113,10 @@ class CaptureSettings: ObservableObject {
     @AppStorage("screenshotFormat") var screenshotFormat: String = ImageFormat.png.rawValue
     @AppStorage("screenshotScale") var screenshotScale: Int = 100
     @AppStorage("jpegQuality") var jpegQuality: Double = 0.85
+    @AppStorage("videoCountdownEnabled") var videoCountdownEnabled: Bool = true
+    @AppStorage("videoCountdownDuration") var videoCountdownDuration: Int = 3
+    @AppStorage("gifCountdownEnabled") var gifCountdownEnabled: Bool = true
+    @AppStorage("gifCountdownDuration") var gifCountdownDuration: Int = 3
 
     var imageFormat: ImageFormat {
         get { ImageFormat(rawValue: screenshotFormat) ?? .png }
