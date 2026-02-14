@@ -172,43 +172,35 @@ private struct ScreenshotEditorView: View {
     private var bottomBar: some View {
         HStack {
             // Image info & save options
-            VStack(alignment: .leading, spacing: 4) {
-                if let img = viewModel.originalImage {
-                    let rep = img.representations.first
-                    Text("\(Int(rep?.pixelsWide ?? 0)) × \(Int(rep?.pixelsHigh ?? 0))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+            if let img = viewModel.originalImage {
+                let rep = img.representations.first
+                Text("\(Int(rep?.pixelsWide ?? 0)) × \(Int(rep?.pixelsHigh ?? 0))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
-                HStack(spacing: 12) {
-                    Picker("Format:", selection: $viewModel.saveFormat) {
-                        ForEach(ImageFormat.allCases, id: \.self) { format in
-                            Text(format.label).tag(format)
-                        }
-                    }
-                    .frame(width: 140)
-
-                    Picker("Scale:", selection: $viewModel.saveScale) {
-                        Text("100%").tag(100)
-                        Text("75%").tag(75)
-                        Text("50%").tag(50)
-                        Text("25%").tag(25)
-                    }
-                    .frame(width: 120)
+            Picker("Format:", selection: $viewModel.saveFormat) {
+                ForEach(ImageFormat.allCases, id: \.self) { format in
+                    Text(format.label).tag(format)
                 }
+            }
+            .frame(width: 140)
 
-                HStack(spacing: 4) {
-                    Text("Quality:")
-                        .font(.caption)
-                    Slider(value: $viewModel.saveJpegQuality, in: 0.1...1.0, step: 0.05)
-                        .frame(width: 140)
-                    Text("\(Int(viewModel.saveJpegQuality * 100))%")
-                        .font(.caption)
-                        .monospacedDigit()
-                        .frame(width: 32, alignment: .trailing)
-                }
-                .opacity(viewModel.saveFormat == .jpeg ? 1 : 0)
-                .allowsHitTesting(viewModel.saveFormat == .jpeg)
+            Picker("Scale:", selection: $viewModel.saveScale) {
+                Text("100%").tag(100)
+                Text("75%").tag(75)
+                Text("50%").tag(50)
+                Text("25%").tag(25)
+            }
+            .frame(width: 120)
+
+            if viewModel.saveFormat == .jpeg {
+                Slider(value: $viewModel.saveJpegQuality, in: 0.1...1.0, step: 0.05)
+                    .frame(width: 80)
+                Text("\(Int(viewModel.saveJpegQuality * 100))%")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .frame(width: 32, alignment: .trailing)
             }
 
             Spacer()
