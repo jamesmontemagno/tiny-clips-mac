@@ -100,8 +100,8 @@ jobs:
             -scheme ${{ env.SCHEME }} \
             -configuration Release \
             -archivePath $RUNNER_TEMP/${{ env.PRODUCT_NAME }}.xcarchive \
-            CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY=- \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
             DEVELOPMENT_TEAM=$APPLE_TEAM_ID \
             MARKETING_VERSION=${{ env.MARKETING_VERSION }} \
             CURRENT_PROJECT_VERSION=${{ env.BUILD_NUMBER }} \
