@@ -9,6 +9,7 @@ class StopRecordingPanel: NSPanel {
             backing: .buffered,
             defer: false
         )
+        self.isReleasedWhenClosed = false
         self.level = .floating
         self.isOpaque = false
         self.backgroundColor = .clear

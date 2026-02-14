@@ -14,6 +14,7 @@ class StartRecordingPanel: NSPanel {
         )
         self.onStart = onStart
         self.onCancel = onCancel
+        self.isReleasedWhenClosed = false
         self.level = .floating
         self.isOpaque = false
         self.backgroundColor = .clear
