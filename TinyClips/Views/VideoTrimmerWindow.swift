@@ -57,7 +57,7 @@ private struct VideoTrimmerView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Video preview
-            VideoPlayer(player: viewModel.player)
+            PlayerView(player: viewModel.player)
                 .frame(minWidth: 400, minHeight: 260)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .padding([.top, .horizontal])
@@ -365,6 +365,24 @@ private class TrimmerViewModel: ObservableObject {
                 completion(nil)
             }
         }
+    }
+}
+
+// MARK: - Player View (AVPlayerView wrapper)
+
+private struct PlayerView: NSViewRepresentable {
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        view.player = player
+        view.controlsStyle = .none
+        view.showsFullScreenToggleButton = false
+        return view
+    }
+
+    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+        nsView.player = player
     }
 }
 
