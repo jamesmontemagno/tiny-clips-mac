@@ -348,7 +348,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = NO;
+				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TinyClips/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Tiny Clips";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
@@ -374,7 +374,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = NO;
+				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TinyClips/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Tiny Clips";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
