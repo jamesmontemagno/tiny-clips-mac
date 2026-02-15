@@ -778,13 +778,27 @@ private class EditorViewModel: ObservableObject {
     }
 
     func copyToClipboard() {
-        guard let rendered = renderFinalImage() else { return }
+        guard let output = buildOutputImage() else { return }
+
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.writeObjects([rendered])
+        pasteboard.writeObjects([output.image])
     }
 
     func save() -> URL? {
+        guard let output = buildOutputImage() else { return nil }
+
+        // Build output URL with the chosen format extension
+        let saveURL = SaveService.shared.generateURL(for: .screenshot, fileExtension: saveFormat.rawValue)
+        do {
+            try output.data.write(to: saveURL)
+            return saveURL
+        } catch {
+            return nil
+        }
+    }
+
+    private func buildOutputImage() -> (image: NSImage, data: Data)? {
         guard let rendered = renderFinalImage() else { return nil }
 
         let scaledImage = scaleImage(rendered, to: saveScale)
@@ -799,16 +813,10 @@ private class EditorViewModel: ObservableObject {
             imageData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: saveJpegQuality])
         }
 
-        guard let data = imageData else { return nil }
+        guard let data = imageData,
+              let outputImage = NSImage(data: data) else { return nil }
 
-        // Build output URL with the chosen format extension
-        let saveURL = SaveService.shared.generateURL(for: .screenshot, fileExtension: saveFormat.rawValue)
-        do {
-            try data.write(to: saveURL)
-            return saveURL
-        } catch {
-            return nil
-        }
+        return (outputImage, data)
     }
 
     private func scaleImage(_ image: NSImage, to percent: Int) -> NSImage {
