@@ -272,11 +272,13 @@ private class TrimmerViewModel: ObservableObject {
             forInterval: CMTime(value: 1, timescale: 30),
             queue: .main
         ) { [weak self] time in
-            guard let self else { return }
-            self.currentTime = time.seconds
-            if self.isPlaying && time.seconds >= self.trimEnd {
-                self.player.pause()
-                self.isPlaying = false
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.currentTime = time.seconds
+                if self.isPlaying && time.seconds >= self.trimEnd {
+                    self.player.pause()
+                    self.isPlaying = false
+                }
             }
         }
     }
