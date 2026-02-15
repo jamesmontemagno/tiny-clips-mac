@@ -83,6 +83,8 @@ private struct Annotation: Identifiable {
     var fontSize: CGFloat = 16 // for text annotations
 }
 
+private typealias LinePoints = (start: CGPoint, end: CGPoint)
+
 // MARK: - Editor View
 
 private struct ScreenshotEditorView: View {
@@ -321,9 +323,9 @@ private struct CanvasView: View {
 
                     // Show endpoint handles for arrows and lines
                     if ann.tool == .arrow || ann.tool == .line {
-                        let sr = viewModel.scaledRect(ann.rect, imageSize: imageSize, origin: origin)
-                        let startPt = CGPoint(x: sr.origin.x, y: sr.origin.y)
-                        let endPt = CGPoint(x: sr.origin.x + sr.width, y: sr.origin.y + sr.height)
+                        let linePoints = viewModel.scaledLinePoints(for: ann, imageSize: imageSize, origin: origin)
+                        let startPt = linePoints.start
+                        let endPt = linePoints.end
 
                         // Tail handle (hollow circle)
                         Circle()
@@ -410,8 +412,9 @@ private struct CanvasView: View {
 
         case .arrow:
             var path = Path()
-            let start = CGPoint(x: scaledRect.origin.x, y: scaledRect.origin.y)
-            let end = CGPoint(x: scaledRect.origin.x + scaledRect.width, y: scaledRect.origin.y + scaledRect.height)
+            let linePoints = viewModel.scaledLinePoints(for: annotation, imageSize: imageSize, origin: origin)
+            let start = linePoints.start
+            let end = linePoints.end
             path.move(to: start)
             path.addLine(to: end)
 
@@ -433,8 +436,9 @@ private struct CanvasView: View {
 
         case .line:
             var path = Path()
-            path.move(to: CGPoint(x: scaledRect.origin.x, y: scaledRect.origin.y))
-            path.addLine(to: CGPoint(x: scaledRect.origin.x + scaledRect.width, y: scaledRect.origin.y + scaledRect.height))
+            let linePoints = viewModel.scaledLinePoints(for: annotation, imageSize: imageSize, origin: origin)
+            path.move(to: linePoints.start)
+            path.addLine(to: linePoints.end)
             context.stroke(path, with: .color(color), lineWidth: lineWidth)
 
         case .pencil:
@@ -538,6 +542,41 @@ private class EditorViewModel: ObservableObject {
         )
     }
 
+    func scaledPoint(_ point: CGPoint, imageSize: CGSize, origin: CGPoint) -> CGPoint {
+        CGPoint(
+            x: origin.x + point.x * imageSize.width,
+            y: origin.y + point.y * imageSize.height
+        )
+    }
+
+    func linePoints(for annotation: Annotation) -> LinePoints {
+        if annotation.points.count >= 2 {
+            return (annotation.points[0], annotation.points[1])
+        }
+        return (
+            start: annotation.rect.origin,
+            end: CGPoint(x: annotation.rect.origin.x + annotation.rect.width,
+                         y: annotation.rect.origin.y + annotation.rect.height)
+        )
+    }
+
+    func scaledLinePoints(for annotation: Annotation, imageSize: CGSize, origin: CGPoint) -> LinePoints {
+        let points = linePoints(for: annotation)
+        return (
+            start: scaledPoint(points.start, imageSize: imageSize, origin: origin),
+            end: scaledPoint(points.end, imageSize: imageSize, origin: origin)
+        )
+    }
+
+    func directedRect(from points: LinePoints) -> CGRect {
+        CGRect(
+            x: points.start.x,
+            y: points.start.y,
+            width: points.end.x - points.start.x,
+            height: points.end.y - points.start.y
+        )
+    }
+
     // Calculate display size maintaining aspect ratio
     func displaySize(in containerSize: CGSize) -> CGSize {
         guard let image = originalImage, image.size.width > 0, image.size.height > 0 else {
@@ -567,12 +606,11 @@ private class EditorViewModel: ObservableObject {
             } else {
                 let hitRect: CGRect
                 if ann.tool == .arrow || ann.tool == .line {
-                    hitRect = CGRect(
-                        x: min(ann.rect.origin.x, ann.rect.origin.x + ann.rect.width),
-                        y: min(ann.rect.origin.y, ann.rect.origin.y + ann.rect.height),
-                        width: abs(ann.rect.width),
-                        height: abs(ann.rect.height)
-                    ).insetBy(dx: -0.02, dy: -0.02)
+                        let line = linePoints(for: ann)
+                        if distanceFromPoint(point, toLineSegmentStart: line.start, end: line.end) <= 0.02 {
+                            return i
+                        }
+                        continue
                 } else if ann.tool == .text {
                     // Text annotations need a larger hit area since the visual text
                     // size doesn't scale with the normalized rect
@@ -623,9 +661,14 @@ private class EditorViewModel: ObservableObject {
 
                     let ann = annotations[idx]
                     if ann.tool == .arrow || ann.tool == .line {
+                        if dragOriginalPoints.count < 2 {
+                            let line = linePoints(for: ann)
+                            dragOriginalPoints = [line.start, line.end]
+                        }
                         // Check if near the head (end) or tail (start) endpoint
-                        let endPt = CGPoint(x: ann.rect.origin.x + ann.rect.width, y: ann.rect.origin.y + ann.rect.height)
-                        let startPt = CGPoint(x: ann.rect.origin.x, y: ann.rect.origin.y)
+                        let line = linePoints(for: ann)
+                        let endPt = line.end
+                        let startPt = line.start
                         let distToEnd = hypot(start.x - endPt.x, start.y - endPt.y)
                         let distToStart = hypot(start.x - startPt.x, start.y - startPt.y)
                         let threshold: CGFloat = 0.04
@@ -650,27 +693,24 @@ private class EditorViewModel: ObservableObject {
                 if isDraggingEndpoint {
                     // Move just the endpoint (rotate the arrow/line)
                     var ann = annotations[idx]
-                    ann.rect = CGRect(
-                        x: dragOriginalRect.origin.x,
-                        y: dragOriginalRect.origin.y,
-                        width: dragOriginalRect.width + dx,
-                        height: dragOriginalRect.height + dy
+                    let orig = originalLinePoints()
+                    let updated: LinePoints = (
+                        start: orig.start,
+                        end: CGPoint(x: orig.end.x + dx, y: orig.end.y + dy)
                     )
+                    ann.points = [updated.start, updated.end]
+                    ann.rect = directedRect(from: updated)
                     annotations[idx] = ann
                 } else if isDraggingStartpoint {
                     // Move the start point (reverse rotate)
                     var ann = annotations[idx]
-                    let origEnd = CGPoint(
-                        x: dragOriginalRect.origin.x + dragOriginalRect.width,
-                        y: dragOriginalRect.origin.y + dragOriginalRect.height
+                    let orig = originalLinePoints()
+                    let updated: LinePoints = (
+                        start: CGPoint(x: orig.start.x + dx, y: orig.start.y + dy),
+                        end: orig.end
                     )
-                    let newStart = CGPoint(x: dragOriginalRect.origin.x + dx, y: dragOriginalRect.origin.y + dy)
-                    ann.rect = CGRect(
-                        x: newStart.x,
-                        y: newStart.y,
-                        width: origEnd.x - newStart.x,
-                        height: origEnd.y - newStart.y
-                    )
+                    ann.points = [updated.start, updated.end]
+                    ann.rect = directedRect(from: updated)
                     annotations[idx] = ann
                 } else if isDraggingAnnotation {
                     moveAnnotation(at: idx, dx: dx, dy: dy)
@@ -703,7 +743,7 @@ private class EditorViewModel: ObservableObject {
                 color: selectedColor,
                 lineWidth: lineWidth,
                 text: "",
-                points: []
+                points: (selectedTool == .arrow || selectedTool == .line) ? [start, current] : []
             )
         }
     }
@@ -746,7 +786,7 @@ private class EditorViewModel: ObservableObject {
                     color: selectedColor,
                     lineWidth: lineWidth,
                     text: "",
-                    points: []
+                    points: (selectedTool == .arrow || selectedTool == .line) ? [start, end] : []
                 ))
             }
             currentAnnotation = nil
@@ -757,6 +797,14 @@ private class EditorViewModel: ObservableObject {
         var ann = annotations[index]
         if ann.tool == .pencil {
             ann.points = dragOriginalPoints.map { CGPoint(x: $0.x + dx, y: $0.y + dy) }
+        } else if ann.tool == .arrow || ann.tool == .line {
+            let base = originalLinePoints()
+            let moved: LinePoints = (
+                start: CGPoint(x: base.start.x + dx, y: base.start.y + dy),
+                end: CGPoint(x: base.end.x + dx, y: base.end.y + dy)
+            )
+            ann.points = [moved.start, moved.end]
+            ann.rect = directedRect(from: moved)
         } else {
             ann.rect = CGRect(
                 x: dragOriginalRect.origin.x + dx,
@@ -837,6 +885,29 @@ private class EditorViewModel: ObservableObject {
     }
 
     // MARK: - Private
+
+    private func originalLinePoints() -> LinePoints {
+        if dragOriginalPoints.count >= 2 {
+            return (dragOriginalPoints[0], dragOriginalPoints[1])
+        }
+        return (
+            start: dragOriginalRect.origin,
+            end: CGPoint(x: dragOriginalRect.origin.x + dragOriginalRect.width,
+                         y: dragOriginalRect.origin.y + dragOriginalRect.height)
+        )
+    }
+
+    private func distanceFromPoint(_ point: CGPoint, toLineSegmentStart start: CGPoint, end: CGPoint) -> CGFloat {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let len2 = dx * dx + dy * dy
+        if len2 <= 0.000001 {
+            return hypot(point.x - start.x, point.y - start.y)
+        }
+        let t = max(0, min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / len2))
+        let proj = CGPoint(x: start.x + t * dx, y: start.y + t * dy)
+        return hypot(point.x - proj.x, point.y - proj.y)
+    }
 
     private func makeRect(from start: CGPoint, to end: CGPoint) -> CGRect {
         // Arrow/line store start in origin and end in maxX/maxY (can be negative width/height)
@@ -956,13 +1027,14 @@ private class EditorViewModel: ObservableObject {
             ctx.strokeEllipse(in: pixelRect)
 
         case .arrow:
+            let line = linePoints(for: annotation)
             let start = CGPoint(
-                x: (annotation.rect.origin.x * fullSize.width) - cropOrigin.x,
-                y: outputSize.height - ((annotation.rect.origin.y * fullSize.height) - cropOrigin.y)
+                x: (line.start.x * fullSize.width) - cropOrigin.x,
+                y: outputSize.height - ((line.start.y * fullSize.height) - cropOrigin.y)
             )
             let end = CGPoint(
-                x: ((annotation.rect.origin.x + annotation.rect.width) * fullSize.width) - cropOrigin.x,
-                y: outputSize.height - (((annotation.rect.origin.y + annotation.rect.height) * fullSize.height) - cropOrigin.y)
+                x: (line.end.x * fullSize.width) - cropOrigin.x,
+                y: outputSize.height - ((line.end.y * fullSize.height) - cropOrigin.y)
             )
             ctx.move(to: start)
             ctx.addLine(to: end)
@@ -985,13 +1057,14 @@ private class EditorViewModel: ObservableObject {
             ctx.strokePath()
 
         case .line:
+            let line = linePoints(for: annotation)
             let start = CGPoint(
-                x: (annotation.rect.origin.x * fullSize.width) - cropOrigin.x,
-                y: outputSize.height - ((annotation.rect.origin.y * fullSize.height) - cropOrigin.y)
+                x: (line.start.x * fullSize.width) - cropOrigin.x,
+                y: outputSize.height - ((line.start.y * fullSize.height) - cropOrigin.y)
             )
             let end = CGPoint(
-                x: ((annotation.rect.origin.x + annotation.rect.width) * fullSize.width) - cropOrigin.x,
-                y: outputSize.height - (((annotation.rect.origin.y + annotation.rect.height) * fullSize.height) - cropOrigin.y)
+                x: (line.end.x * fullSize.width) - cropOrigin.x,
+                y: outputSize.height - ((line.end.y * fullSize.height) - cropOrigin.y)
             )
             ctx.move(to: start)
             ctx.addLine(to: end)
