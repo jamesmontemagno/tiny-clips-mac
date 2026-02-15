@@ -43,32 +43,12 @@ Direct/non-App-Store behavior is unchanged.
   - Without custom folder, screenshots/GIFs save to Pictures and videos save to Movies.
   - Custom folder selection persists across relaunch and new captures save there.
 
-## CI App Store pipeline
+## Xcode Cloud
 
-For fast validation on pull requests and branch pushes, use `.github/workflows/build-mas.yml` to compile the `TinyClipsMAS` scheme unsigned.
+Use Xcode Cloud for the Mac App Store (`TinyClipsMAS`) CI/CD path.
 
-Use `.github/workflows/app-store.yml` to archive and upload the `TinyClipsMAS` build to App Store Connect.
+### Notes
 
-### Xcode Cloud note
-
-If Xcode Cloud has automatic package resolution disabled, commit `TinyClips.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` to the branch being built. Without it, builds fail during dependency resolution with exit code 74.
-
-### Required GitHub secrets
-
-- `APPLE_TEAM_ID`
-- `APPSTORE_API_KEY_ID`
-- `APPSTORE_API_ISSUER_ID`
-- `APPSTORE_API_PRIVATE_KEY_BASE64` (base64 of `AuthKey_XXXXXX.p8`)
-- `MAS_APP_DIST_CERT_BASE64` (base64 of App Store distribution `.p12`)
-- `MAS_APP_DIST_CERT_PASSWORD`
-- `MAS_INSTALLER_CERT_BASE64` (base64 of installer distribution `.p12`)
-- `MAS_INSTALLER_CERT_PASSWORD`
-- `MAS_KEYCHAIN_PASSWORD`
-- `MAS_PROVISIONING_PROFILE_BASE64` (base64 of `.provisionprofile`)
-- `MAS_PROVISIONING_PROFILE_SPECIFIER`
-
-### Running the workflow
-
-- Trigger `App Store` workflow manually with `workflow_dispatch`.
-- Provide a semantic `version` (for `CFBundleShortVersionString`).
-- The workflow sets build number from `github.run_number`, archives `TinyClipsMAS`, exports with `method=app-store`, and uploads the generated `.pkg` via `xcrun altool`.
+- Ensure the cloud workflow builds the `TinyClipsMAS` scheme for App Store validation/distribution.
+- If automatic Swift package resolution is disabled, commit `TinyClips.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` to the branch being built.
+- In App Store Connect, make sure the app record and signing assets align with the MAS bundle identifier `com.refractored.tinyclips`.
