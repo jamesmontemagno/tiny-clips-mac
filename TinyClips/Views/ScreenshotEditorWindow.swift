@@ -92,6 +92,7 @@ private struct ScreenshotEditorView: View {
     let onDone: (URL?) -> Void
 
     @StateObject private var viewModel: EditorViewModel
+    @State private var isSaving = false
 
     init(imageURL: URL, onDone: @escaping (URL?) -> Void) {
         self.imageURL = imageURL
@@ -120,6 +121,12 @@ private struct ScreenshotEditorView: View {
             // Bottom bar
             bottomBar
                 .padding(12)
+        }
+        .disabled(isSaving)
+        .overlay {
+            if isSaving {
+                ProgressOverlayView(title: "Saving…")
+            }
         }
     }
 
@@ -219,11 +226,45 @@ private struct ScreenshotEditorView: View {
             }
 
             Button("Save") {
-                if let url = viewModel.save() {
-                    onDone(url)
-                }
+                saveImage()
             }
             .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    private func saveImage() {
+        guard !isSaving else { return }
+        isSaving = true
+
+        DispatchQueue.main.async {
+            if let url = viewModel.save() {
+                onDone(url)
+            } else {
+                isSaving = false
+            }
+        }
+    }
+}
+
+private struct ProgressOverlayView: View {
+    let title: String
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.2)
+                .ignoresSafeArea()
+
+            VStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.regular)
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
 }

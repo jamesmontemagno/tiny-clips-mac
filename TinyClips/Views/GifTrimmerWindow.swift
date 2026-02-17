@@ -58,6 +58,7 @@ private struct GifTrimmerView: View {
     let onDone: (URL?) -> Void
 
     @StateObject private var viewModel: GifTrimmerViewModel
+    @State private var isSaving = false
 
     init(gifData: GifCaptureData, outputURL: URL, onDone: @escaping (URL?) -> Void) {
         self.gifData = gifData
@@ -157,21 +158,36 @@ private struct GifTrimmerView: View {
                 .keyboardShortcut(.cancelAction)
 
                 Button("Save All Frames") {
-                    if let url = viewModel.exportGif(to: outputURL, trimmed: false) {
-                        onDone(url)
-                    }
+                    saveGif(trimmed: false)
                 }
 
                 Button("Save Trimmed") {
-                    if let url = viewModel.exportGif(to: outputURL, trimmed: true) {
-                        onDone(url)
-                    }
+                    saveGif(trimmed: true)
                 }
                 .keyboardShortcut(.defaultAction)
             }
             .padding()
         }
         .frame(minWidth: 560, minHeight: 420)
+        .disabled(isSaving)
+        .overlay {
+            if isSaving {
+                ProgressOverlayView(title: "Saving…")
+            }
+        }
+    }
+
+    private func saveGif(trimmed: Bool) {
+        guard !isSaving else { return }
+        isSaving = true
+
+        DispatchQueue.main.async {
+            if let url = viewModel.exportGif(to: outputURL, trimmed: trimmed) {
+                onDone(url)
+            } else {
+                isSaving = false
+            }
+        }
     }
 }
 
@@ -459,5 +475,28 @@ private struct CursorModifier: ViewModifier {
 private extension View {
     func cursor(_ cursor: NSCursor) -> some View {
         modifier(CursorModifier(cursor: cursor))
+    }
+}
+
+private struct ProgressOverlayView: View {
+    let title: String
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.2)
+                .ignoresSafeArea()
+
+            VStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.regular)
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
     }
 }

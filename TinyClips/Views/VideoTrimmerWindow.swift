@@ -164,6 +164,12 @@ private struct VideoTrimmerView: View {
             .padding()
         }
         .frame(minWidth: 560, minHeight: 420)
+        .disabled(viewModel.isExporting)
+        .overlay {
+            if viewModel.isExporting {
+                ProgressOverlayView(title: "Saving…")
+            }
+        }
     }
 
     private func formatTime(_ seconds: Double) -> String {
@@ -462,5 +468,28 @@ private struct CursorModifier: ViewModifier {
 private extension View {
     func cursor(_ cursor: NSCursor) -> some View {
         modifier(CursorModifier(cursor: cursor))
+    }
+}
+
+private struct ProgressOverlayView: View {
+    let title: String
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.2)
+                .ignoresSafeArea()
+
+            VStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.regular)
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
     }
 }
