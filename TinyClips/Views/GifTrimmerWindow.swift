@@ -135,7 +135,7 @@ private struct GifTrimmerView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .frame(width: 100)
+                .frame(width: 120)
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -303,7 +303,7 @@ private struct GifTrimSlider: View {
 
 @MainActor
 private class GifTrimmerViewModel: ObservableObject {
-    static let speedOptions: [Double] = [0.5, 1.0, 1.5, 2.0, 3.0]
+    static let speedOptions: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 
     static func speedLabel(for value: Double) -> String {
         if value == value.rounded() {

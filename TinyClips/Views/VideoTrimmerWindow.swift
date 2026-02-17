@@ -116,7 +116,7 @@ private struct VideoTrimmerView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .frame(width: 100)
+                .frame(width: 120)
                 .help("Changing speed affects export playback rate. Audio is only kept at 1x.")
 
                 if viewModel.speed != 1.0 {
@@ -282,7 +282,7 @@ private struct TrimRangeSlider: View {
 
 @MainActor
 private class TrimmerViewModel: ObservableObject {
-    static let speedOptions: [Double] = [0.5, 1.0, 1.5, 2.0, 3.0]
+    static let speedOptions: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
 
     static func speedLabel(for value: Double) -> String {
         if value == value.rounded() {
