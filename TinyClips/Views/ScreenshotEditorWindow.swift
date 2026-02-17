@@ -847,40 +847,52 @@ private class EditorViewModel: ObservableObject {
     }
 
     private func buildOutputImage() -> (image: NSImage, data: Data)? {
-        guard let rendered = renderFinalImage() else { return nil }
+        guard let renderedBitmap = renderFinalImage() else { return nil }
 
-        let scaledImage = scaleImage(rendered, to: saveScale)
-        guard let tiffData = scaledImage.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData) else { return nil }
+        let outputBitmap = scaleBitmap(renderedBitmap, to: saveScale)
 
         let imageData: Data?
         switch saveFormat {
         case .png:
-            imageData = bitmap.representation(using: .png, properties: [:])
+            imageData = outputBitmap.representation(using: .png, properties: [:])
         case .jpeg:
-            imageData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: saveJpegQuality])
+            imageData = outputBitmap.representation(using: .jpeg, properties: [.compressionFactor: saveJpegQuality])
         }
 
-        guard let data = imageData,
-              let outputImage = NSImage(data: data) else { return nil }
+        guard let data = imageData else { return nil }
+
+        let outputImage = NSImage(size: NSSize(width: outputBitmap.pixelsWide, height: outputBitmap.pixelsHigh))
+        outputImage.addRepresentation(outputBitmap)
 
         return (outputImage, data)
     }
 
-    private func scaleImage(_ image: NSImage, to percent: Int) -> NSImage {
-        guard percent < 100, percent > 0 else { return image }
+    private func scaleBitmap(_ bitmap: NSBitmapImageRep, to percent: Int) -> NSBitmapImageRep {
+        guard percent < 100, percent > 0 else { return bitmap }
         let factor = CGFloat(percent) / 100.0
-        let newW = Int(image.size.width * factor)
-        let newH = Int(image.size.height * factor)
-        guard newW > 0 && newH > 0 else { return image }
+        let newW = Int(CGFloat(bitmap.pixelsWide) * factor)
+        let newH = Int(CGFloat(bitmap.pixelsHigh) * factor)
+        guard newW > 0, newH > 0,
+              let scaled = NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: newW,
+                pixelsHigh: newH,
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+              ),
+              let sourceCG = bitmap.cgImage,
+              let cgContext = NSGraphicsContext(bitmapImageRep: scaled)?.cgContext else {
+            return bitmap
+        }
 
-        let scaled = NSImage(size: NSSize(width: newW, height: newH))
-        scaled.lockFocus()
-        image.draw(in: NSRect(x: 0, y: 0, width: newW, height: newH),
-                    from: NSRect(origin: .zero, size: image.size),
-                    operation: .copy,
-                    fraction: 1.0)
-        scaled.unlockFocus()
+        cgContext.interpolationQuality = .high
+        cgContext.draw(sourceCG, in: CGRect(x: 0, y: 0, width: newW, height: newH))
+        scaled.size = NSSize(width: newW, height: newH)
         return scaled
     }
 
@@ -951,7 +963,7 @@ private class EditorViewModel: ObservableObject {
         isEditingText = false
     }
 
-    private func renderFinalImage() -> NSImage? {
+    private func renderFinalImage() -> NSBitmapImageRep? {
         guard let original = originalImage, imagePixelSize.width > 0 else { return nil }
 
         let pixelW = imagePixelSize.width
@@ -974,13 +986,22 @@ private class EditorViewModel: ObservableObject {
         let outputH = Int(cropPixelRect.height)
         guard outputW > 0 && outputH > 0 else { return nil }
 
-        let result = NSImage(size: NSSize(width: outputW, height: outputH))
-        result.lockFocus()
-
-        guard let context = NSGraphicsContext.current?.cgContext else {
-            result.unlockFocus()
+        guard let result = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: outputW,
+            pixelsHigh: outputH,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ),
+        let context = NSGraphicsContext(bitmapImageRep: result)?.cgContext else {
             return nil
         }
+        result.size = NSSize(width: outputW, height: outputH)
 
         // Draw the original image (cropped)
         let drawRect = CGRect(x: 0, y: 0, width: outputW, height: outputH)
@@ -1001,7 +1022,6 @@ private class EditorViewModel: ObservableObject {
             drawAnnotationCG(annotation, in: context, cropOrigin: cropPixelRect.origin, outputSize: CGSize(width: outputW, height: outputH), fullSize: imagePixelSize)
         }
 
-        result.unlockFocus()
         return result
     }
 
