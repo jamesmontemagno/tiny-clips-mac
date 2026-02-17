@@ -127,7 +127,7 @@ class CaptureSettings: ObservableObject {
     @AppStorage("recordMicrophone") var recordMicrophone: Bool = false
     @AppStorage("showScreenshotEditor") var showScreenshotEditor: Bool = true
     @AppStorage("showGifTrimmer") var showGifTrimmer: Bool = true
-    @AppStorage("screenshotFormat") var screenshotFormat: String = ImageFormat.png.rawValue
+    @AppStorage("screenshotFormat") var screenshotFormat: String = ImageFormat.jpeg.rawValue
     @AppStorage("screenshotScale") var screenshotScale: Int = 100
     @AppStorage("jpegQuality") var jpegQuality: Double = 0.85
     @AppStorage("videoCountdownEnabled") var videoCountdownEnabled: Bool = true
@@ -143,7 +143,7 @@ class CaptureSettings: ObservableObject {
 #endif
 
     var imageFormat: ImageFormat {
-        get { ImageFormat(rawValue: screenshotFormat) ?? .png }
+        get { ImageFormat(rawValue: screenshotFormat) ?? .jpeg }
         set { screenshotFormat = newValue.rawValue }
     }
 
@@ -164,7 +164,7 @@ class CaptureSettings: ObservableObject {
         recordMicrophone = false
         showScreenshotEditor = true
         showGifTrimmer = true
-        screenshotFormat = ImageFormat.png.rawValue
+        screenshotFormat = ImageFormat.jpeg.rawValue
         screenshotScale = 100
         jpegQuality = 0.85
         videoCountdownEnabled = true
