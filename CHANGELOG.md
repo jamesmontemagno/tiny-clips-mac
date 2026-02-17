@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.0.13 - 2026-02-16
+
+### Added
+- Speed control for GIF and video trimming with multiple speed options (0.5x, 0.75x, 1x, 1.1x, 1.25x, 1.5x, 2x).
+- Immediate save setting for screenshots and GIFs with option to skip editor.
+- Saving state and progress overlay to GIF and screenshot editors.
+
+### Improved
+- Enhanced screenshot and GIF saving options with better editor toggle controls.
+- GIF and video trimmer speed options and playback speed handling.
+- Image rendering and scaling in EditorViewModel for better visual fidelity.
+- Trimmer window frame width adjustments for better usability.
+
+### Changed
+- Default screenshot format changed from PNG to JPEG for faster saves.
+
 ## v0.0.12 - 2026-02-15
 
 ### Added
