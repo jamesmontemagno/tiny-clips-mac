@@ -169,6 +169,9 @@ private struct GifTrimmerView: View {
             .padding()
         }
         .frame(minWidth: 560, minHeight: 420)
+        .onChange(of: viewModel.speed) { _, _ in
+            viewModel.restartPlaybackTimerIfNeeded()
+        }
         .disabled(isSaving)
         .overlay {
             if isSaving {
@@ -300,16 +303,13 @@ private struct GifTrimSlider: View {
 
 @MainActor
 private class GifTrimmerViewModel: ObservableObject {
-    static let speedOptions: [Double] = (1...20).map { Double($0) / 4.0 }
+    static let speedOptions: [Double] = [0.5, 1.0, 1.5, 2.0, 3.0]
 
     static func speedLabel(for value: Double) -> String {
-        if value.rounded() == value {
+        if value == value.rounded() {
             return "\(Int(value))x"
         }
-        if (value * 10).rounded() == value * 10 {
-            return String(format: "%.1fx", value)
-        }
-        return String(format: "%.2fx", value)
+        return String(format: "%.1fx", value)
     }
 
     let gifData: GifCaptureData
@@ -318,12 +318,7 @@ private class GifTrimmerViewModel: ObservableObject {
     @Published var trimStartFrame: Int = 0
     @Published var trimEndFrame: Int = 0
     @Published var isPlaying = false
-    @Published var speed: Double = 1.0 {
-        didSet {
-            speed = min(max(speed, 0.25), 5.0)
-            restartPlaybackTimerIfNeeded()
-        }
-    }
+    @Published var speed: Double = 1.0
 
     var totalFrames: Int { gifData.frames.count }
     var trimmedFrameCount: Int { max(0, trimEndFrame - trimStartFrame + 1) }
@@ -377,7 +372,7 @@ private class GifTrimmerViewModel: ObservableObject {
         playbackTimer = nil
     }
 
-    private func restartPlaybackTimerIfNeeded() {
+    func restartPlaybackTimerIfNeeded() {
         guard isPlaying else { return }
         playbackTimer?.invalidate()
         playbackTimer = Timer.scheduledTimer(withTimeInterval: effectiveFrameDelay, repeats: true) { [weak self] _ in

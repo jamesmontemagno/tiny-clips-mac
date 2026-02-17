@@ -164,6 +164,9 @@ private struct VideoTrimmerView: View {
             .padding()
         }
         .frame(minWidth: 560, minHeight: 420)
+        .onChange(of: viewModel.speed) { _, _ in
+            viewModel.applySpeedChange()
+        }
         .disabled(viewModel.isExporting)
         .overlay {
             if viewModel.isExporting {
@@ -279,16 +282,13 @@ private struct TrimRangeSlider: View {
 
 @MainActor
 private class TrimmerViewModel: ObservableObject {
-    static let speedOptions: [Double] = (1...20).map { Double($0) / 4.0 }
+    static let speedOptions: [Double] = [0.5, 1.0, 1.5, 2.0, 3.0]
 
     static func speedLabel(for value: Double) -> String {
-        if value.rounded() == value {
+        if value == value.rounded() {
             return "\(Int(value))x"
         }
-        if (value * 10).rounded() == value * 10 {
-            return String(format: "%.1fx", value)
-        }
-        return String(format: "%.2fx", value)
+        return String(format: "%.1fx", value)
     }
 
     let player: AVPlayer
@@ -301,13 +301,12 @@ private class TrimmerViewModel: ObservableObject {
     @Published var trimEnd: Double = 0
     @Published var isPlaying = false
     @Published var isExporting = false
-    @Published var speed: Double = 1.0 {
-        didSet {
-            speed = min(max(speed, 0.25), 5.0)
-            player.isMuted = speed != 1.0
-            if isPlaying {
-                player.rate = Float(speed)
-            }
+    @Published var speed: Double = 1.0
+
+    func applySpeedChange() {
+        player.isMuted = speed != 1.0
+        if isPlaying {
+            player.rate = Float(speed)
         }
     }
 
