@@ -87,7 +87,7 @@ private struct GifTrimmerView: View {
                 Text("Frame \(viewModel.currentFrameIndex + 1) of \(viewModel.totalFrames)")
                     .monospacedDigit()
                 Spacer()
-                Text("\(String(format: "%.1f", Double(viewModel.totalFrames) * gifData.frameDelay))s total")
+                Text("\(String(format: "%.1f", viewModel.totalDurationSeconds))s total")
                     .monospacedDigit()
             }
             .font(.caption)
@@ -113,8 +113,7 @@ private struct GifTrimmerView: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
                 Spacer()
-                let trimmedCount = viewModel.trimEndFrame - viewModel.trimStartFrame + 1
-                Text("\(trimmedCount) frames (\(String(format: "%.1f", Double(trimmedCount) * gifData.frameDelay))s)")
+                Text("\(viewModel.trimmedFrameCount) frames (\(String(format: "%.1f", viewModel.trimmedDurationSeconds))s)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -124,6 +123,22 @@ private struct GifTrimmerView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 2)
+
+            HStack {
+                Text("Speed")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("Speed", selection: $viewModel.speed) {
+                    ForEach(GifTrimmerViewModel.speedOptions, id: \.self) { speed in
+                        Text(GifTrimmerViewModel.speedLabel(for: speed)).tag(speed)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 100)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
 
             Divider()
                 .padding(.top, 10)
@@ -267,15 +282,38 @@ private struct GifTrimSlider: View {
 
 // MARK: - ViewModel
 
+@MainActor
 private class GifTrimmerViewModel: ObservableObject {
+    static let speedOptions: [Double] = (1...20).map { Double($0) / 4.0 }
+
+    static func speedLabel(for value: Double) -> String {
+        if value.rounded() == value {
+            return "\(Int(value))x"
+        }
+        if (value * 10).rounded() == value * 10 {
+            return String(format: "%.1fx", value)
+        }
+        return String(format: "%.2fx", value)
+    }
+
     let gifData: GifCaptureData
 
     @Published var currentFrameIndex: Int = 0
     @Published var trimStartFrame: Int = 0
     @Published var trimEndFrame: Int = 0
     @Published var isPlaying = false
+    @Published var speed: Double = 1.0 {
+        didSet {
+            speed = min(max(speed, 0.25), 5.0)
+            restartPlaybackTimerIfNeeded()
+        }
+    }
 
     var totalFrames: Int { gifData.frames.count }
+    var trimmedFrameCount: Int { max(0, trimEndFrame - trimStartFrame + 1) }
+    var effectiveFrameDelay: Double { max(0.01, gifData.frameDelay / speed) }
+    var totalDurationSeconds: Double { Double(totalFrames) * effectiveFrameDelay }
+    var trimmedDurationSeconds: Double { Double(trimmedFrameCount) * effectiveFrameDelay }
 
     var currentFrameImage: NSImage? {
         guard currentFrameIndex >= 0, currentFrameIndex < gifData.frames.count else { return nil }
@@ -305,7 +343,7 @@ private class GifTrimmerViewModel: ObservableObject {
     private func startPlayback() {
         isPlaying = true
         currentFrameIndex = trimStartFrame
-        playbackTimer = Timer.scheduledTimer(withTimeInterval: gifData.frameDelay, repeats: true) { [weak self] _ in
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: effectiveFrameDelay, repeats: true) { [weak self] _ in
             guard let self else { return }
             DispatchQueue.main.async {
                 if self.currentFrameIndex >= self.trimEndFrame {
@@ -321,6 +359,21 @@ private class GifTrimmerViewModel: ObservableObject {
         isPlaying = false
         playbackTimer?.invalidate()
         playbackTimer = nil
+    }
+
+    private func restartPlaybackTimerIfNeeded() {
+        guard isPlaying else { return }
+        playbackTimer?.invalidate()
+        playbackTimer = Timer.scheduledTimer(withTimeInterval: effectiveFrameDelay, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                if self.currentFrameIndex >= self.trimEndFrame {
+                    self.currentFrameIndex = self.trimStartFrame
+                } else {
+                    self.currentFrameIndex += 1
+                }
+            }
+        }
     }
 
     func exportGif(to url: URL, trimmed: Bool) -> URL? {
@@ -366,7 +419,7 @@ private class GifTrimmerViewModel: ObservableObject {
         for frame in processedFrames {
             let frameProperties: [String: Any] = [
                 kCGImagePropertyGIFDictionary as String: [
-                    kCGImagePropertyGIFDelayTime: gifData.frameDelay,
+                    kCGImagePropertyGIFDelayTime: effectiveFrameDelay,
                 ],
             ]
             CGImageDestinationAddImage(destination, frame, frameProperties as CFDictionary)

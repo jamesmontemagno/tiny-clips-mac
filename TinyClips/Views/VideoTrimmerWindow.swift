@@ -95,7 +95,7 @@ private struct VideoTrimmerView: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
                 Spacer()
-                Text("Duration: \(formatTime(viewModel.trimEnd - viewModel.trimStart))")
+                Text("Duration: \(formatTime(viewModel.trimmedOutputDuration))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -105,6 +105,30 @@ private struct VideoTrimmerView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 2)
+
+            HStack {
+                Text("Speed")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("Speed", selection: $viewModel.speed) {
+                    ForEach(TrimmerViewModel.speedOptions, id: \.self) { speed in
+                        Text(TrimmerViewModel.speedLabel(for: speed)).tag(speed)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 100)
+                .help("Changing speed affects export playback rate. Audio is only kept at 1x.")
+
+                if viewModel.speed != 1.0 {
+                    Text("Audio will be removed on export")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
 
             Divider()
                 .padding(.top, 10)
@@ -249,6 +273,18 @@ private struct TrimRangeSlider: View {
 
 @MainActor
 private class TrimmerViewModel: ObservableObject {
+    static let speedOptions: [Double] = (1...20).map { Double($0) / 4.0 }
+
+    static func speedLabel(for value: Double) -> String {
+        if value.rounded() == value {
+            return "\(Int(value))x"
+        }
+        if (value * 10).rounded() == value * 10 {
+            return String(format: "%.1fx", value)
+        }
+        return String(format: "%.2fx", value)
+    }
+
     let player: AVPlayer
     let asset: AVAsset
     let sourceURL: URL
@@ -259,6 +295,19 @@ private class TrimmerViewModel: ObservableObject {
     @Published var trimEnd: Double = 0
     @Published var isPlaying = false
     @Published var isExporting = false
+    @Published var speed: Double = 1.0 {
+        didSet {
+            speed = min(max(speed, 0.25), 5.0)
+            player.isMuted = speed != 1.0
+            if isPlaying {
+                player.rate = Float(speed)
+            }
+        }
+    }
+
+    var trimmedOutputDuration: Double {
+        max(0, (trimEnd - trimStart) / speed)
+    }
 
     private var timeObserver: Any?
 
@@ -316,7 +365,8 @@ private class TrimmerViewModel: ObservableObject {
             isPlaying = false
         } else {
             seek(to: trimStart)
-            player.play()
+            player.isMuted = speed != 1.0
+            player.playImmediately(atRate: Float(speed))
             isPlaying = true
         }
     }
@@ -344,9 +394,18 @@ private class TrimmerViewModel: ObservableObject {
                     return
                 }
                 try compositionTrack.insertTimeRange(timeRange, of: track, at: .zero)
+                let preferredTransform = try await track.load(.preferredTransform)
+                compositionTrack.preferredTransform = preferredTransform
 
-                // Also copy audio if present
-                if let audioTrack = try? await asset.loadTracks(withMediaType: .audio).first,
+                let targetDuration = CMTimeMultiplyByFloat64(timeRange.duration, multiplier: 1.0 / speed)
+                compositionTrack.scaleTimeRange(
+                    CMTimeRange(start: .zero, duration: timeRange.duration),
+                    toDuration: targetDuration
+                )
+
+                // Copy audio only at 1x speed
+                if speed == 1.0,
+                   let audioTrack = try? await asset.loadTracks(withMediaType: .audio).first,
                    let compositionAudio = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
                     try? compositionAudio.insertTimeRange(timeRange, of: audioTrack, at: .zero)
                 }
