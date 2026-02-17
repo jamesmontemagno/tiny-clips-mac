@@ -303,7 +303,7 @@ private struct GifTrimSlider: View {
 
 @MainActor
 private class GifTrimmerViewModel: ObservableObject {
-    static let speedOptions: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
+    static let speedOptions: [Double] = [0.5, 0.75, 1.0, 1.1, 1.25, 1.5, 2.0]
 
     static func speedLabel(for value: Double) -> String {
         if value == value.rounded() {
