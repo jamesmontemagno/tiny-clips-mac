@@ -1,5 +1,16 @@
 import SwiftUI
 
+// MARK: - Binding Helpers
+
+private extension Binding where Value == Int {
+    var doubleValue: Binding<Double> {
+        Binding<Double>(
+            get: { Double(wrappedValue) },
+            set: { wrappedValue = Int($0) }
+        )
+    }
+}
+
 enum SettingsTab: String, CaseIterable {
     case general = "General"
     case screenshot = "Screenshot"
@@ -111,6 +122,14 @@ struct SettingsView: View {
     private var screenshotSection: some View {
         Section {
             Toggle("Open editor after capture", isOn: $settings.showScreenshotEditor)
+                .onChange(of: settings.showScreenshotEditor) { _, isEnabled in
+                    if !isEnabled {
+                        settings.saveImmediatelyScreenshot = true
+                    }
+                }
+
+            Toggle("Save immediately", isOn: $settings.saveImmediatelyScreenshot)
+                .disabled(!settings.showScreenshotEditor)
 
             Picker("Default format:", selection: $settings.screenshotFormat) {
                 ForEach(ImageFormat.allCases, id: \.rawValue) { format in
@@ -150,6 +169,13 @@ struct SettingsView: View {
             Toggle("Record system audio", isOn: $settings.recordAudio)
             Toggle("Record microphone", isOn: $settings.recordMicrophone)
             Toggle("Open trimmer after recording", isOn: $settings.showTrimmer)
+                .onChange(of: settings.showTrimmer) { _, isEnabled in
+                    if !isEnabled {
+                        settings.saveImmediatelyVideo = true
+                    }
+                }
+            Toggle("Save immediately", isOn: $settings.saveImmediatelyVideo)
+                .disabled(!settings.showTrimmer)
         }
 
         Section("Countdown") {
@@ -158,10 +184,7 @@ struct SettingsView: View {
                 HStack {
                     Text("Duration:")
                     Slider(
-                        value: Binding(
-                            get: { Double(settings.videoCountdownDuration) },
-                            set: { settings.videoCountdownDuration = Int($0) }
-                        ),
+                        value: $settings.videoCountdownDuration.doubleValue,
                         in: 1...10,
                         step: 1
                     )
@@ -200,6 +223,13 @@ struct SettingsView: View {
                     .frame(width: 60, alignment: .trailing)
             }
             Toggle("Open trimmer after recording", isOn: $settings.showGifTrimmer)
+                .onChange(of: settings.showGifTrimmer) { _, isEnabled in
+                    if !isEnabled {
+                        settings.saveImmediatelyGif = true
+                    }
+                }
+            Toggle("Save immediately", isOn: $settings.saveImmediatelyGif)
+                .disabled(!settings.showGifTrimmer)
         }
 
         Section("Countdown") {
@@ -208,10 +238,7 @@ struct SettingsView: View {
                 HStack {
                     Text("Duration:")
                     Slider(
-                        value: Binding(
-                            get: { Double(settings.gifCountdownDuration) },
-                            set: { settings.gifCountdownDuration = Int($0) }
-                        ),
+                        value: $settings.gifCountdownDuration.doubleValue,
                         in: 1...10,
                         step: 1
                     )

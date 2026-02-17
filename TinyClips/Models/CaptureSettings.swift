@@ -127,6 +127,9 @@ class CaptureSettings: ObservableObject {
     @AppStorage("recordMicrophone") var recordMicrophone: Bool = false
     @AppStorage("showScreenshotEditor") var showScreenshotEditor: Bool = true
     @AppStorage("showGifTrimmer") var showGifTrimmer: Bool = true
+    @AppStorage("saveImmediatelyScreenshot") var saveImmediatelyScreenshot: Bool = true
+    @AppStorage("saveImmediatelyVideo") var saveImmediatelyVideo: Bool = true
+    @AppStorage("saveImmediatelyGif") var saveImmediatelyGif: Bool = true
     @AppStorage("screenshotFormat") var screenshotFormat: String = ImageFormat.jpeg.rawValue
     @AppStorage("screenshotScale") var screenshotScale: Int = 100
     @AppStorage("jpegQuality") var jpegQuality: Double = 0.85
@@ -148,29 +151,25 @@ class CaptureSettings: ObservableObject {
     }
 
     func resetToDefaults() {
-        saveDirectory = NSHomeDirectory() + "/Desktop"
+        // Remove all keys in one pass so only a single objectWillChange fires
+        let keys: [String] = [
+            "saveDirectory", "copyToClipboard", "showInFinder", "showSaveNotifications",
+            "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showTrimmer",
+            "recordAudio", "recordMicrophone", "showScreenshotEditor", "showGifTrimmer",
+            "saveImmediatelyScreenshot", "saveImmediatelyVideo", "saveImmediatelyGif",
+            "screenshotFormat", "screenshotScale", "jpegQuality",
+            "videoCountdownEnabled", "videoCountdownDuration",
+            "gifCountdownEnabled", "gifCountdownDuration",
+            "hasCompletedOnboarding"
+        ]
 #if APPSTORE
-        saveDirectoryBookmark = Data()
-        saveDirectoryDisplayPath = ""
+        let masKeys: [String] = ["saveDirectoryBookmark", "saveDirectoryDisplayPath"]
+#else
+        let masKeys: [String] = []
 #endif
-        copyToClipboard = true
-        showInFinder = false
-        showSaveNotifications = false
-        gifFrameRate = 10
-        gifMaxWidth = 640
-        videoFrameRate = 30
-        showTrimmer = true
-        recordAudio = false
-        recordMicrophone = false
-        showScreenshotEditor = true
-        showGifTrimmer = true
-        screenshotFormat = ImageFormat.jpeg.rawValue
-        screenshotScale = 100
-        jpegQuality = 0.85
-        videoCountdownEnabled = true
-        videoCountdownDuration = 3
-        gifCountdownEnabled = true
-        gifCountdownDuration = 3
-        hasCompletedOnboarding = false
+        for key in keys + masKeys {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        objectWillChange.send()
     }
 }

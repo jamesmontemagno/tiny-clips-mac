@@ -140,9 +140,22 @@ class CaptureManager: ObservableObject {
             guard let region = await chooseCaptureRegion(useFullScreen: useFullScreen) else { return }
 
             do {
-                let url = try await ScreenshotCapture.capture(region: region)
-                if CaptureSettings.shared.showScreenshotEditor {
-                    showScreenshotEditor(for: url)
+                let settings = CaptureSettings.shared
+                let shouldSaveImmediately = !settings.showScreenshotEditor || settings.saveImmediatelyScreenshot
+                let outputURL: URL
+
+                if shouldSaveImmediately {
+                    outputURL = SaveService.shared.generateURL(for: .screenshot)
+                } else {
+                    outputURL = temporaryURL(fileExtension: settings.imageFormat.rawValue)
+                }
+
+                let url = try await ScreenshotCapture.capture(region: region, outputURL: outputURL)
+                if settings.showScreenshotEditor {
+                    if shouldSaveImmediately {
+                        SaveService.shared.handleSavedFile(url: url, type: .screenshot)
+                    }
+                    showScreenshotEditor(for: url, deleteSourceOnCancel: !shouldSaveImmediately)
                 } else {
                     SaveService.shared.handleSavedFile(url: url, type: .screenshot)
                 }
@@ -170,7 +183,10 @@ class CaptureManager: ObservableObject {
         let doRecord = { [weak self] in
             guard let self else { return }
             Task {
-                let url = SaveService.shared.generateURL(for: .video)
+                let shouldSaveImmediately = !settings.showTrimmer || settings.saveImmediatelyVideo
+                let url = shouldSaveImmediately
+                    ? SaveService.shared.generateURL(for: .video)
+                    : self.temporaryURL(fileExtension: CaptureType.video.fileExtension)
 
                 do {
                     let recorder = VideoRecorder()
@@ -232,8 +248,22 @@ class CaptureManager: ObservableObject {
             if let writer = gifWriter {
                 let url = SaveService.shared.generateURL(for: .gif)
                 do {
-                    if CaptureSettings.shared.showGifTrimmer {
+                    let settings = CaptureSettings.shared
+                    let shouldSaveImmediately = !settings.showGifTrimmer || settings.saveImmediatelyGif
+
+                    if settings.showGifTrimmer {
                         let gifData = try await writer.stopAndReturnData()
+
+                        if shouldSaveImmediately {
+                            try GifWriter.writeGIF(
+                                frames: gifData.frames,
+                                frameDelay: gifData.frameDelay,
+                                maxWidth: gifData.maxWidth,
+                                to: url
+                            )
+                            SaveService.shared.handleSavedFile(url: url, type: .gif)
+                        }
+
                         showGifTrimmer(gifData: gifData, outputURL: url)
                     } else {
                         try await writer.stop(outputURL: url)
@@ -252,8 +282,18 @@ class CaptureManager: ObservableObject {
             // and UI state is cleaned up, so AVPlayer doesn't contend with
             // AVAssetWriter for the same file.
             if let savedVideoURL {
-                if CaptureSettings.shared.showTrimmer {
-                    showTrimmer(for: savedVideoURL)
+                let settings = CaptureSettings.shared
+                let shouldSaveImmediately = !settings.showTrimmer || settings.saveImmediatelyVideo
+
+                if settings.showTrimmer {
+                    if shouldSaveImmediately {
+                        SaveService.shared.handleSavedFile(url: savedVideoURL, type: .video)
+                    }
+
+                    showTrimmer(
+                        for: savedVideoURL,
+                        saveImmediately: shouldSaveImmediately
+                    )
                 } else {
                     SaveService.shared.handleSavedFile(url: savedVideoURL, type: .video)
                 }
@@ -261,13 +301,15 @@ class CaptureManager: ObservableObject {
         }
     }
 
-    private func showScreenshotEditor(for url: URL) {
+    private func showScreenshotEditor(for url: URL, deleteSourceOnCancel: Bool) {
         let window = ScreenshotEditorWindow(imageURL: url) { [weak self] resultURL in
             guard let self else { return }
             if let resultURL {
                 SaveService.shared.handleSavedFile(url: resultURL, type: .screenshot)
             } else {
-                try? FileManager.default.removeItem(at: url)
+                if deleteSourceOnCancel {
+                    try? FileManager.default.removeItem(at: url)
+                }
             }
             DispatchQueue.main.async {
                 self.screenshotEditorWindow = nil
@@ -280,14 +322,26 @@ class CaptureManager: ObservableObject {
         }
     }
 
-    private func showTrimmer(for url: URL) {
+    private func showTrimmer(for url: URL, saveImmediately: Bool) {
         let window = VideoTrimmerWindow(videoURL: url) { [weak self] resultURL in
             guard let self else { return }
             if let resultURL {
-                SaveService.shared.handleSavedFile(url: resultURL, type: .video)
+                if saveImmediately {
+                    SaveService.shared.handleSavedFile(url: resultURL, type: .video)
+                } else {
+                    let finalURL = SaveService.shared.generateURL(for: .video)
+                    try? FileManager.default.removeItem(at: finalURL)
+                    do {
+                        try FileManager.default.moveItem(at: resultURL, to: finalURL)
+                        SaveService.shared.handleSavedFile(url: finalURL, type: .video)
+                    } catch {
+                        SaveService.shared.showError("Video save failed: \(error.localizedDescription)")
+                    }
+                }
             } else {
-                // User cancelled — clean up the raw file
-                try? FileManager.default.removeItem(at: url)
+                if !saveImmediately {
+                    try? FileManager.default.removeItem(at: url)
+                }
             }
             // Defer release so the window isn't deallocated mid-callback
             DispatchQueue.main.async {
@@ -438,5 +492,11 @@ class CaptureManager: ObservableObject {
     private func screenUnderMouseCursor() -> NSScreen? {
         let mouseLocation = NSEvent.mouseLocation
         return NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) })
+    }
+
+    private func temporaryURL(fileExtension: String) -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("TinyClips-\(UUID().uuidString)")
+            .appendingPathExtension(fileExtension)
     }
 }

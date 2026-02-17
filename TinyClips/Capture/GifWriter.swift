@@ -41,7 +41,7 @@ class GifWriter: NSObject, @unchecked Sendable {
             throw CaptureError.noFrames
         }
 
-        try writeGIF(frames: capturedFrames, to: outputURL)
+        try GifWriter.writeGIF(frames: capturedFrames, frameDelay: frameDelay, maxWidth: maxWidth, to: outputURL)
     }
 
     func stopAndReturnData() async throws -> GifCaptureData {
@@ -56,14 +56,14 @@ class GifWriter: NSObject, @unchecked Sendable {
         return GifCaptureData(frames: capturedFrames, frameDelay: frameDelay, maxWidth: maxWidth)
     }
 
-    private func writeGIF(frames: [CGImage], to url: URL) throws {
+    static func writeGIF(frames: [CGImage], frameDelay: Double, maxWidth: CGFloat, to url: URL) throws {
         let processedFrames: [CGImage]
         if CGFloat(frames[0].width) > maxWidth {
             let scale = maxWidth / CGFloat(frames[0].width)
             let newWidth = Int(maxWidth)
             let newHeight = Int(CGFloat(frames[0].height) * scale)
             let size = CGSize(width: newWidth, height: newHeight)
-            processedFrames = frames.compactMap { downscale($0, to: size) }
+            processedFrames = frames.compactMap { GifWriter.downscale($0, to: size) }
         } else {
             processedFrames = frames
         }
@@ -98,7 +98,7 @@ class GifWriter: NSObject, @unchecked Sendable {
         }
     }
 
-    private func downscale(_ image: CGImage, to size: CGSize) -> CGImage? {
+    private static func downscale(_ image: CGImage, to size: CGSize) -> CGImage? {
         guard let context = CGContext(
             data: nil,
             width: Int(size.width),
