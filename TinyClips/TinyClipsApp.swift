@@ -547,9 +547,8 @@ class CaptureManager: ObservableObject {
     }
 
     private func chooseCaptureRegion(useFullScreen: Bool) async -> CaptureRegion? {
-        let needsPicker = NSScreen.screens.count > 1 && !CaptureSettings.shared.alwaysCaptureMainDisplay
-
         if useFullScreen {
+            let needsPicker = NSScreen.screens.count > 1 && !CaptureSettings.shared.alwaysCaptureMainDisplay
             let screen: NSScreen?
             if needsPicker {
                 screen = await pickScreen()
@@ -560,11 +559,8 @@ class CaptureManager: ObservableObject {
             return CaptureRegion.fullScreen(for: screen)
         }
 
-        if needsPicker {
-            guard let screen = await pickScreen() else { return nil }
-            return await RegionSelector.selectRegion(on: screen)
-        }
-
+        // For region selection, show overlays on all screens —
+        // the user drags on whichever screen they want.
         return await RegionSelector.selectRegion()
     }
 
