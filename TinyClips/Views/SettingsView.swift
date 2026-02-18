@@ -109,6 +109,8 @@ struct SettingsView: View {
         }
 
         Section("Advanced") {
+            Toggle("Always capture main display", isOn: $settings.alwaysCaptureMainDisplay)
+                .help("Skip the display picker when multiple monitors are connected")
             Button("Reset All Settings to Defaults…") {
                 resetAllSettings()
             }

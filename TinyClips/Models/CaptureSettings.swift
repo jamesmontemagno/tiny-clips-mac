@@ -138,6 +138,7 @@ class CaptureSettings: ObservableObject {
     @AppStorage("gifCountdownEnabled") var gifCountdownEnabled: Bool = true
     @AppStorage("gifCountdownDuration") var gifCountdownDuration: Int = 3
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
+    @AppStorage("alwaysCaptureMainDisplay") var alwaysCaptureMainDisplay: Bool = false
 
 #if APPSTORE
     var hasCustomSaveDirectory: Bool {
@@ -160,7 +161,7 @@ class CaptureSettings: ObservableObject {
             "screenshotFormat", "screenshotScale", "jpegQuality",
             "videoCountdownEnabled", "videoCountdownDuration",
             "gifCountdownEnabled", "gifCountdownDuration",
-            "hasCompletedOnboarding"
+            "hasCompletedOnboarding", "alwaysCaptureMainDisplay"
         ]
 #if APPSTORE
         let masKeys: [String] = ["saveDirectoryBookmark", "saveDirectoryDisplayPath"]

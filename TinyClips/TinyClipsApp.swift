@@ -547,9 +547,11 @@ class CaptureManager: ObservableObject {
     }
 
     private func chooseCaptureRegion(useFullScreen: Bool) async -> CaptureRegion? {
+        let needsPicker = NSScreen.screens.count > 1 && !CaptureSettings.shared.alwaysCaptureMainDisplay
+
         if useFullScreen {
             let screen: NSScreen?
-            if NSScreen.screens.count > 1 {
+            if needsPicker {
                 screen = await pickScreen()
             } else {
                 screen = screenUnderMouseCursor() ?? NSScreen.main
@@ -558,7 +560,7 @@ class CaptureManager: ObservableObject {
             return CaptureRegion.fullScreen(for: screen)
         }
 
-        if NSScreen.screens.count > 1 {
+        if needsPicker {
             guard let screen = await pickScreen() else { return nil }
             return await RegionSelector.selectRegion(on: screen)
         }
