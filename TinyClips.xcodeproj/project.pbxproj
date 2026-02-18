@@ -27,6 +27,7 @@
 		B10000000000000000000012 /* OnboardingWizardWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* OnboardingWizardWindow.swift */; };
 		B10000000000000000000013 /* GuideWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000016 /* GuideWindow.swift */; };
 		B10000000000000000000014 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000017 /* HotKeyManager.swift */; };
+		B10000000000000000000015 /* ScreenPickerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* ScreenPickerWindow.swift */; };
 		B20000000000000000000001 /* TinyClipsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* TinyClipsApp.swift */; };
 		B20000000000000000000002 /* CaptureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* CaptureSettings.swift */; };
 		B20000000000000000000003 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000003 /* SettingsView.swift */; };
@@ -47,6 +48,7 @@
 		B20000000000000000000012 /* OnboardingWizardWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* OnboardingWizardWindow.swift */; };
 		B20000000000000000000013 /* GuideWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000016 /* GuideWindow.swift */; };
 		B20000000000000000000014 /* HotKeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000017 /* HotKeyManager.swift */; };
+		B20000000000000000000015 /* ScreenPickerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* ScreenPickerWindow.swift */; };
 		B3EB92CF2F3FCA0B002723CD /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B3EB92CE2F3FCA0B002723CD /* Sparkle */; };
 /* End PBXBuildFile section */
 
@@ -74,6 +76,7 @@
 		A10000000000000000000015 /* OnboardingWizardWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWizardWindow.swift; sourceTree = "<group>"; };
 		A10000000000000000000016 /* GuideWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuideWindow.swift; sourceTree = "<group>"; };
 		A10000000000000000000017 /* HotKeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyManager.swift; sourceTree = "<group>"; };
+		A10000000000000000000018 /* ScreenPickerWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenPickerWindow.swift; sourceTree = "<group>"; };
 		A2000000000000000000000C /* Info-MAS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-MAS.plist"; sourceTree = "<group>"; };
 		A2000000000000000000000D /* TinyClipsMAS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TinyClipsMAS.entitlements; sourceTree = "<group>"; };
 		A2000000000000000000000E /* TinyClipsMAS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TinyClipsMAS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -143,6 +146,7 @@
 				A10000000000000000000014 /* CountdownWindow.swift */,
 				A10000000000000000000015 /* OnboardingWizardWindow.swift */,
 				A10000000000000000000016 /* GuideWindow.swift */,
+				A10000000000000000000018 /* ScreenPickerWindow.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -298,6 +302,7 @@
 				B10000000000000000000012 /* OnboardingWizardWindow.swift in Sources */,
 				B10000000000000000000013 /* GuideWindow.swift in Sources */,
 				B10000000000000000000014 /* HotKeyManager.swift in Sources */,
+				B10000000000000000000015 /* ScreenPickerWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -324,6 +329,7 @@
 				B20000000000000000000012 /* OnboardingWizardWindow.swift in Sources */,
 				B20000000000000000000013 /* GuideWindow.swift in Sources */,
 				B20000000000000000000014 /* HotKeyManager.swift in Sources */,
+				B20000000000000000000015 /* ScreenPickerWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

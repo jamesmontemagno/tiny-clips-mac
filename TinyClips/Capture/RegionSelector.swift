@@ -5,8 +5,12 @@ class RegionSelector {
     private static var activeSelector: RegionSelectorController?
 
     static func selectRegion() async -> CaptureRegion? {
+        return await selectRegion(on: nil)
+    }
+
+    static func selectRegion(on screen: NSScreen?) async -> CaptureRegion? {
         return await withCheckedContinuation { continuation in
-            let selector = RegionSelectorController(completion: { region in
+            let selector = RegionSelectorController(screen: screen, completion: { region in
                 Self.activeSelector = nil
                 continuation.resume(returning: region)
             })
@@ -21,13 +25,16 @@ private class RegionSelectorController {
     private var windows: [NSWindow] = []
     private let completion: (CaptureRegion?) -> Void
     private var eventMonitor: Any?
+    private let targetScreen: NSScreen?
 
-    init(completion: @escaping (CaptureRegion?) -> Void) {
+    init(screen: NSScreen? = nil, completion: @escaping (CaptureRegion?) -> Void) {
+        self.targetScreen = screen
         self.completion = completion
     }
 
     func show() {
-        for screen in NSScreen.screens {
+        let screens = targetScreen.map { [$0] } ?? NSScreen.screens
+        for screen in screens {
             let window = NSWindow(
                 contentRect: screen.frame,
                 styleMask: .borderless,

@@ -153,6 +153,7 @@ class CaptureManager: ObservableObject {
     private var countdownWindow: CountdownWindow?
     private var onboardingWindow: OnboardingWizardWindow?
     private var guideWindow: GuideWindow?
+    private var screenPickerWindow: ScreenPickerWindow?
     private let hotKeyManager = HotKeyManager()
 
     init() {
@@ -547,13 +548,36 @@ class CaptureManager: ObservableObject {
 
     private func chooseCaptureRegion(useFullScreen: Bool) async -> CaptureRegion? {
         if useFullScreen {
-            guard let screen = screenUnderMouseCursor() ?? NSScreen.main else {
-                return nil
+            let screen: NSScreen?
+            if NSScreen.screens.count > 1 {
+                screen = await pickScreen()
+            } else {
+                screen = screenUnderMouseCursor() ?? NSScreen.main
             }
+            guard let screen else { return nil }
             return CaptureRegion.fullScreen(for: screen)
         }
 
+        if NSScreen.screens.count > 1 {
+            guard let screen = await pickScreen() else { return nil }
+            return await RegionSelector.selectRegion(on: screen)
+        }
+
         return await RegionSelector.selectRegion()
+    }
+
+    private func pickScreen() async -> NSScreen? {
+        let screen = await withCheckedContinuation { (continuation: CheckedContinuation<NSScreen?, Never>) in
+            let picker = ScreenPickerWindow { screen in
+                continuation.resume(returning: screen)
+            }
+            self.screenPickerWindow = picker
+            picker.show()
+        }
+        DispatchQueue.main.async {
+            self.screenPickerWindow = nil
+        }
+        return screen
     }
 
     private func screenUnderMouseCursor() -> NSScreen? {
