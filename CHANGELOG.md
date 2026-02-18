@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.0.14 - 2026-02-17
+
+### Added
+- Multi-monitor support for region selection and full-screen capture.
+- Display picker UI for selecting target screen on multi-monitor setups (full-screen capture mode).
+- "Always capture main display" setting in General preferences to bypass display picker if desired.
+- Global hotkey functionality for screenshot, video, and GIF recording.
+
+### Improved
+- Fixed region selection overlay rendering on secondary displays through corrected coordinate space initialization.
+- Enhanced window focus and activation for improved multi-screen usability.
+- Improved event handling for escape key cancellation in display picker and region selector.
+- Better window management with centralized activation logic.
+
+### Fixed
+- Region selection now works correctly on secondary displays.
+- Escape key handling in display picker and region selector on menu bar app context.
+
 ## v0.0.13 - 2026-02-16
 
 ### Added
