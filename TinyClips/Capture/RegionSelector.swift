@@ -43,7 +43,7 @@ private class RegionSelectorController {
             window.acceptsMouseMovedEvents = true
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
-            let view = RegionSelectionView(frame: screen.frame)
+            let view = RegionSelectionView(frame: NSRect(origin: .zero, size: screen.frame.size))
             view.onComplete = { [weak self] region in
                 self?.finish(with: region)
             }
