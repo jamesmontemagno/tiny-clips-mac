@@ -24,7 +24,8 @@ class RegionSelector {
 private class RegionSelectorController {
     private var windows: [NSWindow] = []
     private let completion: (CaptureRegion?) -> Void
-    private var eventMonitor: Any?
+    private var localMonitor: Any?
+    private var globalMonitor: Any?
     private let targetScreen: NSScreen?
 
     init(screen: NSScreen? = nil, completion: @escaping (CaptureRegion?) -> Void) {
@@ -63,12 +64,17 @@ private class RegionSelectorController {
             windows.append(window)
         }
 
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 { // Escape
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 {
                 self?.finish(with: nil)
                 return nil
             }
             return event
+        }
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 {
+                self?.finish(with: nil)
+            }
         }
 
         NSApp.activate()
@@ -84,9 +90,13 @@ private class RegionSelectorController {
     }
 
     private func finish(with region: CaptureRegion?) {
-        if let monitor = eventMonitor {
+        if let monitor = localMonitor {
             NSEvent.removeMonitor(monitor)
-            eventMonitor = nil
+            localMonitor = nil
+        }
+        if let monitor = globalMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalMonitor = nil
         }
         for window in windows {
             window.orderOut(nil)

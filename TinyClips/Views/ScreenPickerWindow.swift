@@ -4,8 +4,11 @@ import SwiftUI
 class ScreenPickerWindow: NSPanel {
     private var didComplete = false
     private var onComplete: ((NSScreen?) -> Void)?
-    private var eventMonitor: Any?
+    private var localMonitor: Any?
+    private var globalMonitor: Any?
     private var capturedScreens: [NSScreen] = []
+
+    override var canBecomeKey: Bool { true }
 
     convenience init(onComplete: @escaping (NSScreen?) -> Void) {
         self.init(
@@ -51,21 +54,38 @@ class ScreenPickerWindow: NSPanel {
         makeKeyAndOrderFront(nil)
         NSApp.activate()
 
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 { // Escape
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 {
                 self?.finish(with: nil)
                 return nil
             }
             return event
+        }
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 {
+                self?.finish(with: nil)
+            }
+        }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 {
+            finish(with: nil)
+        } else {
+            super.keyDown(with: event)
         }
     }
 
     private func finish(with screen: NSScreen?) {
         guard !didComplete else { return }
         didComplete = true
-        if let eventMonitor {
-            NSEvent.removeMonitor(eventMonitor)
-            self.eventMonitor = nil
+        if let localMonitor {
+            NSEvent.removeMonitor(localMonitor)
+            self.localMonitor = nil
+        }
+        if let globalMonitor {
+            NSEvent.removeMonitor(globalMonitor)
+            self.globalMonitor = nil
         }
         orderOut(nil)
         onComplete?(screen)
