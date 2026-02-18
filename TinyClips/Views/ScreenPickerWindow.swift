@@ -49,6 +49,7 @@ class ScreenPickerWindow: NSPanel {
             setFrameOrigin(NSPoint(x: x, y: y))
         }
         makeKeyAndOrderFront(nil)
+        NSApp.activate()
 
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53 { // Escape

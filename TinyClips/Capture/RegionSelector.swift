@@ -35,7 +35,7 @@ private class RegionSelectorController {
     func show() {
         let screens = targetScreen.map { [$0] } ?? NSScreen.screens
         for screen in screens {
-            let window = NSWindow(
+            let window = RegionOverlayWindow(
                 contentRect: screen.frame,
                 styleMask: .borderless,
                 backing: .buffered,
@@ -59,6 +59,7 @@ private class RegionSelectorController {
             }
             window.contentView = view
             window.makeKeyAndOrderFront(nil)
+            window.makeFirstResponder(view)
             windows.append(window)
         }
 
@@ -72,6 +73,14 @@ private class RegionSelectorController {
 
         NSApp.activate()
         windows.first?.makeKey()
+
+        // Secondary screens may need a delayed activation to properly receive focus
+        if targetScreen != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                NSApp.activate()
+                self?.windows.first?.makeKeyAndOrderFront(nil)
+            }
+        }
     }
 
     private func finish(with region: CaptureRegion?) {
@@ -212,4 +221,13 @@ private class RegionSelectionView: NSView {
             height: abs(p2.y - p1.y)
         )
     }
+}
+
+// MARK: - Overlay Window
+
+/// Borderless windows return false for canBecomeKey by default,
+/// which prevents mouse event delivery on secondary screens.
+private class RegionOverlayWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 }
