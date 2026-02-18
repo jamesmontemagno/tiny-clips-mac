@@ -63,9 +63,9 @@ Download the latest release from the [Releases](https://github.com/jamesmontemag
 
 | Action | Shortcut |
 |--------|----------|
-| Screenshot | ⇧⌘5 |
-| Record Video | ⇧⌘6 |
-| Record GIF | ⇧⌘7 |
+| Screenshot | ⌃⌥⌘5 |
+| Record Video | ⌃⌥⌘6 |
+| Record GIF | ⌃⌥⌘7 |
 | Stop Recording | ⌘. |
 | Settings | ⌘, |
 

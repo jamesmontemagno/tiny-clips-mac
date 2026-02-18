@@ -34,17 +34,17 @@ private struct MenuBarContentView: View {
             Button(screenshotTitle) {
                 captureManager.takeScreenshot(useFullScreen: isOptionPressed)
             }
-            .keyboardShortcut("5", modifiers: [.command, .shift])
+            .keyboardShortcut("5", modifiers: [.control, .option, .command])
 
             Button(recordVideoTitle) {
                 captureManager.startVideoRecording(useFullScreen: isOptionPressed)
             }
-            .keyboardShortcut("6", modifiers: [.command, .shift])
+            .keyboardShortcut("6", modifiers: [.control, .option, .command])
 
             Button(recordGifTitle) {
                 captureManager.startGifRecording(useFullScreen: isOptionPressed)
             }
-            .keyboardShortcut("7", modifiers: [.command, .shift])
+            .keyboardShortcut("7", modifiers: [.control, .option, .command])
 
             Divider()
         } else {
@@ -114,7 +114,11 @@ private struct MenuBarContentView: View {
 
 @MainActor
 class CaptureManager: ObservableObject {
-    @Published var isRecording = false
+    @Published var isRecording = false {
+        didSet {
+            updateStopHotKeyRegistration()
+        }
+    }
 
     private var videoRecorder: VideoRecorder?
     private var gifWriter: GifWriter?
@@ -127,10 +131,43 @@ class CaptureManager: ObservableObject {
     private var countdownWindow: CountdownWindow?
     private var onboardingWindow: OnboardingWizardWindow?
     private var guideWindow: GuideWindow?
+    private let hotKeyManager = HotKeyManager()
 
     init() {
+        configureGlobalHotKeys()
+
         DispatchQueue.main.async { [weak self] in
             self?.showOnboardingIfNeeded()
+        }
+    }
+
+    private func configureGlobalHotKeys() {
+        hotKeyManager.registerCaptureHotKeys(
+            onScreenshot: { [weak self] in
+                guard let self, !self.isRecording else { return }
+                self.takeScreenshot()
+            },
+            onRecordVideo: { [weak self] in
+                guard let self, !self.isRecording else { return }
+                self.startVideoRecording()
+            },
+            onRecordGif: { [weak self] in
+                guard let self, !self.isRecording else { return }
+                self.startGifRecording()
+            }
+        )
+
+        updateStopHotKeyRegistration()
+    }
+
+    private func updateStopHotKeyRegistration() {
+        if isRecording {
+            hotKeyManager.registerStopHotKey { [weak self] in
+                guard let self, self.isRecording else { return }
+                self.stopRecording()
+            }
+        } else {
+            hotKeyManager.unregisterStopHotKey()
         }
     }
 

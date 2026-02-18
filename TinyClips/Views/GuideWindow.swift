@@ -87,9 +87,9 @@ private struct GuideWindowView: View {
         case .shortcuts:
             sectionCard(title: "Keyboard Shortcuts", icon: "command") {
                 VStack(alignment: .leading, spacing: 8) {
-                    shortcutRow(title: "Screenshot", keys: "⌘⇧5")
-                    shortcutRow(title: "Record Video", keys: "⌘⇧6")
-                    shortcutRow(title: "Record GIF", keys: "⌘⇧7")
+                    shortcutRow(title: "Screenshot", keys: "⌃⌥⌘5")
+                    shortcutRow(title: "Record Video", keys: "⌃⌥⌘6")
+                    shortcutRow(title: "Record GIF", keys: "⌃⌥⌘7")
                     shortcutRow(title: "Stop Recording", keys: "⌘.")
                     shortcutRow(title: "Settings", keys: "⌘,")
                     shortcutRow(title: "Quit", keys: "⌘Q")
