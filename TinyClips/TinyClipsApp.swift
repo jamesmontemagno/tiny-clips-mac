@@ -146,7 +146,9 @@ class CaptureManager: ObservableObject {
     private var gifWriter: GifWriter?
     private var startPanel: StartRecordingPanel?
     private var stopPanel: StopRecordingPanel?
+    private var regionIndicatorPanel: RegionIndicatorPanel?
     private var pendingVideoRegion: CaptureRegion?
+    private var activeRecordingRegion: CaptureRegion?
     private var trimmerWindow: VideoTrimmerWindow?
     private var gifTrimmerWindow: GifTrimmerWindow?
     private var screenshotEditorWindow: ScreenshotEditorWindow?
@@ -265,12 +267,15 @@ class CaptureManager: ObservableObject {
                 do {
                     let recorder = VideoRecorder()
                     self.videoRecorder = recorder
+                    self.activeRecordingRegion = region
                     self.isRecording = true
 
                     try await recorder.start(region: region, outputURL: url)
                     self.showStopPanel()
+                    self.showRegionIndicator()
                 } catch {
                     self.isRecording = false
+                    self.activeRecordingRegion = nil
                     SaveService.shared.showError("Video recording failed: \(error.localizedDescription)")
                 }
             }
@@ -290,12 +295,15 @@ class CaptureManager: ObservableObject {
                     do {
                         let writer = GifWriter()
                         self.gifWriter = writer
+                        self.activeRecordingRegion = region
                         self.isRecording = true
 
                         try await writer.start(region: region)
                         self.showStopPanel()
+                        self.showRegionIndicator()
                     } catch {
                         self.isRecording = false
+                        self.activeRecordingRegion = nil
                         SaveService.shared.showError("GIF recording failed: \(error.localizedDescription)")
                     }
                 }
@@ -350,7 +358,9 @@ class CaptureManager: ObservableObject {
             }
 
             isRecording = false
+            activeRecordingRegion = nil
             dismissStopPanel()
+            dismissRegionIndicator()
 
             // Show editor windows AFTER all recording resources are released
             // and UI state is cleaned up, so AVPlayer doesn't contend with
@@ -477,6 +487,20 @@ class CaptureManager: ObservableObject {
     private func dismissStopPanel() {
         stopPanel?.close()
         stopPanel = nil
+    }
+
+    private func showRegionIndicator() {
+        guard CaptureSettings.shared.showRegionIndicator,
+              let region = activeRecordingRegion else { return }
+        
+        let panel = RegionIndicatorPanel(region: region)
+        panel.show()
+        self.regionIndicatorPanel = panel
+    }
+    
+    private func dismissRegionIndicator() {
+        regionIndicatorPanel?.close()
+        regionIndicatorPanel = nil
     }
 
     private func showCountdownThen(for type: CaptureType, action: @escaping () -> Void) {

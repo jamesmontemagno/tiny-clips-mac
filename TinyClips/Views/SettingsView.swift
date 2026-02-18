@@ -196,6 +196,10 @@ struct SettingsView: View {
                 }
             }
         }
+        
+        Section("Display") {
+            Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
+        }
     }
 
     // MARK: - GIF
@@ -249,6 +253,10 @@ struct SettingsView: View {
                         .frame(width: 30, alignment: .trailing)
                 }
             }
+        }
+        
+        Section("Display") {
+            Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
         }
     }
 
