@@ -66,7 +66,29 @@ private struct MenuBarContentView: View {
 
         Button("Settings…") {
             openSettings()
-            NSApp.activate()
+            DispatchQueue.main.async {
+                NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+
+                if let settingsWindow = NSApp.windows.first(where: {
+                    $0.isVisible && $0.title.localizedCaseInsensitiveContains("settings")
+                }) {
+                    settingsWindow.collectionBehavior.insert(.moveToActiveSpace)
+                    settingsWindow.makeKeyAndOrderFront(nil)
+                    settingsWindow.orderFrontRegardless()
+                }
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+
+                if let settingsWindow = NSApp.windows.first(where: {
+                    $0.isVisible && $0.title.localizedCaseInsensitiveContains("settings")
+                }) {
+                    settingsWindow.collectionBehavior.insert(.moveToActiveSpace)
+                    settingsWindow.makeKeyAndOrderFront(nil)
+                    settingsWindow.orderFrontRegardless()
+                }
+            }
         }
         .keyboardShortcut(",", modifiers: .command)
 
@@ -138,6 +160,20 @@ class CaptureManager: ObservableObject {
 
         DispatchQueue.main.async { [weak self] in
             self?.showOnboardingIfNeeded()
+        }
+    }
+
+    private func bringWindowToFront(_ window: NSWindow) {
+        window.collectionBehavior.insert(.moveToActiveSpace)
+
+        NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
         }
     }
 
@@ -354,8 +390,7 @@ class CaptureManager: ObservableObject {
         }
         self.screenshotEditorWindow = window
         DispatchQueue.main.async {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate()
+            self.bringWindowToFront(window)
         }
     }
 
@@ -388,8 +423,7 @@ class CaptureManager: ObservableObject {
         self.trimmerWindow = window
         // Defer showing to next run loop to avoid issues with menu tracking
         DispatchQueue.main.async {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate()
+            self.bringWindowToFront(window)
         }
     }
 
@@ -405,8 +439,7 @@ class CaptureManager: ObservableObject {
         }
         self.gifTrimmerWindow = window
         DispatchQueue.main.async {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate()
+            self.bringWindowToFront(window)
         }
     }
 
@@ -488,16 +521,14 @@ class CaptureManager: ObservableObject {
         onboardingWindow = window
 
         DispatchQueue.main.async {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate()
+            self.bringWindowToFront(window)
         }
     }
 
     func showGuide() {
         if let guideWindow {
             DispatchQueue.main.async {
-                guideWindow.makeKeyAndOrderFront(nil)
-                NSApp.activate()
+                self.bringWindowToFront(guideWindow)
             }
             return
         }
@@ -510,8 +541,7 @@ class CaptureManager: ObservableObject {
 
         self.guideWindow = window
         DispatchQueue.main.async {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate()
+            self.bringWindowToFront(window)
         }
     }
 
