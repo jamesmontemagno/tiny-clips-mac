@@ -24,7 +24,7 @@ class ScreenPickerWindow: NSPanel {
 
         let screens = NSScreen.screens
         self.capturedScreens = screens
-        let screenInfos = Self.buildScreenInfos(screens: screens, maxSize: CGSize(width: 360, height: 220))
+        let screenInfos = Self.buildScreenInfos(screens: screens, maxSize: CGSize(width: 480, height: 260))
 
         let hostingView = NSHostingView(rootView: ScreenPickerView(
             screens: screenInfos,
@@ -87,15 +87,17 @@ class ScreenPickerWindow: NSPanel {
 
         let totalWidth = maxX - minX
         let totalHeight = maxY - minY
-        let scale = min(maxSize.width / totalWidth, maxSize.height / totalHeight)
+        let gap: CGFloat = 4
+        let gapCountX = CGFloat(screens.count - 1) // approximate gap allocation
+        let scale = min((maxSize.width - gapCountX * gap) / totalWidth, maxSize.height / totalHeight)
 
         return screens.enumerated().map { index, screen in
             // Flip Y for SwiftUI (top-left origin)
             let scaledFrame = CGRect(
                 x: (screen.frame.minX - minX) * scale,
                 y: (maxY - screen.frame.maxY) * scale,
-                width: screen.frame.width * scale,
-                height: screen.frame.height * scale
+                width: screen.frame.width * scale - gap,
+                height: screen.frame.height * scale - gap
             )
 
             return ScreenInfo(
@@ -146,6 +148,10 @@ private struct ScreenPickerView: View {
                 .foregroundStyle(.white)
 
             ZStack(alignment: .topLeading) {
+                // Invisible spacer to force ZStack to the full arrangement size
+                Color.clear
+                    .frame(width: arrangementSize.width, height: arrangementSize.height)
+
                 ForEach(screens) { screen in
                     ScreenCard(info: screen, isHovered: hoveredIndex == screen.index)
                         .frame(width: screen.scaledFrame.width, height: screen.scaledFrame.height)
@@ -158,7 +164,6 @@ private struct ScreenPickerView: View {
                         }
                 }
             }
-            .frame(width: arrangementSize.width, height: arrangementSize.height)
 
             Text("Click a display · Esc to cancel")
                 .font(.system(size: 11))
@@ -187,24 +192,25 @@ private struct ScreenCard: View {
         ZStack {
             Color.gray.opacity(0.2)
 
-            VStack(spacing: 4) {
+            VStack(spacing: 2) {
                 Spacer()
-                HStack {
+                HStack(spacing: 4) {
                     Text("Display \(info.displayNumber)")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 11, weight: .semibold))
                     if info.isMain {
                         Text("Main")
                             .font(.system(size: 9, weight: .medium))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
                             .background(.white.opacity(0.2))
                             .clipShape(RoundedRectangle(cornerRadius: 4))
                     }
                 }
                 Text(info.resolution)
-                    .font(.system(size: 11))
+                    .font(.system(size: 10))
                     .opacity(0.7)
             }
+            .padding(.bottom, 6)
             .foregroundStyle(.white)
         }
         .clipShape(RoundedRectangle(cornerRadius: 8))
