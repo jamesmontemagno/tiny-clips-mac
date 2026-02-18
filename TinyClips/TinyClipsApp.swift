@@ -147,6 +147,7 @@ class CaptureManager: ObservableObject {
     private var startPanel: StartRecordingPanel?
     private var stopPanel: StopRecordingPanel?
     private var pendingVideoRegion: CaptureRegion?
+    private var recordPanelPosition: NSPoint?
     private var trimmerWindow: VideoTrimmerWindow?
     private var gifTrimmerWindow: GifTrimmerWindow?
     private var screenshotEditorWindow: ScreenshotEditorWindow?
@@ -462,6 +463,10 @@ class CaptureManager: ObservableObject {
     }
 
     private func dismissStartPanel() {
+        // Save the panel position before dismissing
+        if let panel = startPanel {
+            recordPanelPosition = panel.frame.origin
+        }
         startPanel?.dismiss()
         startPanel = nil
     }
@@ -470,13 +475,14 @@ class CaptureManager: ObservableObject {
         let panel = StopRecordingPanel { [weak self] in
             self?.stopRecording()
         }
-        panel.show()
+        panel.show(at: recordPanelPosition)
         self.stopPanel = panel
     }
 
     private func dismissStopPanel() {
         stopPanel?.close()
         stopPanel = nil
+        recordPanelPosition = nil
     }
 
     private func showCountdownThen(for type: CaptureType, action: @escaping () -> Void) {

@@ -21,8 +21,10 @@ class StopRecordingPanel: NSPanel {
         self.contentView = hostingView
     }
 
-    func show() {
-        if let screen = NSScreen.main {
+    func show(at position: NSPoint? = nil) {
+        if let position {
+            setFrameOrigin(position)
+        } else if let screen = NSScreen.main {
             let x = screen.frame.midX - frame.width / 2
             let y = screen.frame.maxY - frame.height - 60
             setFrameOrigin(NSPoint(x: x, y: y))
