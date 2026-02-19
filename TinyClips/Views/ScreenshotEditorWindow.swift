@@ -452,28 +452,38 @@ private struct CanvasView: View {
             context.stroke(Path(ellipseIn: scaledRect), with: .color(color), lineWidth: lineWidth)
 
         case .arrow:
-            var path = Path()
             let linePoints = viewModel.scaledLinePoints(for: annotation, imageSize: imageSize, origin: origin)
             let start = linePoints.start
             let end = linePoints.end
-            path.move(to: start)
-            path.addLine(to: end)
-
-            // Arrowhead
             let angle = atan2(end.y - start.y, end.x - start.x)
             let headLength: CGFloat = 14
             let headAngle: CGFloat = .pi / 6
-            path.move(to: end)
-            path.addLine(to: CGPoint(
+
+            let wing1 = CGPoint(
                 x: end.x - headLength * cos(angle - headAngle),
                 y: end.y - headLength * sin(angle - headAngle)
-            ))
-            path.move(to: end)
-            path.addLine(to: CGPoint(
+            )
+            let wing2 = CGPoint(
                 x: end.x - headLength * cos(angle + headAngle),
                 y: end.y - headLength * sin(angle + headAngle)
-            ))
-            context.stroke(path, with: .color(color), lineWidth: lineWidth)
+            )
+            // Shaft ends at the base of the filled arrowhead
+            let shaftEnd = CGPoint(
+                x: end.x - headLength * cos(headAngle) * cos(angle),
+                y: end.y - headLength * cos(headAngle) * sin(angle)
+            )
+            var linePath = Path()
+            linePath.move(to: start)
+            linePath.addLine(to: shaftEnd)
+            context.stroke(linePath, with: .color(color), lineWidth: lineWidth)
+
+            // Filled triangular arrowhead
+            var arrowHead = Path()
+            arrowHead.move(to: end)
+            arrowHead.addLine(to: wing1)
+            arrowHead.addLine(to: wing2)
+            arrowHead.closeSubpath()
+            context.fill(arrowHead, with: .color(color))
 
         case .line:
             var path = Path()
@@ -1097,25 +1107,34 @@ private class EditorViewModel: ObservableObject {
                 x: (line.end.x * fullSize.width) - cropOrigin.x,
                 y: outputSize.height - ((line.end.y * fullSize.height) - cropOrigin.y)
             )
-            ctx.move(to: start)
-            ctx.addLine(to: end)
-            ctx.strokePath()
-
-            // Arrowhead
             let angle = atan2(end.y - start.y, end.x - start.x)
             let headLength: CGFloat = 20
             let headAngle: CGFloat = .pi / 6
-            ctx.move(to: end)
-            ctx.addLine(to: CGPoint(
+
+            let wing1 = CGPoint(
                 x: end.x - headLength * cos(angle - headAngle),
                 y: end.y - headLength * sin(angle - headAngle)
-            ))
-            ctx.move(to: end)
-            ctx.addLine(to: CGPoint(
+            )
+            let wing2 = CGPoint(
                 x: end.x - headLength * cos(angle + headAngle),
                 y: end.y - headLength * sin(angle + headAngle)
-            ))
+            )
+            // Shaft ends at the base of the filled arrowhead
+            let shaftEnd = CGPoint(
+                x: end.x - headLength * cos(headAngle) * cos(angle),
+                y: end.y - headLength * cos(headAngle) * sin(angle)
+            )
+            ctx.move(to: start)
+            ctx.addLine(to: shaftEnd)
             ctx.strokePath()
+
+            // Filled triangular arrowhead
+            ctx.setFillColor(cgColor)
+            ctx.move(to: end)
+            ctx.addLine(to: wing1)
+            ctx.addLine(to: wing2)
+            ctx.closePath()
+            ctx.fillPath()
 
         case .line:
             let line = linePoints(for: annotation)
