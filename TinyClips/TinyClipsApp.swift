@@ -216,29 +216,36 @@ class CaptureManager: ObservableObject {
             guard await PermissionManager.shared.checkPermission() else { return }
             guard let region = await chooseCaptureRegion(useFullScreen: useFullScreen) else { return }
 
-            do {
-                let settings = CaptureSettings.shared
-                let shouldSaveImmediately = !settings.showScreenshotEditor || settings.saveImmediatelyScreenshot
-                let outputURL: URL
+            let doCapture = { [weak self] in
+                guard let self else { return }
+                Task {
+                    do {
+                        let settings = CaptureSettings.shared
+                        let shouldSaveImmediately = !settings.showScreenshotEditor || settings.saveImmediatelyScreenshot
+                        let outputURL: URL
 
-                if shouldSaveImmediately {
-                    outputURL = SaveService.shared.generateURL(for: .screenshot)
-                } else {
-                    outputURL = temporaryURL(fileExtension: settings.imageFormat.rawValue)
-                }
+                        if shouldSaveImmediately {
+                            outputURL = SaveService.shared.generateURL(for: .screenshot)
+                        } else {
+                            outputURL = self.temporaryURL(fileExtension: settings.imageFormat.rawValue)
+                        }
 
-                let url = try await ScreenshotCapture.capture(region: region, outputURL: outputURL)
-                if settings.showScreenshotEditor {
-                    if shouldSaveImmediately {
-                        SaveService.shared.handleSavedFile(url: url, type: .screenshot)
+                        let url = try await ScreenshotCapture.capture(region: region, outputURL: outputURL)
+                        if settings.showScreenshotEditor {
+                            if shouldSaveImmediately {
+                                SaveService.shared.handleSavedFile(url: url, type: .screenshot)
+                            }
+                            self.showScreenshotEditor(for: url, deleteSourceOnCancel: !shouldSaveImmediately)
+                        } else {
+                            SaveService.shared.handleSavedFile(url: url, type: .screenshot)
+                        }
+                    } catch {
+                        SaveService.shared.showError("Screenshot failed: \(error.localizedDescription)")
                     }
-                    showScreenshotEditor(for: url, deleteSourceOnCancel: !shouldSaveImmediately)
-                } else {
-                    SaveService.shared.handleSavedFile(url: url, type: .screenshot)
                 }
-            } catch {
-                SaveService.shared.showError("Screenshot failed: \(error.localizedDescription)")
             }
+
+            showCountdownThen(for: .screenshot, action: doCapture)
         }
     }
 
@@ -521,9 +528,9 @@ class CaptureManager: ObservableObject {
         case .gif:
             enabled = settings.gifCountdownEnabled
             duration = settings.gifCountdownDuration
-        default:
-            action()
-            return
+        case .screenshot:
+            enabled = settings.screenshotCountdownEnabled
+            duration = settings.screenshotCountdownDuration
         }
 
         guard enabled else {

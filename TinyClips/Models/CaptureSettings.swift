@@ -137,6 +137,8 @@ class CaptureSettings: ObservableObject {
     @AppStorage("videoCountdownDuration") var videoCountdownDuration: Int = 3
     @AppStorage("gifCountdownEnabled") var gifCountdownEnabled: Bool = true
     @AppStorage("gifCountdownDuration") var gifCountdownDuration: Int = 3
+    @AppStorage("screenshotCountdownEnabled") var screenshotCountdownEnabled: Bool = false
+    @AppStorage("screenshotCountdownDuration") var screenshotCountdownDuration: Int = 3
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
     @AppStorage("alwaysCaptureMainDisplay") var alwaysCaptureMainDisplay: Bool = false
     @AppStorage("showRegionIndicator") var showRegionIndicator: Bool = true
@@ -162,6 +164,7 @@ class CaptureSettings: ObservableObject {
             "screenshotFormat", "screenshotScale", "jpegQuality",
             "videoCountdownEnabled", "videoCountdownDuration",
             "gifCountdownEnabled", "gifCountdownDuration",
+            "screenshotCountdownEnabled", "screenshotCountdownDuration",
             "hasCompletedOnboarding", "alwaysCaptureMainDisplay", "showRegionIndicator"
         ]
 #if APPSTORE
