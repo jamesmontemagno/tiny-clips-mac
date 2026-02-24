@@ -16,6 +16,7 @@ enum SettingsTab: String, CaseIterable {
     case screenshot = "Screenshot"
     case video = "Video"
     case gif = "GIF"
+    case pro = "Pro"
     case about = "About"
 
     var icon: String {
@@ -24,8 +25,17 @@ enum SettingsTab: String, CaseIterable {
         case .screenshot: return "camera"
         case .video: return "video"
         case .gif: return "photo.on.rectangle"
+        case .pro: return "star"
         case .about: return "info.circle"
         }
+    }
+
+    static var displayCases: [SettingsTab] {
+#if APPSTORE
+        return allCases
+#else
+        return allCases.filter { $0 != .pro }
+#endif
     }
 }
 
@@ -37,7 +47,7 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             Picker("", selection: $selectedTab) {
-                ForEach(SettingsTab.allCases, id: \.self) { tab in
+                ForEach(SettingsTab.displayCases, id: \.self) { tab in
                     Label(tab.rawValue, systemImage: tab.icon).tag(tab)
                 }
             }
@@ -56,6 +66,8 @@ struct SettingsView: View {
                     videoSection
                 case .gif:
                     gifSection
+                case .pro:
+                    proSection
                 case .about:
                     aboutSection
                 }
@@ -260,6 +272,15 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Pro
+
+    @ViewBuilder
+    private var proSection: some View {
+#if APPSTORE
+        ProSettingsSection()
+#endif
+    }
+
     // MARK: - About
 
     @ViewBuilder
@@ -346,3 +367,70 @@ struct SettingsView: View {
         }
     }
 }
+
+// MARK: - Pro Settings Section (APPSTORE only)
+
+#if APPSTORE
+private struct ProSettingsSection: View {
+    @ObservedObject private var storeService = StoreService.shared
+
+    var body: some View {
+        Section {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("TinyClips Pro")
+                        .font(.headline)
+                    Text(storeService.isPro
+                         ? "You have Pro — thank you for your support!"
+                         : "Unlock Clips Manager and more.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if storeService.isPro {
+                    Label("Active", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                        .font(.callout)
+                }
+            }
+        }
+
+        if !storeService.isPro {
+            Section {
+                if let product = storeService.proProduct {
+                    Button("Upgrade to Pro — \(product.displayPrice)") {
+                        Task { await storeService.purchase() }
+                    }
+                    .disabled(storeService.isPurchasing)
+                } else if storeService.isLoading {
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("Loading…").foregroundStyle(.secondary)
+                    }
+                } else {
+                    Button("Upgrade to Pro") {}
+                        .disabled(true)
+                }
+
+                Button("Restore Purchase") {
+                    Task { await storeService.restore() }
+                }
+                .disabled(storeService.isPurchasing)
+
+                if let error = storeService.purchaseError {
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                }
+            }
+        }
+
+        Section("Pro Features") {
+            Label("Clips Manager — browse screenshots, videos & GIFs", systemImage: "photo.stack")
+            Label("Grid and list views with thumbnail previews", systemImage: "square.grid.2x2")
+            Label("Sort, filter, copy, share, and delete clips", systemImage: "arrow.up.arrow.down")
+        }
+        .foregroundStyle(storeService.isPro ? .primary : .secondary)
+    }
+}
+#endif

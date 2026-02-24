@@ -60,6 +60,10 @@ private struct MenuBarContentView: View {
             sparkleController.checkForUpdates()
         }
 #endif
+        Button("Clips Manager…") {
+            captureManager.showClipsManager()
+        }
+
         Button("Guide…") {
             captureManager.showGuide()
         }
@@ -156,6 +160,7 @@ class CaptureManager: ObservableObject {
     private var countdownWindow: CountdownWindow?
     private var onboardingWindow: OnboardingWizardWindow?
     private var guideWindow: GuideWindow?
+    private var clipsManagerWindow: ClipsManagerWindow?
     private var screenPickerWindow: ScreenPickerWindow?
     private let hotKeyManager = HotKeyManager()
 
@@ -551,6 +556,26 @@ class CaptureManager: ObservableObject {
         }
         onboardingWindow = window
 
+        DispatchQueue.main.async {
+            self.bringWindowToFront(window)
+        }
+    }
+
+    func showClipsManager() {
+        if let clipsManagerWindow {
+            DispatchQueue.main.async {
+                self.bringWindowToFront(clipsManagerWindow)
+            }
+            return
+        }
+
+        let window = ClipsManagerWindow(onClose: { [weak self] in
+            DispatchQueue.main.async {
+                self?.clipsManagerWindow = nil
+            }
+        })
+
+        self.clipsManagerWindow = window
         DispatchQueue.main.async {
             self.bringWindowToFront(window)
         }
