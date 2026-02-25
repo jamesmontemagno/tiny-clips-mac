@@ -156,6 +156,23 @@ struct SettingsView: View {
                 Text("25%").tag(25)
             }
         }
+
+        Section("Countdown") {
+            Toggle("Countdown before screenshot", isOn: $settings.screenshotCountdownEnabled)
+            if settings.screenshotCountdownEnabled {
+                HStack {
+                    Text("Duration:")
+                    Slider(
+                        value: $settings.screenshotCountdownDuration.doubleValue,
+                        in: 1...10,
+                        step: 1
+                    )
+                    Text("\(settings.screenshotCountdownDuration)s")
+                        .monospacedDigit()
+                        .frame(width: 30, alignment: .trailing)
+                }
+            }
+        }
     }
 
     // MARK: - Video
