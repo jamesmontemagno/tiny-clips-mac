@@ -1,4 +1,5 @@
 import SwiftUI
+import ScreenCaptureKit
 
 @main
 struct TinyClipsApp: App {
@@ -31,8 +32,8 @@ private struct MenuBarContentView: View {
 
     var body: some View {
         if !captureManager.isRecording {
-            Button(screenshotTitle) {
-                captureManager.takeScreenshot(useFullScreen: isOptionPressed)
+            Button("Screenshot…") {
+                captureManager.takeScreenshot()
             }
             .keyboardShortcut("5", modifiers: [.control, .option, .command])
 
@@ -114,10 +115,6 @@ private struct MenuBarContentView: View {
         }
     }
 
-    private var screenshotTitle: String {
-        isOptionPressed ? "Screenshot (Full Screen)" : "Screenshot"
-    }
-
     private var recordVideoTitle: String {
         isOptionPressed ? "Record Video (Full Screen)" : "Record Video"
     }
@@ -144,6 +141,8 @@ class CaptureManager: ObservableObject {
 
     private var videoRecorder: VideoRecorder?
     private var gifWriter: GifWriter?
+    private var screenshotPickerPanel: ScreenshotPickerPanel?
+    private var screenshotPickerPosition: NSPoint?
     private var startPanel: StartRecordingPanel?
     private var stopPanel: StopRecordingPanel?
     private var regionIndicatorPanel: RegionIndicatorPanel?
@@ -214,39 +213,103 @@ class CaptureManager: ObservableObject {
     func takeScreenshot(useFullScreen: Bool = false) {
         Task {
             guard await PermissionManager.shared.checkPermission() else { return }
-            guard let region = await chooseCaptureRegion(useFullScreen: useFullScreen) else { return }
+            showScreenshotPicker()
+        }
+    }
 
-            let doCapture = { [weak self] in
+    private func showScreenshotPicker() {
+        guard screenshotPickerPanel == nil else { return }
+        let panel = ScreenshotPickerPanel(
+            onCapture: { [weak self] mode in
                 guard let self else { return }
+                self.dismissScreenshotPicker()
                 Task {
-                    do {
-                        let settings = CaptureSettings.shared
-                        let shouldSaveImmediately = !settings.showScreenshotEditor || settings.saveImmediatelyScreenshot
-                        let outputURL: URL
+                    await self.performScreenshotCapture(mode: mode)
+                }
+            },
+            onCancel: { [weak self] in
+                self?.dismissScreenshotPicker()
+            }
+        )
+        panel.show(at: screenshotPickerPosition)
+        self.screenshotPickerPanel = panel
+    }
 
+    private func dismissScreenshotPicker() {
+        if let panel = screenshotPickerPanel {
+            screenshotPickerPosition = panel.frame.origin
+        }
+        screenshotPickerPanel?.dismiss()
+        screenshotPickerPanel = nil
+    }
+
+    private func performScreenshotCapture(mode: ScreenshotMode) async {
+        switch mode {
+        case .region:
+            guard let region = await RegionSelector.selectRegion() else {
+                showScreenshotPicker()
+                return
+            }
+            doScreenshotCapture(region: region, window: nil)
+
+        case .screen:
+            let needsPicker = NSScreen.screens.count > 1 && !CaptureSettings.shared.alwaysCaptureMainDisplay
+            let screen: NSScreen?
+            if needsPicker {
+                screen = await pickScreen()
+            } else {
+                screen = screenUnderMouseCursor() ?? NSScreen.main
+            }
+            guard let screen, let region = CaptureRegion.fullScreen(for: screen) else {
+                showScreenshotPicker()
+                return
+            }
+            doScreenshotCapture(region: region, window: nil)
+
+        case .window:
+            guard let window = await WindowSelector.selectWindow() else {
+                showScreenshotPicker()
+                return
+            }
+            doScreenshotCapture(region: nil, window: window)
+        }
+    }
+
+    private func doScreenshotCapture(region: CaptureRegion?, window: SCWindow?) {
+        let doCapture = { [weak self] in
+            guard let self else { return }
+            Task {
+                do {
+                    let settings = CaptureSettings.shared
+                    let shouldSaveImmediately = !settings.showScreenshotEditor || settings.saveImmediatelyScreenshot
+                    let outputURL: URL = shouldSaveImmediately
+                        ? SaveService.shared.generateURL(for: .screenshot)
+                        : self.temporaryURL(fileExtension: settings.imageFormat.rawValue)
+
+                    let url: URL
+                    if let window {
+                        url = try await ScreenshotCapture.captureWindow(window, outputURL: outputURL)
+                    } else if let region {
+                        url = try await ScreenshotCapture.capture(region: region, outputURL: outputURL)
+                    } else {
+                        return
+                    }
+
+                    if settings.showScreenshotEditor {
                         if shouldSaveImmediately {
-                            outputURL = SaveService.shared.generateURL(for: .screenshot)
-                        } else {
-                            outputURL = self.temporaryURL(fileExtension: settings.imageFormat.rawValue)
-                        }
-
-                        let url = try await ScreenshotCapture.capture(region: region, outputURL: outputURL)
-                        if settings.showScreenshotEditor {
-                            if shouldSaveImmediately {
-                                SaveService.shared.handleSavedFile(url: url, type: .screenshot)
-                            }
-                            self.showScreenshotEditor(for: url, deleteSourceOnCancel: !shouldSaveImmediately)
-                        } else {
                             SaveService.shared.handleSavedFile(url: url, type: .screenshot)
                         }
-                    } catch {
-                        SaveService.shared.showError("Screenshot failed: \(error.localizedDescription)")
+                        self.showScreenshotEditor(for: url, deleteSourceOnCancel: !shouldSaveImmediately)
+                    } else {
+                        SaveService.shared.handleSavedFile(url: url, type: .screenshot)
                     }
+                } catch {
+                    SaveService.shared.showError("Screenshot failed: \(error.localizedDescription)")
                 }
+                self.showScreenshotPicker()
             }
-
-            showCountdownThen(for: .screenshot, action: doCapture)
         }
+        showCountdownThen(for: .screenshot, action: doCapture)
     }
 
     func startVideoRecording(useFullScreen: Bool = false) {
