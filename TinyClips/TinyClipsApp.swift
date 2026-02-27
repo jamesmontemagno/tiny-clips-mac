@@ -359,13 +359,19 @@ class CaptureManager: ObservableObject {
 
                     try await recorder.start(region: region, outputURL: url)
                     self.showStopPanel()
-                    self.showRegionIndicator()
                 } catch {
                     self.isRecording = false
                     self.activeRecordingRegion = nil
+                    self.dismissRegionIndicator()
                     SaveService.shared.showError("Video recording failed: \(error.localizedDescription)")
                 }
             }
+        }
+
+        if CaptureSettings.shared.showRegionIndicator {
+            let panel = RegionIndicatorPanel(region: region)
+            panel.show()
+            self.regionIndicatorPanel = panel
         }
 
         showCountdownThen(for: .video, action: doRecord)
@@ -387,13 +393,19 @@ class CaptureManager: ObservableObject {
 
                         try await writer.start(region: region)
                         self.showStopPanel()
-                        self.showRegionIndicator()
                     } catch {
                         self.isRecording = false
                         self.activeRecordingRegion = nil
+                        self.dismissRegionIndicator()
                         SaveService.shared.showError("GIF recording failed: \(error.localizedDescription)")
                     }
                 }
+            }
+
+            if CaptureSettings.shared.showRegionIndicator {
+                let panel = RegionIndicatorPanel(region: region)
+                panel.show()
+                self.regionIndicatorPanel = panel
             }
 
             showCountdownThen(for: .gif, action: doRecord)
@@ -581,15 +593,6 @@ class CaptureManager: ObservableObject {
         recordPanelPosition = nil
     }
 
-    private func showRegionIndicator() {
-        guard CaptureSettings.shared.showRegionIndicator,
-              let region = activeRecordingRegion else { return }
-        
-        let panel = RegionIndicatorPanel(region: region)
-        panel.show()
-        self.regionIndicatorPanel = panel
-    }
-    
     private func dismissRegionIndicator() {
         regionIndicatorPanel?.close()
         regionIndicatorPanel = nil
