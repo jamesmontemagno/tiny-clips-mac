@@ -37,7 +37,7 @@ private class RegionSelectorController {
         let screens = targetScreen.map { [$0] } ?? NSScreen.screens
         for screen in screens {
             let window = RegionOverlayWindow(
-                contentRect: screen.frame,
+                contentRect: NSRect(origin: .zero, size: screen.frame.size),
                 styleMask: .borderless,
                 backing: .buffered,
                 defer: false,
@@ -181,13 +181,13 @@ private class RegionSelectionView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        currentPoint = convert(event.locationInWindow, from: nil)
+        currentPoint = clampedPoint(convert(event.locationInWindow, from: nil))
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
         guard let start = startPoint else { return }
-        let end = convert(event.locationInWindow, from: nil)
+        let end = clampedPoint(convert(event.locationInWindow, from: nil))
         let selectionRect = makeRect(from: start, to: end)
 
         guard selectionRect.width >= 10, selectionRect.height >= 10 else {
@@ -229,6 +229,13 @@ private class RegionSelectionView: NSView {
             y: min(p1.y, p2.y),
             width: abs(p2.x - p1.x),
             height: abs(p2.y - p1.y)
+        )
+    }
+
+    private func clampedPoint(_ point: NSPoint) -> NSPoint {
+        NSPoint(
+            x: min(max(point.x, bounds.minX), bounds.maxX),
+            y: min(max(point.y, bounds.minY), bounds.maxY)
         )
     }
 }
