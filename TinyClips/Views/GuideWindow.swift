@@ -78,8 +78,8 @@ private struct GuideWindowView: View {
             sectionCard(title: "How It Works", icon: "list.number") {
                 VStack(alignment: .leading, spacing: 10) {
                     step(number: "1", text: "Choose Screenshot, Record Video, or Record GIF from the menu bar.")
-                    step(number: "2", text: "Drag to select a region, or hold Option while starting to capture the full display under your cursor.")
-                    step(number: "3", text: "For video, pick audio options in the start panel and begin recording.")
+                    step(number: "2", text: "For video/GIF, use the picker to choose Region, Screen, or Window and set an optional countdown.")
+                    step(number: "3", text: "After selecting a region, confirm audio/mic options in the start panel and click Record (or cancel).")
                     step(number: "4", text: "Stop from the floating Stop Recording panel or with the stop shortcut.")
                     step(number: "5", text: "Save directly, or use the editor/trimmer when enabled in Settings.")
                 }
@@ -100,7 +100,7 @@ private struct GuideWindowView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     bullet(text: "Use Settings to enable countdowns, screenshot editor, and trimmer windows.")
                     bullet(text: "If Screen Recording permission changes, restart TinyClips.")
-                    bullet(text: "Use Option when starting a capture for full-display capture.")
+                    bullet(text: "For video/GIF, pick Region, Screen, or Window directly from the recording picker.")
                 }
             }
         }
