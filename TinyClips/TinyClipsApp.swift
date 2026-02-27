@@ -220,11 +220,11 @@ class CaptureManager: ObservableObject {
     private func showScreenshotPicker() {
         guard screenshotPickerPanel == nil else { return }
         let panel = ScreenshotPickerPanel(
-            onCapture: { [weak self] mode in
+            onCapture: { [weak self] mode, countdownEnabled, countdownDuration in
                 guard let self else { return }
                 self.dismissScreenshotPicker()
                 Task {
-                    await self.performScreenshotCapture(mode: mode)
+                    await self.performScreenshotCapture(mode: mode, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
                 }
             },
             onCancel: { [weak self] in
@@ -243,14 +243,14 @@ class CaptureManager: ObservableObject {
         screenshotPickerPanel = nil
     }
 
-    private func performScreenshotCapture(mode: ScreenshotMode) async {
+    private func performScreenshotCapture(mode: ScreenshotMode, countdownEnabled: Bool, countdownDuration: Int) async {
         switch mode {
         case .region:
             guard let region = await RegionSelector.selectRegion() else {
                 showScreenshotPicker()
                 return
             }
-            doScreenshotCapture(region: region, window: nil)
+            doScreenshotCapture(region: region, window: nil, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
 
         case .screen:
             let needsPicker = NSScreen.screens.count > 1 && !CaptureSettings.shared.alwaysCaptureMainDisplay
@@ -264,18 +264,18 @@ class CaptureManager: ObservableObject {
                 showScreenshotPicker()
                 return
             }
-            doScreenshotCapture(region: region, window: nil)
+            doScreenshotCapture(region: region, window: nil, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
 
         case .window:
             guard let window = await WindowSelector.selectWindow() else {
                 showScreenshotPicker()
                 return
             }
-            doScreenshotCapture(region: nil, window: window)
+            doScreenshotCapture(region: nil, window: window, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
         }
     }
 
-    private func doScreenshotCapture(region: CaptureRegion?, window: SCWindow?) {
+    private func doScreenshotCapture(region: CaptureRegion?, window: SCWindow?, countdownEnabled: Bool, countdownDuration: Int) {
         let doCapture = { [weak self] in
             guard let self else { return }
             self.dismissRegionIndicator()
@@ -311,13 +311,21 @@ class CaptureManager: ObservableObject {
             }
         }
         if let region,
-           CaptureSettings.shared.screenshotCountdownEnabled,
+           countdownEnabled,
            CaptureSettings.shared.showRegionIndicator {
             let panel = RegionIndicatorPanel(region: region)
             panel.show()
             self.regionIndicatorPanel = panel
         }
-        showCountdownThen(for: .screenshot, action: doCapture)
+        guard countdownEnabled else {
+            doCapture()
+            return
+        }
+        let window = CountdownWindow(duration: countdownDuration) {
+            doCapture()
+        }
+        self.countdownWindow = window
+        window.show()
     }
 
     func startVideoRecording(useFullScreen: Bool = false) {

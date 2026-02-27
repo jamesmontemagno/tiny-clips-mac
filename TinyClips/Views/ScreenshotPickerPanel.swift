@@ -12,10 +12,10 @@ enum ScreenshotMode {
 // MARK: - Panel
 
 class ScreenshotPickerPanel: NSPanel {
-    private var onCapture: ((ScreenshotMode) -> Void)?
+    private var onCapture: ((ScreenshotMode, Bool, Int) -> Void)?
     private var onCancel: (() -> Void)?
 
-    convenience init(onCapture: @escaping (ScreenshotMode) -> Void, onCancel: @escaping () -> Void) {
+    convenience init(onCapture: @escaping (ScreenshotMode, Bool, Int) -> Void, onCancel: @escaping () -> Void) {
         self.init(
             contentRect: NSRect(x: 0, y: 0, width: 100, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -33,8 +33,8 @@ class ScreenshotPickerPanel: NSPanel {
         self.isMovableByWindowBackground = true
 
         let hostingView = NSHostingView(rootView: ScreenshotPickerView(
-            onCapture: { [weak self] mode in
-                self?.onCapture?(mode)
+            onCapture: { [weak self] mode, countdownEnabled, countdownDuration in
+                self?.onCapture?(mode, countdownEnabled, countdownDuration)
                 self?.onCapture = nil
                 self?.onCancel = nil
             },
@@ -68,10 +68,10 @@ class ScreenshotPickerPanel: NSPanel {
 // MARK: - View
 
 private struct ScreenshotPickerView: View {
-    @AppStorage("screenshotCountdownEnabled") private var countdownEnabled: Bool = false
-    @AppStorage("screenshotCountdownDuration") private var countdownDuration: Int = 3
+    @State private var countdownEnabled: Bool = CaptureSettings.shared.screenshotCountdownEnabled
+    @State private var countdownDuration: Int = CaptureSettings.shared.screenshotCountdownDuration
 
-    let onCapture: (ScreenshotMode) -> Void
+    let onCapture: (ScreenshotMode, Bool, Int) -> Void
     let onCancel: () -> Void
 
     private var timerLabel: String {
@@ -81,7 +81,7 @@ private struct ScreenshotPickerView: View {
     var body: some View {
         HStack(spacing: 8) {
             // Region button
-            Button { onCapture(.region) } label: {
+            Button { onCapture(.region, countdownEnabled, countdownDuration) } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "viewfinder.rectangular")
                         .font(.system(size: 12))
@@ -98,7 +98,7 @@ private struct ScreenshotPickerView: View {
             .help("Select a region to capture")
 
             // Screen button
-            Button { onCapture(.screen) } label: {
+            Button { onCapture(.screen, countdownEnabled, countdownDuration) } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "display")
                         .font(.system(size: 12))
@@ -115,7 +115,7 @@ private struct ScreenshotPickerView: View {
             .help("Capture the full screen")
 
             // Window button
-            Button { onCapture(.window) } label: {
+            Button { onCapture(.window, countdownEnabled, countdownDuration) } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "macwindow")
                         .font(.system(size: 12))
