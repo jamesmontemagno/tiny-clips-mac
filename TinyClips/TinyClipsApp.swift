@@ -278,6 +278,7 @@ class CaptureManager: ObservableObject {
     private func doScreenshotCapture(region: CaptureRegion?, window: SCWindow?) {
         let doCapture = { [weak self] in
             guard let self else { return }
+            self.dismissRegionIndicator()
             Task {
                 do {
                     let settings = CaptureSettings.shared
@@ -308,6 +309,13 @@ class CaptureManager: ObservableObject {
                 }
                 self.showScreenshotPicker()
             }
+        }
+        if let region,
+           CaptureSettings.shared.screenshotCountdownEnabled,
+           CaptureSettings.shared.showRegionIndicator {
+            let panel = RegionIndicatorPanel(region: region)
+            panel.show()
+            self.regionIndicatorPanel = panel
         }
         showCountdownThen(for: .screenshot, action: doCapture)
     }
