@@ -167,12 +167,15 @@ private struct RecordingPickerView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "timer")
                         .font(.system(size: 11))
+                        .foregroundStyle(Color.white)
                     Text(timerLabel)
                         .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.white)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9))
+                        .foregroundStyle(Color.white)
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.white)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
                 .background(.white.opacity(0.1))
