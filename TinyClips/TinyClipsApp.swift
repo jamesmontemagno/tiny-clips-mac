@@ -35,12 +35,12 @@ private struct MenuBarContentView: View {
             }
             .keyboardShortcut("5", modifiers: [.control, .option, .command])
 
-            Button("Record Video") {
+            Button("Record Video...") {
                 captureManager.startVideoRecording()
             }
             .keyboardShortcut("6", modifiers: [.control, .option, .command])
 
-            Button("Record GIF") {
+            Button("Record GIF...") {
                 captureManager.startGifRecording()
             }
             .keyboardShortcut("7", modifiers: [.control, .option, .command])
