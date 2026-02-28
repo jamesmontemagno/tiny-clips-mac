@@ -555,7 +555,7 @@
 				);
 				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.refractored.tinyclips;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Tiny Clips";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) APPSTORE";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -584,7 +584,7 @@
 				);
 				MARKETING_VERSION = 1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.refractored.tinyclips;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "Tiny Clips";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) APPSTORE";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
