@@ -175,7 +175,7 @@ private class RegionSelectionView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        startPoint = convert(event.locationInWindow, from: nil)
+        startPoint = clampedPoint(convert(event.locationInWindow, from: nil))
         currentPoint = startPoint
         needsDisplay = true
     }
