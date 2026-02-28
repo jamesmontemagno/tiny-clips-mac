@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.0.17 - 2026-02-28
+
+### Changed
+- Unified `ScreenshotPickerPanel` and `RecordingPickerPanel` into a single `CapturePickerPanel` class to reduce code duplication.
+- Renamed `RecordingCaptureMode` and `ScreenshotMode` to unified `CapturePickerMode` enum.
+- Theme-adaptive background colors for picker panels (light/dark mode support via `colorScheme` environment).
+
 ## v0.0.16 - 2026-02-28
 
 ### Fixed
