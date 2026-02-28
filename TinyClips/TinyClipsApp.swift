@@ -54,6 +54,13 @@ private struct MenuBarContentView: View {
 
             Divider()
         }
+
+        Button("My Clips…") {
+            captureManager.showClipsManager()
+        }
+
+        Divider()
+
 #if !APPSTORE
         Button("Check for Updates\u{2026}") {
             sparkleController.checkForUpdates()
@@ -130,6 +137,10 @@ class CaptureManager: ObservableObject {
     private var onboardingWindow: OnboardingWizardWindow?
     private var guideWindow: GuideWindow?
     private var screenPickerWindow: ScreenPickerWindow?
+    private var clipsManagerWindow: ClipsManagerWindow?
+#if APPSTORE
+    private var proUpgradeWindow: ProUpgradeWindow?
+#endif
     private let hotKeyManager = HotKeyManager()
 
     init() {
@@ -678,6 +689,54 @@ class CaptureManager: ObservableObject {
             self.bringWindowToFront(window)
         }
     }
+
+    func showClipsManager() {
+#if APPSTORE
+        guard ProManager.shared.isPro else {
+            showProUpgrade()
+            return
+        }
+#endif
+        if let clipsManagerWindow {
+            DispatchQueue.main.async {
+                self.bringWindowToFront(clipsManagerWindow)
+            }
+            return
+        }
+
+        let window = ClipsManagerWindow { [weak self] in
+            DispatchQueue.main.async {
+                self?.clipsManagerWindow = nil
+            }
+        }
+
+        self.clipsManagerWindow = window
+        DispatchQueue.main.async {
+            self.bringWindowToFront(window)
+        }
+    }
+
+#if APPSTORE
+    private func showProUpgrade() {
+        if let proUpgradeWindow {
+            DispatchQueue.main.async {
+                self.bringWindowToFront(proUpgradeWindow)
+            }
+            return
+        }
+
+        let window = ProUpgradeWindow { [weak self] in
+            DispatchQueue.main.async {
+                self?.proUpgradeWindow = nil
+            }
+        }
+
+        self.proUpgradeWindow = window
+        DispatchQueue.main.async {
+            self.bringWindowToFront(window)
+        }
+    }
+#endif
 
     private func showRecordingPicker(for type: CaptureType) {
         guard recordingPickerPanel == nil else { return }
