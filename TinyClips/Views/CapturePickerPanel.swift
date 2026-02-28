@@ -1,9 +1,9 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Recording Mode
+// MARK: - Capture Picker Mode
 
-enum RecordingCaptureMode {
+enum CapturePickerMode {
     case region
     case screen
     case window
@@ -12,14 +12,14 @@ enum RecordingCaptureMode {
 
 // MARK: - Panel
 
-class RecordingPickerPanel: NSPanel {
-    private var onCapture: ((RecordingCaptureMode, Bool, Int) -> Void)?
+class CapturePickerPanel: NSPanel {
+    private var onCapture: ((CapturePickerMode, Bool, Int) -> Void)?
     private var onCancel: (() -> Void)?
 
     convenience init(
         countdownEnabled: Bool,
         countdownDuration: Int,
-        onCapture: @escaping (RecordingCaptureMode, Bool, Int) -> Void,
+        onCapture: @escaping (CapturePickerMode, Bool, Int) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.init(
@@ -38,7 +38,7 @@ class RecordingPickerPanel: NSPanel {
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         self.isMovableByWindowBackground = true
 
-        let hostingView = NSHostingView(rootView: RecordingPickerView(
+        let hostingView = NSHostingView(rootView: CapturePickerView(
             countdownEnabled: countdownEnabled,
             countdownDuration: countdownDuration,
             onCapture: { [weak self] mode, enabled, duration in
@@ -75,17 +75,18 @@ class RecordingPickerPanel: NSPanel {
 
 // MARK: - View
 
-private struct RecordingPickerView: View {
+private struct CapturePickerView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @State private var countdownEnabled: Bool
     @State private var countdownDuration: Int
 
-    let onCapture: (RecordingCaptureMode, Bool, Int) -> Void
+    let onCapture: (CapturePickerMode, Bool, Int) -> Void
     let onCancel: () -> Void
 
     init(
         countdownEnabled: Bool,
         countdownDuration: Int,
-        onCapture: @escaping (RecordingCaptureMode, Bool, Int) -> Void,
+        onCapture: @escaping (CapturePickerMode, Bool, Int) -> Void,
         onCancel: @escaping () -> Void
     ) {
         _countdownEnabled = State(initialValue: countdownEnabled)
@@ -114,7 +115,7 @@ private struct RecordingPickerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .help("Select a region to record")
+            .help("Select a region")
 
             Button { onCapture(.screen, countdownEnabled, countdownDuration) } label: {
                 HStack(spacing: 5) {
@@ -123,14 +124,14 @@ private struct RecordingPickerView: View {
                     Text("Screen")
                         .font(.system(size: 13, weight: .medium))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .background(.white.opacity(0.15))
+                .background(.primary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .help("Record a full screen")
+            .help("Full screen")
 
             Button { onCapture(.window, countdownEnabled, countdownDuration) } label: {
                 HStack(spacing: 5) {
@@ -139,18 +140,18 @@ private struct RecordingPickerView: View {
                     Text("Window")
                         .font(.system(size: 13, weight: .medium))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .background(.white.opacity(0.15))
+                .background(.primary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .help("Record a window")
+            .help("Select a window")
 
             Divider()
                 .frame(height: 20)
-                .overlay(.white.opacity(0.2))
+                .overlay(.primary.opacity(0.2))
 
             Menu {
                 Button("Off") {
@@ -167,30 +168,27 @@ private struct RecordingPickerView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "timer")
                         .font(.system(size: 11))
-                        .foregroundStyle(Color.white)
                     Text(timerLabel)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.white)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9))
-                        .foregroundStyle(Color.white)
                 }
-                .foregroundStyle(Color.white)
+                .foregroundStyle(.primary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
-                .background(.white.opacity(0.1))
+                .background(.primary.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .help("Countdown timer before recording")
+            .help("Countdown timer")
 
             Button { onCancel() } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.primary.opacity(0.5))
                     .frame(width: 24, height: 24)
-                    .background(.white.opacity(0.1))
+                    .background(.primary.opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
@@ -201,10 +199,11 @@ private struct RecordingPickerView: View {
         .fixedSize()
         .background {
             RoundedRectangle(cornerRadius: 10)
-                .fill(.black.opacity(0.8))
+                .fill(colorScheme == .dark ? Color.black.opacity(0.8) : Color.white.opacity(0.9))
+                .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 2)
                 .overlay {
                     RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                        .strokeBorder(.primary.opacity(0.15), lineWidth: 0.5)
                 }
         }
     }

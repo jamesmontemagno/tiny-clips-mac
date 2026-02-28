@@ -110,9 +110,9 @@ class CaptureManager: ObservableObject {
 
     private var videoRecorder: VideoRecorder?
     private var gifWriter: GifWriter?
-    private var screenshotPickerPanel: ScreenshotPickerPanel?
+    private var screenshotPickerPanel: CapturePickerPanel?
     private var screenshotPickerPosition: NSPoint?
-    private var recordingPickerPanel: RecordingPickerPanel?
+    private var recordingPickerPanel: CapturePickerPanel?
     private var recordingPickerPosition: NSPoint?
     private var startPanel: StartRecordingPanel?
     private var stopPanel: StopRecordingPanel?
@@ -193,7 +193,10 @@ class CaptureManager: ObservableObject {
 
     private func showScreenshotPicker() {
         guard screenshotPickerPanel == nil else { return }
-        let panel = ScreenshotPickerPanel(
+        let settings = CaptureSettings.shared
+        let panel = CapturePickerPanel(
+            countdownEnabled: settings.screenshotCountdownEnabled,
+            countdownDuration: settings.screenshotCountdownDuration,
             onCapture: { [weak self] mode, countdownEnabled, countdownDuration in
                 guard let self else { return }
                 self.dismissScreenshotPicker()
@@ -217,7 +220,7 @@ class CaptureManager: ObservableObject {
         screenshotPickerPanel = nil
     }
 
-    private func performScreenshotCapture(mode: ScreenshotMode, countdownEnabled: Bool, countdownDuration: Int) async {
+    private func performScreenshotCapture(mode: CapturePickerMode, countdownEnabled: Bool, countdownDuration: Int) async {
         switch mode {
         case .region:
             guard let region = await RegionSelector.selectRegion() else {
@@ -698,7 +701,7 @@ class CaptureManager: ObservableObject {
             countdownDuration = settings.screenshotCountdownDuration
         }
 
-        let panel = RecordingPickerPanel(
+        let panel = CapturePickerPanel(
             countdownEnabled: countdownEnabled,
             countdownDuration: countdownDuration,
             onCapture: { [weak self] mode, enabled, duration in
@@ -731,7 +734,7 @@ class CaptureManager: ObservableObject {
 
     private func performRecordingSetup(
         type: CaptureType,
-        mode: RecordingCaptureMode,
+        mode: CapturePickerMode,
         countdownEnabled: Bool,
         countdownDuration: Int
     ) async {
@@ -756,7 +759,7 @@ class CaptureManager: ObservableObject {
         showStartPanel()
     }
 
-    private func chooseCaptureRegion(for mode: RecordingCaptureMode) async -> CaptureRegion? {
+    private func chooseCaptureRegion(for mode: CapturePickerMode) async -> CaptureRegion? {
         switch mode {
         case .region:
             return await RegionSelector.selectRegion()
