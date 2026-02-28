@@ -3,12 +3,12 @@
     <channel>
         <title>TinyClips</title>
         <item>
-            <title>0.0.14</title>
-            <pubDate>Wed, 18 Feb 2026 07:04:04 +0000</pubDate>
-            <sparkle:version>18</sparkle:version>
-            <sparkle:shortVersionString>0.0.14</sparkle:shortVersionString>
+            <title>0.0.15</title>
+            <pubDate>Sat, 28 Feb 2026 08:42:01 +0000</pubDate>
+            <sparkle:version>19</sparkle:version>
+            <sparkle:shortVersionString>0.0.15</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v0.0.14/TinyClips-v0.0.14.zip" length="2058525" type="application/octet-stream" sparkle:edSignature="vPztqFI6Q2WldXgrgqwOl6izuOkYOj1XIX/70E2V+sP6hmpk8ZMCDc6CIGQZTG/XAzWEC4CppnLv9GAJyzCwBQ=="/>
+            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v0.0.15/TinyClips-v0.0.15.zip" length="2121894" type="application/octet-stream" sparkle:edSignature="WJbbSMlZSeaGGI25vanGPmbV1wBdwQywvBS7nvegxAVGokjg3mIg7BaGa5ll5R0SDKSpvEOYhytnS8dz21GDAQ=="/>
         </item>
     </channel>
 </rss>
