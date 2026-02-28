@@ -32,6 +32,7 @@ enum SettingsTab: String, CaseIterable {
 struct SettingsView: View {
     @ObservedObject private var settings = CaptureSettings.shared
     @ObservedObject private var sparkleController = SparkleController.shared
+    @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
     @State private var selectedTab: SettingsTab = .general
 
     var body: some View {
@@ -109,6 +110,10 @@ struct SettingsView: View {
         }
 
         Section("Advanced") {
+            Toggle("Launch at login", isOn: Binding(
+                get: { launchAtLogin.isEnabled },
+                set: { launchAtLogin.setEnabled($0) }
+            ))
             Toggle("Always capture main display", isOn: $settings.alwaysCaptureMainDisplay)
                 .help("Skip the display picker when multiple monitors are connected")
             Button("Reset All Settings to Defaults…") {
