@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.0.16 - 2026-02-28
+
+### Fixed
+- Timer display in recording picker panel now uses consistent white foreground color in light mode.
+
+### Changed
+- Updated product name to "Tiny Clips" in project configuration.
+
 ## v0.0.15 - 2026-02-28
 
 ### Added
