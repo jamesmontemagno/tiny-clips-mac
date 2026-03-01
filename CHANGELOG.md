@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.0.18 - 2026-03-01
+
+### Added
+- Keyboard shortcuts for capture picker mode selection: R (Region), S (Screen), W (Window).
+- Escape key support to cancel capture picker.
+- Keyboard shortcut hints in button tooltips for discoverability.
+
+### Improved
+- Capture picker now supports both keyboard and mouse input.
+- Updated Guide window and README with new picker keyboard shortcuts.
+
 ## v0.0.17 - 2026-02-28
 
 ### Changed
