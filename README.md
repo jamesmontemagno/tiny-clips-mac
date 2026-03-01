@@ -67,6 +67,10 @@ Download the latest release from the [Releases](https://github.com/jamesmontemag
 | Screenshot | ⌃⌥⌘5 |
 | Record Video | ⌃⌥⌘6 |
 | Record GIF | ⌃⌥⌘7 |
+| Picker: Region | R |
+| Picker: Screen | S |
+| Picker: Window | W |
+| Picker: Cancel | Esc |
 | Stop Recording | ⌘. |
 | Settings | ⌘, |
 

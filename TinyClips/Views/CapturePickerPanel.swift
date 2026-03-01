@@ -13,8 +13,15 @@ enum CapturePickerMode {
 // MARK: - Panel
 
 class CapturePickerPanel: NSPanel {
+    private var didComplete = false
+    private var localMonitor: Any?
+    private var globalMonitor: Any?
     private var onCapture: ((CapturePickerMode, Bool, Int) -> Void)?
     private var onCancel: (() -> Void)?
+    private var countdownEnabled = false
+    private var countdownDuration = 3
+
+    override var canBecomeKey: Bool { true }
 
     convenience init(
         countdownEnabled: Bool,
@@ -28,6 +35,8 @@ class CapturePickerPanel: NSPanel {
             backing: .buffered,
             defer: false
         )
+        self.countdownEnabled = countdownEnabled
+        self.countdownDuration = countdownDuration
         self.onCapture = onCapture
         self.onCancel = onCancel
         self.isReleasedWhenClosed = false
@@ -39,17 +48,19 @@ class CapturePickerPanel: NSPanel {
         self.isMovableByWindowBackground = true
 
         let hostingView = NSHostingView(rootView: CapturePickerView(
-            countdownEnabled: countdownEnabled,
-            countdownDuration: countdownDuration,
+            countdownEnabled: Binding(
+                get: { [weak self] in self?.countdownEnabled ?? false },
+                set: { [weak self] in self?.countdownEnabled = $0 }
+            ),
+            countdownDuration: Binding(
+                get: { [weak self] in self?.countdownDuration ?? 3 },
+                set: { [weak self] in self?.countdownDuration = $0 }
+            ),
             onCapture: { [weak self] mode, enabled, duration in
-                self?.onCapture?(mode, enabled, duration)
-                self?.onCapture = nil
-                self?.onCancel = nil
+                self?.finishCapture(mode: mode, countdownEnabled: enabled, countdownDuration: duration)
             },
             onCancel: { [weak self] in
-                self?.onCancel?()
-                self?.onCapture = nil
-                self?.onCancel = nil
+                self?.finishCancel()
             }
         ))
         let fittingSize = hostingView.fittingSize
@@ -65,11 +76,96 @@ class CapturePickerPanel: NSPanel {
             let y = screen.frame.maxY - frame.height - 60
             setFrameOrigin(NSPoint(x: x, y: y))
         }
-        orderFront(nil)
+        makeKeyAndOrderFront(nil)
+        NSApp.activate()
+        installKeyboardMonitors()
     }
 
     func dismiss() {
+        removeKeyboardMonitors()
         orderOut(nil)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if handleKeyDown(event) {
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    private func installKeyboardMonitors() {
+        removeKeyboardMonitors()
+
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            if self.handleKeyDown(event) {
+                return nil
+            }
+            return event
+        }
+
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            _ = self?.handleKeyDown(event)
+        }
+    }
+
+    private func removeKeyboardMonitors() {
+        if let localMonitor {
+            NSEvent.removeMonitor(localMonitor)
+            self.localMonitor = nil
+        }
+
+        if let globalMonitor {
+            NSEvent.removeMonitor(globalMonitor)
+            self.globalMonitor = nil
+        }
+    }
+
+    private func handleKeyDown(_ event: NSEvent) -> Bool {
+        guard !didComplete else { return true }
+
+        if event.keyCode == 53 {
+            finishCancel()
+            return true
+        }
+
+        guard let key = event.charactersIgnoringModifiers?.lowercased() else {
+            return false
+        }
+
+        switch key {
+        case "r":
+            finishCapture(mode: .region, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+            return true
+        case "s":
+            finishCapture(mode: .screen, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+            return true
+        case "w":
+            finishCapture(mode: .window, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func finishCapture(mode: CapturePickerMode, countdownEnabled: Bool, countdownDuration: Int) {
+        guard !didComplete else { return }
+        didComplete = true
+        removeKeyboardMonitors()
+        orderOut(nil)
+        onCapture?(mode, countdownEnabled, countdownDuration)
+        onCapture = nil
+        onCancel = nil
+    }
+
+    private func finishCancel() {
+        guard !didComplete else { return }
+        didComplete = true
+        removeKeyboardMonitors()
+        orderOut(nil)
+        onCancel?()
+        onCapture = nil
+        onCancel = nil
     }
 }
 
@@ -77,20 +173,20 @@ class CapturePickerPanel: NSPanel {
 
 private struct CapturePickerView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @State private var countdownEnabled: Bool
-    @State private var countdownDuration: Int
+    @Binding var countdownEnabled: Bool
+    @Binding var countdownDuration: Int
 
     let onCapture: (CapturePickerMode, Bool, Int) -> Void
     let onCancel: () -> Void
 
     init(
-        countdownEnabled: Bool,
-        countdownDuration: Int,
+        countdownEnabled: Binding<Bool>,
+        countdownDuration: Binding<Int>,
         onCapture: @escaping (CapturePickerMode, Bool, Int) -> Void,
         onCancel: @escaping () -> Void
     ) {
-        _countdownEnabled = State(initialValue: countdownEnabled)
-        _countdownDuration = State(initialValue: countdownDuration)
+        _countdownEnabled = countdownEnabled
+        _countdownDuration = countdownDuration
         self.onCapture = onCapture
         self.onCancel = onCancel
     }
@@ -115,7 +211,7 @@ private struct CapturePickerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .help("Select a region")
+            .help("Select a region (R)")
 
             Button { onCapture(.screen, countdownEnabled, countdownDuration) } label: {
                 HStack(spacing: 5) {
@@ -131,7 +227,7 @@ private struct CapturePickerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .help("Full screen")
+            .help("Full screen (S)")
 
             Button { onCapture(.window, countdownEnabled, countdownDuration) } label: {
                 HStack(spacing: 5) {
@@ -147,7 +243,7 @@ private struct CapturePickerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .help("Select a window")
+            .help("Select a window (W)")
 
             Divider()
                 .frame(height: 20)
@@ -192,7 +288,7 @@ private struct CapturePickerView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .help("Cancel")
+            .help("Cancel (Esc)")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
