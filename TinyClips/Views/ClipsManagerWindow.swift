@@ -1085,16 +1085,6 @@ private struct ClipsManagerContentView: View {
 
     private var toolbar: some View {
         HStack(spacing: 8) {
-            Button {
-                withAnimation {
-                    sidebarVisibility = sidebarVisibility == .detailOnly ? .all : .detailOnly
-                }
-            } label: {
-                Image(systemName: "sidebar.leading")
-            }
-            .buttonStyle(.borderless)
-            .help(sidebarVisibility == .detailOnly ? "Show Sidebar" : "Hide Sidebar")
-
             // Sort & Filter menu
             Menu {
                 Picker("Sort", selection: $viewModel.sortOption) {
