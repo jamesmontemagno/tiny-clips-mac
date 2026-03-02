@@ -893,6 +893,7 @@ private struct ClipsManagerContentView: View {
                 Divider()
                 content
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear { viewModel.load() }
     #if APPSTORE
@@ -1123,11 +1124,14 @@ private struct ClipsManagerContentView: View {
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
 
             // View mode toggle
-            Picker("View Mode", selection: $viewModel.viewMode) {
+            Picker(selection: $viewModel.viewMode) {
                 Image(systemName: "square.grid.2x2").tag(ClipsViewModel.ViewMode.grid)
                 Image(systemName: "list.bullet").tag(ClipsViewModel.ViewMode.list)
+            } label: {
+                EmptyView()
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
             .frame(width: 64)
 
             Button {
