@@ -375,62 +375,31 @@ private struct ProSettingsSection: View {
     @ObservedObject private var storeService = StoreService.shared
 
     var body: some View {
-        Section {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("TinyClips Pro")
-                        .font(.headline)
-                    Text(storeService.isPro
-                         ? "You have Pro — thank you for your support!"
-                         : "Unlock Clips Manager and more.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if storeService.isPro {
+        if storeService.isPro {
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("TinyClips Pro")
+                            .font(.headline)
+                        if let plan = storeService.activeProPlan {
+                            Text("Plan: \(plan.label) — thank you for your support!")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Active — thank you for your support!")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
                     Label("Active", systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.green)
                         .font(.callout)
                 }
             }
+        } else {
+            ProSubscriptionView()
         }
-
-        if !storeService.isPro {
-            Section {
-                if let product = storeService.proProduct {
-                    Button("Upgrade to Pro — \(product.displayPrice)") {
-                        Task { await storeService.purchase() }
-                    }
-                    .disabled(storeService.isPurchasing)
-                } else if storeService.isLoading {
-                    HStack {
-                        ProgressView().controlSize(.small)
-                        Text("Loading…").foregroundStyle(.secondary)
-                    }
-                } else {
-                    Button("Upgrade to Pro") {}
-                        .disabled(true)
-                }
-
-                Button("Restore Purchase") {
-                    Task { await storeService.restore() }
-                }
-                .disabled(storeService.isPurchasing)
-
-                if let error = storeService.purchaseError {
-                    Text(error)
-                        .foregroundStyle(.red)
-                        .font(.caption)
-                }
-            }
-        }
-
-        Section("Pro Features") {
-            Label("Clips Manager — browse screenshots, videos & GIFs", systemImage: "photo.stack")
-            Label("Grid and list views with thumbnail previews", systemImage: "square.grid.2x2")
-            Label("Sort, filter, copy, share, and delete clips", systemImage: "arrow.up.arrow.down")
-        }
-        .foregroundStyle(storeService.isPro ? .primary : .secondary)
     }
 }
 #endif
