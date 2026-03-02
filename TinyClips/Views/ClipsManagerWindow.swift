@@ -873,6 +873,7 @@ private struct ClipsManagerContentView: View {
     @State private var collectionClip: ClipItem?
     @State private var batchTag = ""
     @State private var showProUpsell = false
+    @State private var showSidebar = true
 
     private let gridColumns = [
         GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 12)
@@ -880,8 +881,10 @@ private struct ClipsManagerContentView: View {
 
     var body: some View {
         HSplitView {
-            sidebar
-                .frame(minWidth: 140, idealWidth: 160, maxWidth: 200)
+            if showSidebar {
+                sidebar
+                    .frame(minWidth: 140, idealWidth: 160, maxWidth: 200)
+            }
             VStack(spacing: 0) {
                 if !isPro {
                     proUpsellBanner
@@ -1050,6 +1053,16 @@ private struct ClipsManagerContentView: View {
 
     private var toolbar: some View {
         HStack(spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showSidebar.toggle()
+                }
+            } label: {
+                Image(systemName: "sidebar.leading")
+            }
+            .buttonStyle(.borderless)
+            .help(showSidebar ? "Hide Sidebar" : "Show Sidebar")
+
             // Sort & Filter menu
             Menu {
                 Picker("Sort", selection: $viewModel.sortOption) {
