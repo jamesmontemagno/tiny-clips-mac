@@ -119,6 +119,7 @@ class CaptureSettings: ObservableObject {
     @AppStorage("copyToClipboard") var copyToClipboard: Bool = true
     @AppStorage("showInFinder") var showInFinder: Bool = false
     @AppStorage("showSaveNotifications") var showSaveNotifications: Bool = false
+    @AppStorage("fileNameTemplate") var fileNameTemplate: String = "TinyClips {date} at {time}"
     @AppStorage("gifFrameRate") var gifFrameRate: Double = 10
     @AppStorage("gifMaxWidth") var gifMaxWidth: Int = 640
     @AppStorage("videoFrameRate") var videoFrameRate: Int = 30
@@ -156,6 +157,7 @@ class CaptureSettings: ObservableObject {
         // Remove all keys in one pass so only a single objectWillChange fires
         let keys: [String] = [
             "saveDirectory", "copyToClipboard", "showInFinder", "showSaveNotifications",
+            "fileNameTemplate",
             "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showTrimmer",
             "recordAudio", "recordMicrophone", "showScreenshotEditor", "showGifTrimmer",
             "saveImmediatelyScreenshot", "saveImmediatelyVideo", "saveImmediatelyGif",

@@ -33,16 +33,78 @@ class SaveService {
         )
 #endif
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
-        let timestamp = formatter.string(from: Date())
-        let filename = "TinyClips \(timestamp).\(fileExtension)"
+        let filename = generatedFileName(for: type, fileExtension: fileExtension)
 
 #if APPSTORE
-        return directoryURL.appendingPathComponent(filename)
+        return uniqueURL(in: directoryURL, filename: filename)
 #else
-        return URL(fileURLWithPath: directory).appendingPathComponent(filename)
+        return uniqueURL(in: URL(fileURLWithPath: directory), filename: filename)
 #endif
+    }
+
+    func generatedFileName(for type: CaptureType, fileExtension: String, date: Date = Date()) -> String {
+        let settings = CaptureSettings.shared
+        let rawTemplate = settings.fileNameTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+        let template = rawTemplate.isEmpty ? "TinyClips {date} at {time}" : rawTemplate
+
+        var stem = template
+            .replacingOccurrences(of: "{app}", with: "TinyClips")
+            .replacingOccurrences(of: "{type}", with: type.label)
+            .replacingOccurrences(of: "{date}", with: formatted(date, format: "yyyy-MM-dd"))
+            .replacingOccurrences(of: "{time}", with: formatted(date, format: "HH.mm.ss"))
+            .replacingOccurrences(of: "{datetime}", with: formatted(date, format: "yyyy-MM-dd_HH.mm.ss"))
+
+        stem = sanitizedFilenameStem(stem, fallbackDate: date)
+
+        let cleanExtension = fileExtension
+            .trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+            .lowercased()
+        return cleanExtension.isEmpty ? stem : "\(stem).\(cleanExtension)"
+    }
+
+    func namingPreview(for type: CaptureType = .screenshot) -> String {
+        generatedFileName(for: type, fileExtension: type.fileExtension)
+    }
+
+    private func formatted(_ date: Date, format: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = format
+        return formatter.string(from: date)
+    }
+
+    private func sanitizedFilenameStem(_ stem: String, fallbackDate: Date) -> String {
+        let invalidCharacters = CharacterSet(charactersIn: "/\\:?*\"<>|")
+        var cleaned = stem
+            .components(separatedBy: invalidCharacters)
+            .joined(separator: "-")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: " .\n\t"))
+
+        if cleaned.isEmpty {
+            cleaned = "TinyClips \(formatted(fallbackDate, format: "yyyy-MM-dd_HH.mm.ss"))"
+        }
+
+        return cleaned
+    }
+
+    private func uniqueURL(in directoryURL: URL, filename: String) -> URL {
+        let initialURL = directoryURL.appendingPathComponent(filename)
+        guard FileManager.default.fileExists(atPath: initialURL.path) else {
+            return initialURL
+        }
+
+        let ext = initialURL.pathExtension
+        let stem = initialURL.deletingPathExtension().lastPathComponent
+        var suffix = 2
+
+        while true {
+            let candidateName = ext.isEmpty ? "\(stem) \(suffix)" : "\(stem) \(suffix).\(ext)"
+            let candidateURL = directoryURL.appendingPathComponent(candidateName)
+            if !FileManager.default.fileExists(atPath: candidateURL.path) {
+                return candidateURL
+            }
+            suffix += 1
+        }
     }
 
 #if APPSTORE

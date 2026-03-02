@@ -115,6 +115,38 @@ struct SettingsView: View {
                 }
             }
 #endif
+            VStack(alignment: .leading, spacing: 6) {
+                TextField("File name template", text: $settings.fileNameTemplate)
+                    .textFieldStyle(.roundedBorder)
+
+                HStack(spacing: 10) {
+                    Button("Classic") {
+                        settings.fileNameTemplate = "TinyClips {date} at {time}"
+                    }
+                    .buttonStyle(.link)
+
+                    Button("Type + Date") {
+                        settings.fileNameTemplate = "{type} {date} at {time}"
+                    }
+                    .buttonStyle(.link)
+
+                    Button("Date First") {
+                        settings.fileNameTemplate = "{date} {time} {type}"
+                    }
+                    .buttonStyle(.link)
+                }
+                .font(.caption)
+
+                Text("Tokens: {app}, {type}, {date}, {time}, {datetime}")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("Preview: \(SaveService.shared.namingPreview(for: .screenshot))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
             Toggle("Copy to clipboard", isOn: $settings.copyToClipboard)
             Toggle("Show in Finder after save", isOn: $settings.showInFinder)
             Toggle("Show notification after save", isOn: $settings.showSaveNotifications)
