@@ -876,7 +876,7 @@ private struct ClipsManagerContentView: View {
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .automatic
 
     private let gridColumns = [
-        GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 12)
+        GridItem(.adaptive(minimum: 180, maximum: 220), spacing: 12)
     ]
 
     var body: some View {
@@ -1402,8 +1402,8 @@ private struct ClipGridCell: View {
                     Spacer()
                 }
             }
-            .aspectRatio(4/3, contentMode: .fit)
-            .clipped()
+            .frame(maxWidth: .infinity)
+            .frame(height: 135)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .onHover { isHovered = $0 }
             .onTapGesture {
@@ -1452,6 +1452,7 @@ private struct ClipGridCell: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .top)
         .contextMenu {
             Button(isFavorite ? "Remove Favorite" : "Add Favorite") { onToggleFavorite() }
             Button("Rename…") { onRename() }
