@@ -1011,6 +1011,12 @@ private struct ClipsManagerContentView: View {
         .background(.yellow.opacity(0.08))
     }
 
+    private func colorForTag(_ tag: String) -> Color {
+        let palette: [Color] = [.blue, .purple, .pink, .orange, .green, .teal, .indigo]
+        let hash = tag.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return palette[hash % palette.count]
+    }
+
     // MARK: - Sidebar
 
     private var sidebar: some View {
@@ -1040,6 +1046,34 @@ private struct ClipsManagerContentView: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(viewModel.selectedCollection == collection ? .primary : .secondary)
+                    }
+                }
+            }
+
+            if !viewModel.availableTags.isEmpty {
+                Section("Tags") {
+                    Button {
+                        viewModel.selectedTag = ""
+                    } label: {
+                        Label("All Tags", systemImage: "tag")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(viewModel.selectedTag.isEmpty ? .primary : .secondary)
+
+                    ForEach(viewModel.availableTags, id: \.self) { tag in
+                        Button {
+                            viewModel.selectedTag = tag
+                        } label: {
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(colorForTag(tag))
+                                    .frame(width: 8, height: 8)
+                                Text(tag)
+                                Spacer(minLength: 0)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(viewModel.selectedTag == tag ? .primary : .secondary)
                     }
                 }
             }
@@ -1618,36 +1652,6 @@ private struct ClipListRow: View {
                 }
                 .buttonStyle(.borderless)
                 .help(isFavorite ? "Remove Favorite" : "Add Favorite")
-
-                Button { onRename() } label: {
-                    Image(systemName: "pencil")
-                }
-                .buttonStyle(.borderless)
-                .help("Rename")
-
-                Button { onEditTags() } label: {
-                    Image(systemName: "tag")
-                }
-                .buttonStyle(.borderless)
-                .help("Edit Tags")
-
-                Button { onEditNotes() } label: {
-                    Image(systemName: "note.text")
-                }
-                .buttonStyle(.borderless)
-                .help("Edit Notes")
-
-                Button { onEditCollection() } label: {
-                    Image(systemName: "folder")
-                }
-                .buttonStyle(.borderless)
-                .help("Set Collection")
-
-                Button { onEditMedia() } label: {
-                    Image(systemName: item.type == .screenshot ? "paintbrush" : "scissors")
-                }
-                .buttonStyle(.borderless)
-                .help(item.type == .screenshot ? "Edit Screenshot" : "Trim Clip")
 
                 Button { onOpenDetails() } label: {
                     Image(systemName: "info.circle")
