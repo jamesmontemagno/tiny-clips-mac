@@ -873,18 +873,17 @@ private struct ClipsManagerContentView: View {
     @State private var collectionClip: ClipItem?
     @State private var batchTag = ""
     @State private var showProUpsell = false
-    @State private var showSidebar = true
+    @State private var sidebarVisibility: NavigationSplitViewVisibility = .automatic
 
     private let gridColumns = [
         GridItem(.adaptive(minimum: 160, maximum: 200), spacing: 12)
     ]
 
     var body: some View {
-        HSplitView {
-            if showSidebar {
-                sidebar
-                    .frame(minWidth: 140, idealWidth: 160, maxWidth: 200)
-            }
+        NavigationSplitView(columnVisibility: $sidebarVisibility) {
+            sidebar
+                .navigationSplitViewColumnWidth(min: 140, ideal: 160, max: 200)
+        } detail: {
             VStack(spacing: 0) {
                 if !isPro {
                     proUpsellBanner
@@ -896,7 +895,6 @@ private struct ClipsManagerContentView: View {
                 Divider()
                 content
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear { viewModel.load() }
     #if APPSTORE
@@ -1054,14 +1052,14 @@ private struct ClipsManagerContentView: View {
     private var toolbar: some View {
         HStack(spacing: 8) {
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showSidebar.toggle()
+                withAnimation {
+                    sidebarVisibility = sidebarVisibility == .detailOnly ? .all : .detailOnly
                 }
             } label: {
                 Image(systemName: "sidebar.leading")
             }
             .buttonStyle(.borderless)
-            .help(showSidebar ? "Hide Sidebar" : "Show Sidebar")
+            .help(sidebarVisibility == .detailOnly ? "Show Sidebar" : "Hide Sidebar")
 
             // Sort & Filter menu
             Menu {
@@ -1404,7 +1402,7 @@ private struct ClipGridCell: View {
                     Spacer()
                 }
             }
-            .aspectRatio(4/3, contentMode: .fill)
+            .aspectRatio(4/3, contentMode: .fit)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .onHover { isHovered = $0 }
