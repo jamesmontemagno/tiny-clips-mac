@@ -22,7 +22,7 @@ class ClipsManagerWindow: NSWindow, NSWindowDelegate {
         self.title = "Clips Manager"
         self.isReleasedWhenClosed = false
         self.delegate = self
-        self.minSize = NSSize(width: 620, height: 420)
+        self.minSize = NSSize(width: 700, height: 460)
         self.center()
         self.contentView = NSHostingView(rootView: ClipsManagerRootView())
     }
@@ -1329,14 +1329,11 @@ private struct ClipGridCell: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(.quaternary)
-                    .aspectRatio(4/3, contentMode: .fit)
 
                 if let thumbnail {
                     Image(nsImage: thumbnail)
                         .resizable()
                         .scaledToFill()
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .aspectRatio(4/3, contentMode: .fit)
                 } else {
                     Image(systemName: item.typeIcon)
                         .font(.system(size: 28))
@@ -1347,7 +1344,6 @@ private struct ClipGridCell: View {
                 if isHovered {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(.black.opacity(0.4))
-                        .aspectRatio(4/3, contentMode: .fit)
                     HStack(spacing: 12) {
                         cellButton(icon: "doc.on.doc", help: "Copy", action: onCopy)
                         cellButton(icon: "folder", help: "Reveal in Finder", action: onReveal)
@@ -1395,6 +1391,9 @@ private struct ClipGridCell: View {
                     Spacer()
                 }
             }
+            .aspectRatio(4/3, contentMode: .fill)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .onHover { isHovered = $0 }
             .onTapGesture {
                 if isSelectionMode {
@@ -1601,39 +1600,74 @@ private struct ClipListRow: View {
             Spacer()
 
             // Actions
-            HStack(spacing: 4) {
-                Button {
-                    onToggleFavorite()
-                } label: {
+            HStack(spacing: 2) {
+                Button { onToggleFavorite() } label: {
                     Image(systemName: isFavorite ? "star.fill" : "star")
                         .foregroundStyle(isFavorite ? .yellow : .secondary)
                 }
                 .buttonStyle(.borderless)
-                Button("Rename") { onRename() }
-                    .buttonStyle(.borderless)
-                Button("Tags") { onEditTags() }
-                    .buttonStyle(.borderless)
-                Button("Notes") { onEditNotes() }
-                    .buttonStyle(.borderless)
-                Button("Collection") { onEditCollection() }
-                    .buttonStyle(.borderless)
-                Button(item.type == .screenshot ? "Edit" : "Trim") { onEditMedia() }
-                    .buttonStyle(.borderless)
-                Button("Info") { onOpenDetails() }
-                    .buttonStyle(.borderless)
-                Button("Copy") { onCopy() }
-                    .buttonStyle(.borderless)
-                Button("Show") { onReveal() }
-                    .buttonStyle(.borderless)
+                .help(isFavorite ? "Remove Favorite" : "Add Favorite")
+
+                Button { onRename() } label: {
+                    Image(systemName: "pencil")
+                }
+                .buttonStyle(.borderless)
+                .help("Rename")
+
+                Button { onEditTags() } label: {
+                    Image(systemName: "tag")
+                }
+                .buttonStyle(.borderless)
+                .help("Edit Tags")
+
+                Button { onEditNotes() } label: {
+                    Image(systemName: "note.text")
+                }
+                .buttonStyle(.borderless)
+                .help("Edit Notes")
+
+                Button { onEditCollection() } label: {
+                    Image(systemName: "folder")
+                }
+                .buttonStyle(.borderless)
+                .help("Set Collection")
+
+                Button { onEditMedia() } label: {
+                    Image(systemName: item.type == .screenshot ? "paintbrush" : "scissors")
+                }
+                .buttonStyle(.borderless)
+                .help(item.type == .screenshot ? "Edit Screenshot" : "Trim Clip")
+
+                Button { onOpenDetails() } label: {
+                    Image(systemName: "info.circle")
+                }
+                .buttonStyle(.borderless)
+                .help("Details")
+
+                Button { onCopy() } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                .help("Copy")
+
+                Button { onReveal() } label: {
+                    Image(systemName: "folder.badge.questionmark")
+                }
+                .buttonStyle(.borderless)
+                .help("Show in Finder")
+
                 ShareLink(item: item.url) {
                     Image(systemName: "square.and.arrow.up")
                 }
                 .buttonStyle(.borderless)
+                .help("Share")
+
                 Button(role: .destructive) { onDelete() } label: {
                     Image(systemName: "trash")
                         .foregroundStyle(.red)
                 }
                 .buttonStyle(.borderless)
+                .help("Delete")
             }
         }
         .padding(.vertical, 4)
