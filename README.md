@@ -56,8 +56,9 @@ Download the latest release from the [Releases](https://github.com/jamesmontemag
 
 1. Click the camera icon in the menu bar
 2. Choose **Screenshot**, **Record Video**, or **Record GIF**
-3. Drag to select a screen region
-4. For video/GIF: click the floating **Stop** button when done
+3. For video/GIF, choose **Region**, **Screen**, or **Window** in the recording picker (and optional countdown)
+4. For region recordings, confirm audio/mic options in the floating **Record** panel
+5. Click the floating **Stop** button when done (or use ⌘.)
 
 ### Keyboard Shortcuts (in menu)
 
@@ -66,6 +67,10 @@ Download the latest release from the [Releases](https://github.com/jamesmontemag
 | Screenshot | ⌃⌥⌘5 |
 | Record Video | ⌃⌥⌘6 |
 | Record GIF | ⌃⌥⌘7 |
+| Picker: Region | R |
+| Picker: Screen | S |
+| Picker: Window | W |
+| Picker: Cancel | Esc |
 | Stop Recording | ⌘. |
 | Settings | ⌘, |
 

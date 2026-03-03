@@ -42,6 +42,7 @@ enum SettingsTab: String, CaseIterable {
 struct SettingsView: View {
     @ObservedObject private var settings = CaptureSettings.shared
     @ObservedObject private var sparkleController = SparkleController.shared
+    @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
     @State private var selectedTab: SettingsTab = .general
 
     var body: some View {
@@ -153,6 +154,10 @@ struct SettingsView: View {
         }
 
         Section("Advanced") {
+            Toggle("Launch at login", isOn: Binding(
+                get: { launchAtLogin.isEnabled },
+                set: { launchAtLogin.setEnabled($0) }
+            ))
             Toggle("Always capture main display", isOn: $settings.alwaysCaptureMainDisplay)
                 .help("Skip the display picker when multiple monitors are connected")
             Button("Reset All Settings to Defaults…") {
@@ -198,6 +203,23 @@ struct SettingsView: View {
                 Text("75%").tag(75)
                 Text("50%").tag(50)
                 Text("25%").tag(25)
+            }
+        }
+
+        Section("Countdown") {
+            Toggle("Countdown before screenshot", isOn: $settings.screenshotCountdownEnabled)
+            if settings.screenshotCountdownEnabled {
+                HStack {
+                    Text("Duration:")
+                    Slider(
+                        value: $settings.screenshotCountdownDuration.doubleValue,
+                        in: 1...10,
+                        step: 1
+                    )
+                    Text("\(settings.screenshotCountdownDuration)s")
+                        .monospacedDigit()
+                        .frame(width: 30, alignment: .trailing)
+                }
             }
         }
     }

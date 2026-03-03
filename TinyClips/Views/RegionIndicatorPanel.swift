@@ -33,7 +33,7 @@ class RegionIndicatorPanel: NSPanel {
         // Convert from display-local coordinates (Y-down from top-left)
         // to screen coordinates (Y-up from bottom-left)
         let screenX = screen.frame.minX + region.sourceRect.minX
-        let screenY = screen.frame.maxY - region.sourceRect.maxY - region.sourceRect.height
+        let screenY = screen.frame.maxY - region.sourceRect.maxY
         
         let panelFrame = NSRect(
             x: screenX,

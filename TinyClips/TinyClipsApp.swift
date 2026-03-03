@@ -1,4 +1,5 @@
 import SwiftUI
+import ScreenCaptureKit
 
 @main
 struct TinyClipsApp: App {
@@ -26,23 +27,21 @@ private struct MenuBarContentView: View {
     @ObservedObject var captureManager: CaptureManager
     @ObservedObject var sparkleController: SparkleController
     @Environment(\.openSettings) private var openSettings
-    @State private var isOptionPressed = false
-    @State private var pollingTimer: Timer?
 
     var body: some View {
         if !captureManager.isRecording {
-            Button(screenshotTitle) {
-                captureManager.takeScreenshot(useFullScreen: isOptionPressed)
+            Button("Screenshot…") {
+                captureManager.takeScreenshot()
             }
             .keyboardShortcut("5", modifiers: [.control, .option, .command])
 
-            Button(recordVideoTitle) {
-                captureManager.startVideoRecording(useFullScreen: isOptionPressed)
+            Button("Record Video...") {
+                captureManager.startVideoRecording()
             }
             .keyboardShortcut("6", modifiers: [.control, .option, .command])
 
-            Button(recordGifTitle) {
-                captureManager.startGifRecording(useFullScreen: isOptionPressed)
+            Button("Record GIF...") {
+                captureManager.startGifRecording()
             }
             .keyboardShortcut("7", modifiers: [.control, .option, .command])
 
@@ -102,39 +101,6 @@ private struct MenuBarContentView: View {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)
-        .onAppear {
-            updateModifierState()
-            let timer = Timer(timeInterval: 0.1, repeats: true) { _ in
-                DispatchQueue.main.async {
-                    updateModifierState()
-                }
-            }
-            RunLoop.main.add(timer, forMode: .common)
-            pollingTimer = timer
-        }
-        .onDisappear {
-            pollingTimer?.invalidate()
-            pollingTimer = nil
-        }
-    }
-
-    private var screenshotTitle: String {
-        isOptionPressed ? "Screenshot (Full Screen)" : "Screenshot"
-    }
-
-    private var recordVideoTitle: String {
-        isOptionPressed ? "Record Video (Full Screen)" : "Record Video"
-    }
-
-    private var recordGifTitle: String {
-        isOptionPressed ? "Record GIF (Full Screen)" : "Record GIF"
-    }
-
-    private func updateModifierState() {
-        let hasOption = NSEvent.modifierFlags.contains(.option)
-        if hasOption != isOptionPressed {
-            isOptionPressed = hasOption
-        }
     }
 }
 
@@ -148,10 +114,17 @@ class CaptureManager: ObservableObject {
 
     private var videoRecorder: VideoRecorder?
     private var gifWriter: GifWriter?
+    private var screenshotPickerPanel: CapturePickerPanel?
+    private var screenshotPickerPosition: NSPoint?
+    private var recordingPickerPanel: CapturePickerPanel?
+    private var recordingPickerPosition: NSPoint?
     private var startPanel: StartRecordingPanel?
     private var stopPanel: StopRecordingPanel?
     private var regionIndicatorPanel: RegionIndicatorPanel?
-    private var pendingVideoRegion: CaptureRegion?
+    private var pendingRecordingRegion: CaptureRegion?
+    private var pendingRecordingType: CaptureType?
+    private var pendingRecordingCountdownEnabled: Bool = true
+    private var pendingRecordingCountdownDuration: Int = 3
     private var activeRecordingRegion: CaptureRegion?
     private var recordPanelPosition: NSPoint?
     private var trimmerWindow: VideoTrimmerWindow?
@@ -216,48 +189,141 @@ class CaptureManager: ObservableObject {
         }
     }
 
-    func takeScreenshot(useFullScreen: Bool = false) {
+    func takeScreenshot() {
         Task {
             guard await PermissionManager.shared.checkPermission() else { return }
-            guard let region = await chooseCaptureRegion(useFullScreen: useFullScreen) else { return }
+            showScreenshotPicker()
+        }
+    }
 
-            do {
-                let settings = CaptureSettings.shared
-                let shouldSaveImmediately = !settings.showScreenshotEditor || settings.saveImmediatelyScreenshot
-                let outputURL: URL
-
-                if shouldSaveImmediately {
-                    outputURL = SaveService.shared.generateURL(for: .screenshot)
-                } else {
-                    outputURL = temporaryURL(fileExtension: settings.imageFormat.rawValue)
+    private func showScreenshotPicker() {
+        guard screenshotPickerPanel == nil else { return }
+        let settings = CaptureSettings.shared
+        let panel = CapturePickerPanel(
+            countdownEnabled: settings.screenshotCountdownEnabled,
+            countdownDuration: settings.screenshotCountdownDuration,
+            onCapture: { [weak self] mode, countdownEnabled, countdownDuration in
+                guard let self else { return }
+                self.dismissScreenshotPicker()
+                Task {
+                    await self.performScreenshotCapture(mode: mode, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
                 }
+            },
+            onCancel: { [weak self] in
+                self?.dismissScreenshotPicker()
+            }
+        )
+        panel.show(at: screenshotPickerPosition)
+        self.screenshotPickerPanel = panel
+    }
 
-                let url = try await ScreenshotCapture.capture(region: region, outputURL: outputURL)
-                if settings.showScreenshotEditor {
-                    if shouldSaveImmediately {
+    private func dismissScreenshotPicker() {
+        if let panel = screenshotPickerPanel {
+            screenshotPickerPosition = panel.frame.origin
+        }
+        screenshotPickerPanel?.dismiss()
+        screenshotPickerPanel = nil
+    }
+
+    private func performScreenshotCapture(mode: CapturePickerMode, countdownEnabled: Bool, countdownDuration: Int) async {
+        switch mode {
+        case .region:
+            guard let region = await RegionSelector.selectRegion() else {
+                showScreenshotPicker()
+                return
+            }
+            doScreenshotCapture(region: region, window: nil, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+
+        case .screen:
+            let needsPicker = NSScreen.screens.count > 1 && !CaptureSettings.shared.alwaysCaptureMainDisplay
+            let screen: NSScreen?
+            if needsPicker {
+                screen = await pickScreen()
+            } else {
+                screen = screenUnderMouseCursor() ?? NSScreen.main
+            }
+            guard let screen, let region = CaptureRegion.fullScreen(for: screen) else {
+                showScreenshotPicker()
+                return
+            }
+            doScreenshotCapture(region: region, window: nil, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+
+        case .window:
+            guard let window = await WindowSelector.selectWindow() else {
+                showScreenshotPicker()
+                return
+            }
+            doScreenshotCapture(region: nil, window: window, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+        }
+    }
+
+    private func doScreenshotCapture(region: CaptureRegion?, window: SCWindow?, countdownEnabled: Bool, countdownDuration: Int) {
+        let doCapture = { [weak self] in
+            guard let self else { return }
+            self.dismissRegionIndicator()
+            Task {
+                do {
+                    let settings = CaptureSettings.shared
+                    let shouldSaveImmediately = !settings.showScreenshotEditor || settings.saveImmediatelyScreenshot
+                    let outputURL: URL = shouldSaveImmediately
+                        ? SaveService.shared.generateURL(for: .screenshot)
+                        : self.temporaryURL(fileExtension: settings.imageFormat.rawValue)
+
+                    let url: URL
+                    if let window {
+                        url = try await ScreenshotCapture.captureWindow(window, outputURL: outputURL)
+                    } else if let region {
+                        url = try await ScreenshotCapture.capture(region: region, outputURL: outputURL)
+                    } else {
+                        return
+                    }
+
+                    if settings.showScreenshotEditor {
+                        if shouldSaveImmediately {
+                            SaveService.shared.handleSavedFile(url: url, type: .screenshot)
+                        }
+                        self.showScreenshotEditor(for: url, deleteSourceOnCancel: !shouldSaveImmediately)
+                    } else {
                         SaveService.shared.handleSavedFile(url: url, type: .screenshot)
                     }
-                    showScreenshotEditor(for: url, deleteSourceOnCancel: !shouldSaveImmediately)
-                } else {
-                    SaveService.shared.handleSavedFile(url: url, type: .screenshot)
+                } catch {
+                    SaveService.shared.showError("Screenshot failed: \(error.localizedDescription)")
                 }
-            } catch {
-                SaveService.shared.showError("Screenshot failed: \(error.localizedDescription)")
+                self.showScreenshotPicker()
             }
         }
+        if let region,
+           countdownEnabled,
+           CaptureSettings.shared.showRegionIndicator {
+            let panel = RegionIndicatorPanel(region: region)
+            panel.show()
+            self.regionIndicatorPanel = panel
+        }
+        guard countdownEnabled else {
+            doCapture()
+            return
+        }
+        let window = CountdownWindow(duration: countdownDuration) {
+            doCapture()
+        }
+        self.countdownWindow = window
+        window.show()
     }
 
-    func startVideoRecording(useFullScreen: Bool = false) {
+    func startVideoRecording() {
         Task {
             guard await PermissionManager.shared.checkPermission() else { return }
-            guard let region = await chooseCaptureRegion(useFullScreen: useFullScreen) else { return }
-
-            self.pendingVideoRegion = region
-            showStartPanel()
+            showRecordingPicker(for: .video)
         }
     }
 
-    private func beginVideoRecording(region: CaptureRegion, systemAudio: Bool, microphone: Bool) {
+    private func beginVideoRecording(
+        region: CaptureRegion,
+        systemAudio: Bool,
+        microphone: Bool,
+        countdownEnabled: Bool,
+        countdownDuration: Int
+    ) {
         let settings = CaptureSettings.shared
         settings.recordAudio = systemAudio
         settings.recordMicrophone = microphone
@@ -278,45 +344,57 @@ class CaptureManager: ObservableObject {
 
                     try await recorder.start(region: region, outputURL: url)
                     self.showStopPanel()
-                    self.showRegionIndicator()
                 } catch {
                     self.isRecording = false
                     self.activeRecordingRegion = nil
+                    self.dismissRegionIndicator()
                     SaveService.shared.showError("Video recording failed: \(error.localizedDescription)")
                 }
             }
         }
 
-        showCountdownThen(for: .video, action: doRecord)
+        showCountdownThen(
+            for: .video,
+            countdownEnabled: countdownEnabled,
+            countdownDuration: countdownDuration,
+            action: doRecord
+        )
     }
 
-    func startGifRecording(useFullScreen: Bool = false) {
+    func startGifRecording() {
         Task {
             guard await PermissionManager.shared.checkPermission() else { return }
-            guard let region = await chooseCaptureRegion(useFullScreen: useFullScreen) else { return }
+            showRecordingPicker(for: .gif)
+        }
+    }
 
-            let doRecord = { [weak self] in
-                guard let self else { return }
-                Task {
-                    do {
-                        let writer = GifWriter()
-                        self.gifWriter = writer
-                        self.activeRecordingRegion = region
-                        self.isRecording = true
+    private func beginGifRecording(region: CaptureRegion, countdownEnabled: Bool, countdownDuration: Int) {
+        let doRecord = { [weak self] in
+            guard let self else { return }
+            Task {
+                do {
+                    let writer = GifWriter()
+                    self.gifWriter = writer
+                    self.activeRecordingRegion = region
+                    self.isRecording = true
 
-                        try await writer.start(region: region)
-                        self.showStopPanel()
-                        self.showRegionIndicator()
-                    } catch {
-                        self.isRecording = false
-                        self.activeRecordingRegion = nil
-                        SaveService.shared.showError("GIF recording failed: \(error.localizedDescription)")
-                    }
+                    try await writer.start(region: region)
+                    self.showStopPanel()
+                } catch {
+                    self.isRecording = false
+                    self.activeRecordingRegion = nil
+                    self.dismissRegionIndicator()
+                    SaveService.shared.showError("GIF recording failed: \(error.localizedDescription)")
                 }
             }
-
-            showCountdownThen(for: .gif, action: doRecord)
         }
+
+        showCountdownThen(
+            for: .gif,
+            countdownEnabled: countdownEnabled,
+            countdownDuration: countdownDuration,
+            action: doRecord
+        )
     }
 
     func stopRecording() {
@@ -463,14 +541,43 @@ class CaptureManager: ObservableObject {
     private func showStartPanel() {
         let panel = StartRecordingPanel(
             onStart: { [weak self] systemAudio, mic in
-                guard let self, let region = self.pendingVideoRegion else { return }
-                self.pendingVideoRegion = nil
+                guard
+                    let self,
+                    let region = self.pendingRecordingRegion,
+                    let type = self.pendingRecordingType
+                else { return }
+
+                let countdownEnabled = self.pendingRecordingCountdownEnabled
+                let countdownDuration = self.pendingRecordingCountdownDuration
+
+                self.pendingRecordingRegion = nil
+                self.pendingRecordingType = nil
                 self.dismissStartPanel()
-                self.beginVideoRecording(region: region, systemAudio: systemAudio, microphone: mic)
+
+                switch type {
+                case .video:
+                    self.beginVideoRecording(
+                        region: region,
+                        systemAudio: systemAudio,
+                        microphone: mic,
+                        countdownEnabled: countdownEnabled,
+                        countdownDuration: countdownDuration
+                    )
+                case .gif:
+                    self.beginGifRecording(
+                        region: region,
+                        countdownEnabled: countdownEnabled,
+                        countdownDuration: countdownDuration
+                    )
+                case .screenshot:
+                    break
+                }
             },
             onCancel: { [weak self] in
-                self?.pendingVideoRegion = nil
+                self?.pendingRecordingRegion = nil
+                self?.pendingRecordingType = nil
                 self?.dismissStartPanel()
+                self?.dismissRegionIndicator()
             }
         )
         panel.show()
@@ -500,36 +607,35 @@ class CaptureManager: ObservableObject {
         recordPanelPosition = nil
     }
 
-    private func showRegionIndicator() {
-        guard CaptureSettings.shared.showRegionIndicator,
-              let region = activeRecordingRegion else { return }
-        
-        let panel = RegionIndicatorPanel(region: region)
-        panel.show()
-        self.regionIndicatorPanel = panel
-    }
-    
     private func dismissRegionIndicator() {
         regionIndicatorPanel?.close()
         regionIndicatorPanel = nil
     }
 
-    private func showCountdownThen(for type: CaptureType, action: @escaping () -> Void) {
+    private func showCountdownThen(
+        for type: CaptureType,
+        countdownEnabled: Bool? = nil,
+        countdownDuration: Int? = nil,
+        action: @escaping () -> Void
+    ) {
         let settings = CaptureSettings.shared
-        let enabled: Bool
-        let duration: Int
+        let defaultEnabled: Bool
+        let defaultDuration: Int
 
         switch type {
         case .video:
-            enabled = settings.videoCountdownEnabled
-            duration = settings.videoCountdownDuration
+            defaultEnabled = settings.videoCountdownEnabled
+            defaultDuration = settings.videoCountdownDuration
         case .gif:
-            enabled = settings.gifCountdownEnabled
-            duration = settings.gifCountdownDuration
-        default:
-            action()
-            return
+            defaultEnabled = settings.gifCountdownEnabled
+            defaultDuration = settings.gifCountdownDuration
+        case .screenshot:
+            defaultEnabled = settings.screenshotCountdownEnabled
+            defaultDuration = settings.screenshotCountdownDuration
         }
+
+        let enabled = countdownEnabled ?? defaultEnabled
+        let duration = countdownDuration ?? defaultDuration
 
         guard enabled else {
             action()
@@ -601,8 +707,88 @@ class CaptureManager: ObservableObject {
         }
     }
 
-    private func chooseCaptureRegion(useFullScreen: Bool) async -> CaptureRegion? {
-        if useFullScreen {
+    private func showRecordingPicker(for type: CaptureType) {
+        guard recordingPickerPanel == nil else { return }
+
+        let settings = CaptureSettings.shared
+        let countdownEnabled: Bool
+        let countdownDuration: Int
+
+        switch type {
+        case .video:
+            countdownEnabled = settings.videoCountdownEnabled
+            countdownDuration = settings.videoCountdownDuration
+        case .gif:
+            countdownEnabled = settings.gifCountdownEnabled
+            countdownDuration = settings.gifCountdownDuration
+        case .screenshot:
+            countdownEnabled = settings.screenshotCountdownEnabled
+            countdownDuration = settings.screenshotCountdownDuration
+        }
+
+        let panel = CapturePickerPanel(
+            countdownEnabled: countdownEnabled,
+            countdownDuration: countdownDuration,
+            onCapture: { [weak self] mode, enabled, duration in
+                guard let self else { return }
+                self.dismissRecordingPicker()
+                Task {
+                    await self.performRecordingSetup(
+                        type: type,
+                        mode: mode,
+                        countdownEnabled: enabled,
+                        countdownDuration: duration
+                    )
+                }
+            },
+            onCancel: { [weak self] in
+                self?.dismissRecordingPicker()
+            }
+        )
+        panel.show(at: recordingPickerPosition)
+        self.recordingPickerPanel = panel
+    }
+
+    private func dismissRecordingPicker() {
+        if let panel = recordingPickerPanel {
+            recordingPickerPosition = panel.frame.origin
+        }
+        recordingPickerPanel?.dismiss()
+        recordingPickerPanel = nil
+    }
+
+    private func performRecordingSetup(
+        type: CaptureType,
+        mode: CapturePickerMode,
+        countdownEnabled: Bool,
+        countdownDuration: Int
+    ) async {
+        guard let region = await chooseCaptureRegion(for: mode) else {
+            showRecordingPicker(for: type)
+            return
+        }
+
+        pendingRecordingRegion = region
+        pendingRecordingType = type
+        pendingRecordingCountdownEnabled = countdownEnabled
+        pendingRecordingCountdownDuration = countdownDuration
+
+        dismissRegionIndicator()
+
+        if mode == .region, CaptureSettings.shared.showRegionIndicator {
+            let panel = RegionIndicatorPanel(region: region)
+            panel.show()
+            regionIndicatorPanel = panel
+        }
+
+        showStartPanel()
+    }
+
+    private func chooseCaptureRegion(for mode: CapturePickerMode) async -> CaptureRegion? {
+        switch mode {
+        case .region:
+            return await RegionSelector.selectRegion()
+        case .screen:
             let needsPicker = NSScreen.screens.count > 1 && !CaptureSettings.shared.alwaysCaptureMainDisplay
             let screen: NSScreen?
             if needsPicker {
@@ -612,11 +798,44 @@ class CaptureManager: ObservableObject {
             }
             guard let screen else { return nil }
             return CaptureRegion.fullScreen(for: screen)
+        case .window:
+            guard let window = await WindowSelector.selectWindow() else { return nil }
+            return captureRegion(for: window)
+        }
+    }
+
+    private func captureRegion(for window: SCWindow) -> CaptureRegion? {
+        let windowRect = appKitRect(fromSCFrame: window.frame)
+        let windowCenter = NSPoint(x: windowRect.midX, y: windowRect.midY)
+
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(windowCenter) })
+            ?? NSScreen.screens.first(where: { $0.frame.intersects(windowRect) })
+        else {
+            return nil
         }
 
-        // For region selection, show overlays on all screens —
-        // the user drags on whichever screen they want.
-        return await RegionSelector.selectRegion()
+        guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+            return nil
+        }
+
+        let localX = windowRect.minX - screen.frame.minX
+        let localY = screen.frame.maxY - windowRect.maxY
+
+        return CaptureRegion(
+            sourceRect: CGRect(x: localX, y: localY, width: windowRect.width, height: windowRect.height),
+            displayID: displayID,
+            scaleFactor: screen.backingScaleFactor
+        )
+    }
+
+    private func appKitRect(fromSCFrame scFrame: CGRect) -> CGRect {
+        let primaryScreenTop = NSScreen.screens.first?.frame.maxY ?? 0
+        return CGRect(
+            x: scFrame.origin.x,
+            y: primaryScreenTop - scFrame.maxY,
+            width: scFrame.width,
+            height: scFrame.height
+        )
     }
 
     private func pickScreen() async -> NSScreen? {
