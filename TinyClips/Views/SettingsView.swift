@@ -148,6 +148,7 @@ struct SettingsView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
+
             Toggle("Copy to clipboard", isOn: $settings.copyToClipboard)
             Toggle("Show in Finder after save", isOn: $settings.showInFinder)
             Toggle("Show notification after save", isOn: $settings.showSaveNotifications)
@@ -451,6 +452,7 @@ private struct ProSettingsSection: View {
                         .font(.callout)
                 }
             }
+
         } else {
             ProSubscriptionView()
         }

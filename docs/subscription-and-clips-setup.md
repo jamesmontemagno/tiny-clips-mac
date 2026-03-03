@@ -64,6 +64,37 @@ The Clips Manager uses read-only mode for free users:
 
 ---
 
+## 5. Uploadcare (Bring Your Own Account)
+
+TinyClips does not ship with Uploadcare credentials. Users configure their own Uploadcare account in Settings.
+
+### User setup
+
+1. Create an Uploadcare account: <https://uploadcare.com/>
+2. Open **Uploadcare Dashboard → Project → API Keys**
+3. Copy your project **Public API Key**
+4. In TinyClips **Settings → General**:
+   - Enable **Uploadcare uploads**
+   - Paste your **Uploadcare public API key**
+   - (Optional) Set your Uploadcare CDN subdomain
+
+### Behavior
+
+- Upload action appears in Clips Manager list/grid/context menu.
+- TinyClips uploads directly to Uploadcare Upload API (`/base/`) using the user key.
+- Returned Uploadcare URL is copied to clipboard after a successful upload.
+- If key is missing/invalid, TinyClips shows an upload error and no upload is performed.
+
+### Verification checklist
+
+- [ ] Uploadcare toggle + key fields are visible and save correctly
+- [ ] Upload a screenshot clip to Uploadcare succeeds
+- [ ] Upload a video/GIF clip under 100 MiB succeeds
+- [ ] Returned Uploadcare URL is copied to clipboard
+- [ ] Missing key path shows clear error
+
+---
+
 ## Quick Reference
 
 | Item | Location |
@@ -72,3 +103,4 @@ The Clips Manager uses read-only mode for free users:
 | Paywall UI | `TinyClips/Views/SubscriptionView.swift` |
 | Clips Manager | `TinyClips/Views/ClipsManagerWindow.swift` |
 | Settings Pro tab | `TinyClips/Views/SettingsView.swift` (`ProSettingsSection`) |
+| Uploadcare client | `TinyClips/Services/SaveService.swift` (`UploadcareService`) |

@@ -223,3 +223,151 @@ class SaveService {
         alert.runModal()
     }
 }
+
+// MARK: - Uploadcare
+
+struct UploadcareUploadResult {
+    let uuid: String
+    let fileURL: URL
+}
+
+enum UploadcareError: LocalizedError {
+    case missingPublicKey
+    case fileTooLarge
+    case invalidResponse
+    case api(statusCode: Int, message: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingPublicKey:
+            return "Uploadcare public API key is missing."
+        case .fileTooLarge:
+            return "Uploadcare direct upload supports files up to 100 MiB. Please upload a smaller file."
+        case .invalidResponse:
+            return "Uploadcare returned an invalid response."
+        case .api(_, let message):
+            return message
+        }
+    }
+}
+
+final class UploadcareService {
+    static let shared = UploadcareService()
+
+    private init() {}
+
+    func upload(fileURL: URL, publicKey: String, cdnSubdomain: String) async throws -> UploadcareUploadResult {
+        let key = publicKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            throw UploadcareError.missingPublicKey
+        }
+
+        let values = try fileURL.resourceValues(forKeys: [.fileSizeKey])
+        let fileSize = values.fileSize ?? 0
+        if fileSize > 104_857_600 {
+            throw UploadcareError.fileTooLarge
+        }
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var request = URLRequest(url: URL(string: "https://upload.uploadcare.com/base/")!)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        body.appendFormField(named: "UPLOADCARE_PUB_KEY", value: key, boundary: boundary)
+        body.appendFormField(named: "UPLOADCARE_STORE", value: "auto", boundary: boundary)
+
+        let fileData = try Data(contentsOf: fileURL)
+        body.appendFileField(
+            named: "file",
+            fileName: fileURL.lastPathComponent,
+            mimeType: mimeType(for: fileURL),
+            fileData: fileData,
+            boundary: boundary
+        )
+        body.appendString("--\(boundary)--\r\n")
+
+        let (data, response) = try await URLSession.shared.upload(for: request, from: body)
+        guard let http = response as? HTTPURLResponse else {
+            throw UploadcareError.invalidResponse
+        }
+
+        if !(200..<300).contains(http.statusCode) {
+            throw UploadcareError.api(
+                statusCode: http.statusCode,
+                message: uploadcareErrorMessage(from: data, statusCode: http.statusCode)
+            )
+        }
+
+        struct Response: Decodable { let file: String }
+        guard let parsed = try? JSONDecoder().decode(Response.self, from: data),
+              !parsed.file.isEmpty else {
+            throw UploadcareError.invalidResponse
+        }
+
+        let url = makeCDNURL(uuid: parsed.file, cdnSubdomain: cdnSubdomain)
+        return UploadcareUploadResult(uuid: parsed.file, fileURL: url)
+    }
+
+    private func mimeType(for url: URL) -> String {
+        switch url.pathExtension.lowercased() {
+        case "png": return "image/png"
+        case "jpg", "jpeg": return "image/jpeg"
+        case "gif": return "image/gif"
+        case "mp4": return "video/mp4"
+        default: return "application/octet-stream"
+        }
+    }
+
+    private func makeCDNURL(uuid: String, cdnSubdomain: String) -> URL {
+        let trimmed = cdnSubdomain
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "https://", with: "")
+            .replacingOccurrences(of: "http://", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+
+        if trimmed.isEmpty {
+            return URL(string: "https://ucarecdn.com/\(uuid)/")!
+        }
+
+        let host = trimmed.contains(".") ? trimmed : "\(trimmed).ucarecdn.com"
+        return URL(string: "https://\(host)/\(uuid)/") ?? URL(string: "https://ucarecdn.com/\(uuid)/")!
+    }
+
+    private func uploadcareErrorMessage(from data: Data, statusCode: Int) -> String {
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let message = object["error"] as? String, !message.isEmpty {
+                return message
+            }
+            if let message = object["error_content"] as? String, !message.isEmpty {
+                return message
+            }
+            if let message = object["detail"] as? String, !message.isEmpty {
+                return message
+            }
+        }
+        return "Uploadcare upload failed (HTTP \(statusCode))."
+    }
+}
+
+private extension Data {
+    mutating func appendString(_ string: String) {
+        if let data = string.data(using: .utf8) {
+            append(data)
+        }
+    }
+
+    mutating func appendFormField(named name: String, value: String, boundary: String) {
+        appendString("--\(boundary)\r\n")
+        appendString("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+        appendString("\(value)\r\n")
+    }
+
+    mutating func appendFileField(named name: String, fileName: String, mimeType: String, fileData: Data, boundary: String) {
+        appendString("--\(boundary)\r\n")
+        appendString("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(fileName)\"\r\n")
+        appendString("Content-Type: \(mimeType)\r\n\r\n")
+        append(fileData)
+        appendString("\r\n")
+    }
+}

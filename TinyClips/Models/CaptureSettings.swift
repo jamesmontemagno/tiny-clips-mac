@@ -120,6 +120,9 @@ class CaptureSettings: ObservableObject {
     @AppStorage("showInFinder") var showInFinder: Bool = false
     @AppStorage("showSaveNotifications") var showSaveNotifications: Bool = false
     @AppStorage("fileNameTemplate") var fileNameTemplate: String = "TinyClips {date} at {time}"
+    @AppStorage("uploadcareEnabled") var uploadcareEnabled: Bool = false
+    @AppStorage("uploadcarePublicKey") var uploadcarePublicKey: String = ""
+    @AppStorage("uploadcareCDNSubdomain") var uploadcareCDNSubdomain: String = ""
     @AppStorage("gifFrameRate") var gifFrameRate: Double = 10
     @AppStorage("gifMaxWidth") var gifMaxWidth: Int = 640
     @AppStorage("videoFrameRate") var videoFrameRate: Int = 30
@@ -160,6 +163,7 @@ class CaptureSettings: ObservableObject {
         let keys: [String] = [
             "saveDirectory", "copyToClipboard", "showInFinder", "showSaveNotifications",
             "fileNameTemplate",
+            "uploadcareEnabled", "uploadcarePublicKey", "uploadcareCDNSubdomain",
             "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showTrimmer",
             "recordAudio", "recordMicrophone", "showScreenshotEditor", "showGifTrimmer",
             "saveImmediatelyScreenshot", "saveImmediatelyVideo", "saveImmediatelyGif",

@@ -240,6 +240,7 @@ private class ClipsViewModel: ObservableObject {
     @Published var selectedCollection: String = ""
     @Published var selectionMode = false
     @Published var selectedClipIDs: Set<UUID> = []
+    @Published var uploadingClipIDs: Set<UUID> = []
     @Published private var metadataByPath: [String: ClipMetadata] = [:]
 
     private let metadataStore = ClipMetadataStore.shared
@@ -539,6 +540,45 @@ private class ClipsViewModel: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([item.url])
     }
 
+    var canUploadToUploadcare: Bool {
+        let settings = CaptureSettings.shared
+        return settings.uploadcareEnabled
+            && !settings.uploadcarePublicKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    func uploadToUploadcare(_ item: ClipItem) {
+        guard canUploadToUploadcare else {
+            SaveService.shared.showError("Configure Uploadcare in Settings before uploading.")
+            return
+        }
+
+        guard uploadingClipIDs.insert(item.id).inserted else { return }
+
+        let settings = CaptureSettings.shared
+        let publicKey = settings.uploadcarePublicKey
+        let subdomain = settings.uploadcareCDNSubdomain
+
+        Task {
+            defer { uploadingClipIDs.remove(item.id) }
+            do {
+                let result = try await UploadcareService.shared.upload(
+                    fileURL: item.url,
+                    publicKey: publicKey,
+                    cdnSubdomain: subdomain
+                )
+                copyTextToClipboard(result.fileURL.absoluteString)
+            } catch {
+                SaveService.shared.showError("Uploadcare upload failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func copyTextToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
     func displayName(for item: ClipItem) -> String {
         let customName = metadataByPath[item.filePath]?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let customName, !customName.isEmpty {
@@ -836,6 +876,7 @@ private struct ClipsManagerContentView: View {
     @State private var collectionClip: ClipItem?
     @State private var batchTag = ""
     @State private var showProUpsell = false
+    @State private var showUploadcareSettings = false
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .automatic
 
     private let gridColumns = [
@@ -870,6 +911,10 @@ private struct ClipsManagerContentView: View {
             .frame(minWidth: 500, minHeight: 500)
         }
     #endif
+        .sheet(isPresented: $showUploadcareSettings) {
+            ClipManagerUploadcareSettingsView()
+                .frame(width: 460, height: 300)
+        }
         .popover(item: $renameClip) { item in
             ClipRenamePopover(
                 currentName: viewModel.displayName(for: item),
@@ -1132,16 +1177,26 @@ private struct ClipsManagerContentView: View {
             .labelsHidden()
             .frame(width: 64)
 
-            Button {
-                viewModel.load()
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .buttonStyle(.plain)
-            .help("Refresh")
+             Button {
+                 viewModel.load()
+             } label: {
+                 Image(systemName: "arrow.clockwise")
+             }
+             .buttonStyle(.plain)
+             .help("Refresh")
 
-            if isPro {
-                Button(viewModel.selectionMode ? "Done" : "Select") {
+             if isPro {
+                 Button {
+                     showUploadcareSettings = true
+                 } label: {
+                     Image(systemName: "gearshape")
+                 }
+                 .buttonStyle(.plain)
+                 .help("Clip Manager settings")
+             }
+
+             if isPro {
+                 Button(viewModel.selectionMode ? "Done" : "Select") {
                     viewModel.selectionMode.toggle()
                     if !viewModel.selectionMode {
                         viewModel.clearSelection()
@@ -1248,6 +1303,15 @@ private struct ClipsManagerContentView: View {
                         onEditCollection: requiresPro { collectionClip = item },
                         onOpenDetails: { detailClip = item },
                         onEditMedia: requiresPro { viewModel.editClip(item) },
+                        onUpload: requiresPro {
+                            if viewModel.canUploadToUploadcare {
+                                viewModel.uploadToUploadcare(item)
+                            } else {
+                                showUploadcareSettings = true
+                            }
+                        },
+                        canUpload: true,
+                        isUploading: viewModel.uploadingClipIDs.contains(item.id),
                         onToggleSelection: { viewModel.toggleSelection(item) }
                     )
                 }
@@ -1280,6 +1344,15 @@ private struct ClipsManagerContentView: View {
                 onEditCollection: requiresPro { collectionClip = item },
                 onOpenDetails: { detailClip = item },
                 onEditMedia: requiresPro { viewModel.editClip(item) },
+                onUpload: requiresPro {
+                    if viewModel.canUploadToUploadcare {
+                        viewModel.uploadToUploadcare(item)
+                    } else {
+                        showUploadcareSettings = true
+                    }
+                },
+                canUpload: true,
+                isUploading: viewModel.uploadingClipIDs.contains(item.id),
                 onToggleSelection: { viewModel.toggleSelection(item) }
             )
         }
@@ -1309,6 +1382,9 @@ private struct ClipGridCell: View {
     let onEditCollection: () -> Void
     let onOpenDetails: () -> Void
     let onEditMedia: () -> Void
+    let onUpload: () -> Void
+    let canUpload: Bool
+    let isUploading: Bool
     let onToggleSelection: () -> Void
 
     @State private var isHovered = false
@@ -1336,6 +1412,8 @@ private struct ClipGridCell: View {
                     HStack(spacing: 12) {
                         cellButton(icon: "doc.on.doc", help: "Copy", action: onCopy)
                         cellButton(icon: "folder", help: "Reveal in Finder", action: onReveal)
+                        cellButton(icon: "icloud.and.arrow.up", help: "Upload to Uploadcare", action: onUpload)
+                            .disabled(isUploading || !canUpload)
                     }
                 }
 
@@ -1446,6 +1524,9 @@ private struct ClipGridCell: View {
                 Label("Share…", systemImage: "square.and.arrow.up")
             }
             Divider()
+            Button("Upload to Uploadcare") { onUpload() }
+                .disabled(isUploading || !canUpload)
+            Divider()
             Button("Delete", role: .destructive) { onDelete() }
         }
     }
@@ -1485,6 +1566,9 @@ private struct ClipListRow: View {
     let onEditCollection: () -> Void
     let onOpenDetails: () -> Void
     let onEditMedia: () -> Void
+    let onUpload: () -> Void
+    let canUpload: Bool
+    let isUploading: Bool
     let onToggleSelection: () -> Void
 
     private static let dateFormatter: DateFormatter = {
@@ -1609,6 +1693,18 @@ private struct ClipListRow: View {
                 .buttonStyle(.borderless)
                 .help("Share")
 
+                Button { onUpload() } label: {
+                    if isUploading {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "icloud.and.arrow.up")
+                    }
+                }
+                .buttonStyle(.borderless)
+                .help("Upload to Uploadcare")
+                .disabled(isUploading || !canUpload)
+
                 Button(role: .destructive) { onDelete() } label: {
                     Image(systemName: "trash")
                         .foregroundStyle(.red)
@@ -1639,6 +1735,9 @@ private struct ClipListRow: View {
             ShareLink(item: item.url) {
                 Label("Share…", systemImage: "square.and.arrow.up")
             }
+            Divider()
+            Button("Upload to Uploadcare") { onUpload() }
+                .disabled(isUploading || !canUpload)
             Divider()
             Button("Delete", role: .destructive) { onDelete() }
         }
@@ -1920,6 +2019,47 @@ private struct ClipCollectionPopover: View {
         .onAppear {
             draft = initialCollection
         }
+    }
+}
+
+private struct ClipManagerUploadcareSettingsView: View {
+    @ObservedObject private var settings = CaptureSettings.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Upload Settings")
+                .font(.title3.weight(.semibold))
+
+            Text("Upload to your own Uploadcare account from Clips Manager.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Toggle("Enable Uploadcare uploads", isOn: $settings.uploadcareEnabled)
+
+            if settings.uploadcareEnabled {
+                TextField("Uploadcare public API key", text: $settings.uploadcarePublicKey)
+                    .textFieldStyle(.roundedBorder)
+                TextField("Uploadcare CDN subdomain (optional)", text: $settings.uploadcareCDNSubdomain)
+                    .textFieldStyle(.roundedBorder)
+                Link("Create Uploadcare account / find API keys", destination: URL(string: "https://app.uploadcare.com/projects/-/api-keys/")!)
+                    .font(.caption)
+                Text("TinyClips does not ship with Uploadcare credentials or manage your account.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            HStack {
+                Spacer()
+                Button("Done") {
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
     }
 }
 
