@@ -23,8 +23,6 @@ Register three new in-app purchase products in [App Store Connect](https://appst
 5. Set pricing for each product and add localized display names/descriptions
 6. Submit for review (products must be approved before they work in production)
 
-> **Legacy compatibility:** The old `com.refractored.tinyclips.pro` product ID is still checked in `StoreService.swift`. Existing purchasers will retain Pro status. You can eventually deprecate this product in App Store Connect once all users have updated.
-
 ---
 
 ## 2. StoreKit Testing (Sandbox)
@@ -40,8 +38,7 @@ Before shipping, test all purchase flows in the StoreKit sandbox:
    - [ ] Purchase monthly subscription
    - [ ] Purchase yearly subscription
    - [ ] Purchase lifetime unlock
-   - [ ] Restore purchases (existing + new product IDs)
-   - [ ] Legacy `com.refractored.tinyclips.pro` purchasers still show as Pro
+   - [ ] Restore purchases (monthly/yearly/lifetime products)
    - [ ] Subscription expiry/renewal behavior
    - [ ] Paywall UI displays correct prices from StoreKit
    - [ ] "Manage Subscription" link works for active subscribers

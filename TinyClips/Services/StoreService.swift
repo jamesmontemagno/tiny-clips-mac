@@ -39,10 +39,7 @@ enum ProPlan: String, CaseIterable, Identifiable {
 class StoreService: ObservableObject {
     static let shared = StoreService()
 
-    /// Legacy product ID — still honored so existing buyers keep Pro
-    static let legacyProProductID = "com.refractored.tinyclips.pro"
-
-    static let allProductIDs: Set<String> = Set(ProPlan.allCases.map(\.rawValue) + [legacyProProductID])
+    static let allProductIDs: Set<String> = Set(ProPlan.allCases.map(\.rawValue))
 
     @Published var isPro = false
     @Published var activeProPlan: ProPlan?
