@@ -63,7 +63,7 @@ struct ClipItem: Identifiable {
     init?(url: URL) {
         let ext = url.pathExtension.lowercased()
         switch ext {
-        case "png", "jpg": self.type = .screenshot
+        case "png", "jpg", "jpeg": self.type = .screenshot
         case "mp4": self.type = .video
         case "gif": self.type = .gif
         default: return nil
@@ -464,13 +464,13 @@ private class ClipsViewModel: ObservableObject {
     private func filesInDirectory(_ dir: URL) -> [URL] {
         guard let contents = try? FileManager.default.contentsOfDirectory(
             at: dir,
-            includingPropertiesForKeys: [.creationDateKey, .fileSizeKey],
+            includingPropertiesForKeys: [.creationDateKey, .fileSizeKey, .isRegularFileKey],
             options: .skipsHiddenFiles
         ) else { return [] }
         return contents.filter {
-            let name = $0.lastPathComponent
+            let isRegularFile = (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) ?? false
             let ext = $0.pathExtension.lowercased()
-            return name.hasPrefix("TinyClips ") && ["png", "jpg", "mp4", "gif"].contains(ext)
+            return isRegularFile && ["png", "jpg", "jpeg", "mp4", "gif"].contains(ext)
         }
     }
 
