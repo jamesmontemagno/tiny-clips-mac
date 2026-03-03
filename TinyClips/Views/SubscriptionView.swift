@@ -54,7 +54,7 @@ struct ProSubscriptionView: View {
             featureRow(icon: "photo.stack", text: "Clips Manager — browse, organize, and manage all captures")
             featureRow(icon: "tag", text: "Tags, collections, favorites, and custom names")
             featureRow(icon: "sparkles", text: "Auto-tags and smart collections")
-            featureRow(icon: "arrow.up.to.line", text: "Upload to Imgur and share instantly")
+            featureRow(icon: "wand.and.stars", text: "Powerful organization tools for screenshots, videos, and GIFs")
             featureRow(icon: "square.grid.2x2", text: "Grid and list views with thumbnail previews")
         }
         .padding(20)

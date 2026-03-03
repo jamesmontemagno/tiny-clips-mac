@@ -102,7 +102,6 @@ private struct ClipMetadata {
     var isFavorite: Bool
     var notes: String
     var collection: String?
-    var imgurLink: String?
 }
 
 @Model
@@ -113,7 +112,6 @@ private final class ClipMetadataRecord {
     var isFavorite: Bool
     var notes: String
     var collection: String?
-    var imgurLink: String?
 
     init(
         clipPath: String,
@@ -121,8 +119,7 @@ private final class ClipMetadataRecord {
         tags: [String] = [],
         isFavorite: Bool = false,
         notes: String = "",
-        collection: String? = nil,
-        imgurLink: String? = nil
+        collection: String? = nil
     ) {
         self.clipPath = clipPath
         self.displayName = displayName
@@ -130,7 +127,6 @@ private final class ClipMetadataRecord {
         self.isFavorite = isFavorite
         self.notes = notes
         self.collection = collection
-        self.imgurLink = imgurLink
     }
 
     var tags: [String] {
@@ -173,8 +169,7 @@ private final class ClipMetadataStore {
                 tags: record.tags,
                 isFavorite: record.isFavorite,
                 notes: record.notes,
-                collection: record.collection,
-                imgurLink: record.imgurLink
+                collection: record.collection
             )
         }
     }
@@ -197,8 +192,7 @@ private final class ClipMetadataStore {
             tags: record.tags,
             isFavorite: record.isFavorite,
             notes: record.notes,
-            collection: record.collection,
-            imgurLink: record.imgurLink
+            collection: record.collection
         )
         mutate(&metadata)
 
@@ -210,7 +204,6 @@ private final class ClipMetadataStore {
         record.notes = metadata.notes.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedCollection = metadata.collection?.trimmingCharacters(in: .whitespacesAndNewlines)
         record.collection = (trimmedCollection?.isEmpty == false) ? trimmedCollection : nil
-        record.imgurLink = metadata.imgurLink
 
         try? modelContext.save()
     }
@@ -633,36 +626,6 @@ private class ClipsViewModel: ObservableObject {
             metadata.collection = trimmed.isEmpty ? nil : trimmed
         }
         metadataByPath = metadataStore.metadataMap()
-    }
-
-    // MARK: - Imgur Upload
-
-    @Published var uploadingClipIDs: Set<UUID> = []
-
-    func imgurLink(for item: ClipItem) -> String? {
-        metadataByPath[item.filePath]?.imgurLink
-    }
-
-    func uploadToImgur(_ item: ClipItem) {
-        guard !uploadingClipIDs.contains(item.id) else { return }
-        uploadingClipIDs.insert(item.id)
-
-        Task {
-            do {
-                let result = try await ImgurService.shared.upload(fileURL: item.url)
-                metadataStore.upsert(path: item.filePath) { metadata in
-                    metadata.imgurLink = result.link
-                }
-                metadataByPath = metadataStore.metadataMap()
-
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(result.link, forType: .string)
-            } catch {
-                SaveService.shared.showError(error.localizedDescription)
-            }
-            uploadingClipIDs.remove(item.id)
-        }
     }
 
     var availableTags: [String] {
@@ -1285,10 +1248,7 @@ private struct ClipsManagerContentView: View {
                         onEditCollection: requiresPro { collectionClip = item },
                         onOpenDetails: { detailClip = item },
                         onEditMedia: requiresPro { viewModel.editClip(item) },
-                        onToggleSelection: { viewModel.toggleSelection(item) },
-                        onUploadImgur: requiresPro { viewModel.uploadToImgur(item) },
-                        isUploading: viewModel.uploadingClipIDs.contains(item.id),
-                        imgurLink: viewModel.imgurLink(for: item)
+                        onToggleSelection: { viewModel.toggleSelection(item) }
                     )
                 }
             }
@@ -1320,10 +1280,7 @@ private struct ClipsManagerContentView: View {
                 onEditCollection: requiresPro { collectionClip = item },
                 onOpenDetails: { detailClip = item },
                 onEditMedia: requiresPro { viewModel.editClip(item) },
-                onToggleSelection: { viewModel.toggleSelection(item) },
-                onUploadImgur: requiresPro { viewModel.uploadToImgur(item) },
-                isUploading: viewModel.uploadingClipIDs.contains(item.id),
-                imgurLink: viewModel.imgurLink(for: item)
+                onToggleSelection: { viewModel.toggleSelection(item) }
             )
         }
         .listStyle(.plain)
@@ -1353,9 +1310,6 @@ private struct ClipGridCell: View {
     let onOpenDetails: () -> Void
     let onEditMedia: () -> Void
     let onToggleSelection: () -> Void
-    let onUploadImgur: () -> Void
-    let isUploading: Bool
-    let imgurLink: String?
 
     @State private var isHovered = false
 
@@ -1487,15 +1441,6 @@ private struct ClipGridCell: View {
             Divider()
             Button("Open in Finder") { onReveal() }
             Button("Copy") { onCopy() }
-            if let imgurLink {
-                Button("Copy Imgur Link") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(imgurLink, forType: .string)
-                }
-            } else {
-                Button(isUploading ? "Uploading…" : "Upload to Imgur") { onUploadImgur() }
-                    .disabled(isUploading)
-            }
             Divider()
             ShareLink(item: item.url) {
                 Label("Share…", systemImage: "square.and.arrow.up")
@@ -1541,9 +1486,6 @@ private struct ClipListRow: View {
     let onOpenDetails: () -> Void
     let onEditMedia: () -> Void
     let onToggleSelection: () -> Void
-    let onUploadImgur: () -> Void
-    let isUploading: Bool
-    let imgurLink: String?
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -1693,15 +1635,6 @@ private struct ClipListRow: View {
             Divider()
             Button("Open in Finder") { onReveal() }
             Button("Copy") { onCopy() }
-            if let imgurLink {
-                Button("Copy Imgur Link") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(imgurLink, forType: .string)
-                }
-            } else {
-                Button(isUploading ? "Uploading…" : "Upload to Imgur") { onUploadImgur() }
-                    .disabled(isUploading)
-            }
             Divider()
             ShareLink(item: item.url) {
                 Label("Share…", systemImage: "square.and.arrow.up")

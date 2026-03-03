@@ -1,124 +1,66 @@
 # Subscription Tiers & Clips Manager Setup Guide
 
-This document covers everything you need to do before shipping the new subscription system, Clips Manager overhaul, and Imgur upload feature.
+This document covers what you need to do before shipping the subscription system and Clips Manager updates.
 
 ---
 
 ## 1. App Store Connect — Product IDs
 
-Register three new in-app purchase products in [App Store Connect](https://appstoreconnect.apple.com):
+Register three in-app purchase products in [App Store Connect](https://appstoreconnect.apple.com):
 
 | Product ID | Type | Notes |
 |---|---|---|
 | `com.refractored.tinyclips.pro.monthly` | Auto-Renewable Subscription | Monthly billing |
-| `com.refractored.tinyclips.pro.yearly` | Auto-Renewable Subscription | Yearly billing — shown as "Best Value" in the paywall |
-| `com.refractored.tinyclips.pro.lifetime` | Non-Consumable | One-time purchase — shown as "One-Time" in the paywall |
+| `com.refractored.tinyclips.pro.yearly` | Auto-Renewable Subscription | Yearly billing |
+| `com.refractored.tinyclips.pro.lifetime` | Non-Consumable | One-time purchase |
 
 ### Steps
 
 1. Go to **App Store Connect → Your App → Subscriptions**
-2. Create a **Subscription Group** (e.g., "TinyClips Pro") if one doesn't exist
-3. Add the `monthly` and `yearly` products to the subscription group
-4. Go to **In-App Purchases** and add the `lifetime` product as a non-consumable
-5. Set pricing for each product and add localized display names/descriptions
-6. Submit for review (products must be approved before they work in production)
+2. Create a **Subscription Group** (for monthly/yearly) if needed
+3. Add `monthly` and `yearly` to the subscription group
+4. Add `lifetime` under **In-App Purchases** as non-consumable
+5. Set pricing and localized metadata
+6. Submit products for review
 
 ---
 
 ## 2. StoreKit Testing (Sandbox)
 
-Before shipping, test all purchase flows in the StoreKit sandbox:
+Before shipping, test all purchase flows:
 
-1. **Create sandbox test accounts** in App Store Connect → Users and Access → Sandbox Testers
-2. **StoreKit Configuration file (recommended):** Create a `.storekit` configuration in Xcode for local testing:
-   - File → New → File → StoreKit Configuration File
-   - Add matching product IDs for monthly, yearly, and lifetime
-   - Set as the active StoreKit Configuration in the scheme (Edit Scheme → Run → Options → StoreKit Configuration)
-3. **Test these flows:**
+1. Create sandbox tester accounts in App Store Connect
+2. Optionally create a local `.storekit` configuration file in Xcode with the same product IDs
+3. Verify:
    - [ ] Purchase monthly subscription
    - [ ] Purchase yearly subscription
    - [ ] Purchase lifetime unlock
-   - [ ] Restore purchases (monthly/yearly/lifetime products)
-   - [ ] Subscription expiry/renewal behavior
-   - [ ] Paywall UI displays correct prices from StoreKit
-   - [ ] "Manage Subscription" link works for active subscribers
+   - [ ] Restore purchases (monthly/yearly/lifetime)
+   - [ ] Subscription renewal/expiry behavior
+   - [ ] Paywall pricing displays correctly
+   - [ ] Manage subscription link works for active subscribers
 
 ---
 
-## 3. Imgur API Registration
+## 3. Pro Gating Verification (App Store Build)
 
-The Imgur upload feature requires a registered Client ID.
+The Clips Manager uses read-only mode for free users:
 
-### Steps
-
-1. Go to [https://api.imgur.com/oauth2/addclient](https://api.imgur.com/oauth2/addclient)
-2. Register a new application:
-   - **Application name:** TinyClips
-   - **Authorization type:** "OAuth 2 authorization without a callback URL" (anonymous uploads only need Client-ID)
-   - **Email:** your contact email
-3. Copy the **Client ID** from the registered application
-4. Replace the placeholder in `TinyClips/Services/ImgurService.swift`:
-
-```swift
-// Line 40 — replace this:
-private let clientID = "YOUR_IMGUR_CLIENT_ID"
-
-// With your real Client ID:
-private let clientID = "abc123yourclientid"
-```
-
-### Imgur API Limits
-
-- **Anonymous uploads:** 1,250 uploads/day, 12,500 requests/hour per Client ID
-- **Image size limit:** 10 MB
-- **Video/GIF size limit:** 200 MB
-- These limits are enforced in `ImgurService.swift` with user-friendly error messages
-
-### Testing
-
-- [ ] Upload a screenshot (PNG/JPEG)
-- [ ] Upload a GIF
-- [ ] Upload a video (MP4)
-- [ ] Verify "Copy Imgur Link" works after upload
-- [ ] Verify the link is persisted (re-open Clips Manager, right-click → "Copy Imgur Link" still available)
-- [ ] Test rate limit error handling
+- [ ] Free users can browse and preview clips
+- [ ] Free users see upgrade banner/upsell prompts
+- [ ] Rename/Tag/Notes/Favorites/Delete/Batch actions are gated
+- [ ] Pro users have full organization features
+- [ ] Direct distribution build has no Pro gating
 
 ---
 
-## 4. SwiftData Schema Migration
+## 4. UI Verification
 
-A new optional field `imgurLink: String?` was added to `ClipMetadataRecord`. SwiftData handles lightweight migrations for optional property additions automatically, but this should be verified:
-
-- [ ] Install the **previous version** of TinyClips (before this PR)
-- [ ] Create some clips so metadata records exist
-- [ ] Update to the **new version** (this PR)
-- [ ] Verify existing clips load without errors
-- [ ] Verify new clips get the `imgurLink` field (upload to Imgur, confirm it persists)
-
----
-
-## 5. Pro Gating Verification (App Store Build)
-
-The Clips Manager uses a read-only mode for free users on the App Store build. Verify:
-
-- [ ] Free users can browse and preview all clips
-- [ ] Free users see the yellow "Upgrade to TinyClips Pro" banner
-- [ ] These actions show the Pro upsell sheet for free users:
-  - Rename, Tag, Notes, Favorites, Delete
-  - Batch operations (Select mode is hidden)
-  - Imgur upload
-- [ ] Pro users have full access to all features
-- [ ] Direct distribution build (`TinyClips` scheme) has no Pro gating at all
-
----
-
-## 6. UI Verification
-
-- [ ] **Paywall (`ProSubscriptionView`):** Fits within the Settings window (420×340 frame) — may need scroll view if content overflows
-- [ ] **Smart Collections sidebar:** All collections filter correctly (Recent, This Week, This Month, by type, Large Files, Favorites, Has Notes)
-- [ ] **Auto-tags:** Display correctly with tertiary style (distinct from user tags)
-- [ ] **Toolbar:** Sort & Filter menu works, search bar filters live, batch toolbar appears/disappears with selection mode
-- [ ] **Imgur upload:** Progress indicator shows during upload, context menu items appear correctly
+- [ ] `ProSubscriptionView` fits in Settings window
+- [ ] Smart collections and tags sidebar filtering works
+- [ ] Auto-tags render with tertiary style (distinct from user tags)
+- [ ] Sort & Filter menu + search + list/grid toggle behave correctly
+- [ ] Grid/list layouts remain stable at narrow widths
 
 ---
 
@@ -126,9 +68,7 @@ The Clips Manager uses a read-only mode for free users on the App Store build. V
 
 | Item | Location |
 |---|---|
-| Product IDs | `TinyClips/Services/StoreService.swift` → `ProPlan` enum |
-| Imgur Client ID | `TinyClips/Services/ImgurService.swift` line 40 |
+| Product IDs | `TinyClips/Services/StoreService.swift` (`ProPlan`) |
 | Paywall UI | `TinyClips/Views/SubscriptionView.swift` |
 | Clips Manager | `TinyClips/Views/ClipsManagerWindow.swift` |
-| Settings Pro tab | `TinyClips/Views/SettingsView.swift` → `ProSettingsSection` |
-| SwiftData model | `ClipMetadataRecord` in `ClipsManagerWindow.swift` |
+| Settings Pro tab | `TinyClips/Views/SettingsView.swift` (`ProSettingsSection`) |

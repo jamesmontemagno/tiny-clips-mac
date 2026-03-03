@@ -32,7 +32,6 @@
 		B10000000000000000000017 /* StoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001A /* StoreService.swift */; };
 		B10000000000000000000018 /* ClipsManagerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001B /* ClipsManagerWindow.swift */; };
 		B10000000000000000000019 /* SubscriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001C /* SubscriptionView.swift */; };
-		B1000000000000000000001A /* ImgurService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001D /* ImgurService.swift */; };
 		B1000000000000000000001B /* WindowSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001E /* WindowSelector.swift */; };
 		B1000000000000000000001C /* CapturePickerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001F /* CapturePickerPanel.swift */; };
 		B1000000000000000000001D /* LaunchAtLoginManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* LaunchAtLoginManager.swift */; };
@@ -61,7 +60,6 @@
 		B20000000000000000000017 /* StoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001A /* StoreService.swift */; };
 		B20000000000000000000018 /* ClipsManagerWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001B /* ClipsManagerWindow.swift */; };
 		B20000000000000000000019 /* SubscriptionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001C /* SubscriptionView.swift */; };
-		B2000000000000000000001A /* ImgurService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001D /* ImgurService.swift */; };
 		B2000000000000000000001B /* WindowSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001E /* WindowSelector.swift */; };
 		B2000000000000000000001C /* CapturePickerPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001F /* CapturePickerPanel.swift */; };
 		B2000000000000000000001D /* LaunchAtLoginManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* LaunchAtLoginManager.swift */; };
@@ -97,7 +95,6 @@
 		A1000000000000000000001A /* StoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreService.swift; sourceTree = "<group>"; };
 		A1000000000000000000001B /* ClipsManagerWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipsManagerWindow.swift; sourceTree = "<group>"; };
 		A1000000000000000000001C /* SubscriptionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionView.swift; sourceTree = "<group>"; };
-		A1000000000000000000001D /* ImgurService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImgurService.swift; sourceTree = "<group>"; };
 		A1000000000000000000001E /* WindowSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSelector.swift; sourceTree = "<group>"; };
 		A1000000000000000000001F /* CapturePickerPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapturePickerPanel.swift; sourceTree = "<group>"; };
 		A10000000000000000000020 /* LaunchAtLoginManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginManager.swift; sourceTree = "<group>"; };
@@ -199,7 +196,6 @@
 				A1000000000000000000000F /* SparkleController.swift */,
 				A10000000000000000000017 /* HotKeyManager.swift */,
 				A1000000000000000000001A /* StoreService.swift */,
-				A1000000000000000000001D /* ImgurService.swift */,
 				A10000000000000000000020 /* LaunchAtLoginManager.swift */,
 			);
 			path = Services;
@@ -339,7 +335,6 @@
 				B10000000000000000000017 /* StoreService.swift in Sources */,
 				B10000000000000000000018 /* ClipsManagerWindow.swift in Sources */,
 				B10000000000000000000019 /* SubscriptionView.swift in Sources */,
-				B1000000000000000000001A /* ImgurService.swift in Sources */,
 				B1000000000000000000001B /* WindowSelector.swift in Sources */,
 				B1000000000000000000001C /* CapturePickerPanel.swift in Sources */,
 				B1000000000000000000001D /* LaunchAtLoginManager.swift in Sources */,
@@ -374,7 +369,6 @@
 				B20000000000000000000017 /* StoreService.swift in Sources */,
 				B20000000000000000000018 /* ClipsManagerWindow.swift in Sources */,
 				B20000000000000000000019 /* SubscriptionView.swift in Sources */,
-				B2000000000000000000001A /* ImgurService.swift in Sources */,
 				B2000000000000000000001B /* WindowSelector.swift in Sources */,
 				B2000000000000000000001C /* CapturePickerPanel.swift in Sources */,
 				B2000000000000000000001D /* LaunchAtLoginManager.swift in Sources */,
