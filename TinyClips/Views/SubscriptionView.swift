@@ -36,7 +36,7 @@ struct ProSubscriptionView: View {
                     .cornerRadius(16)
             }
 
-            Text("TinyClips Pro")
+            Text("Tiny Clips Pro")
                 .font(.largeTitle.bold())
 
             Text("Unlock the full power of your captures.")
@@ -236,7 +236,7 @@ struct ProActiveView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Label("TinyClips Pro", systemImage: "checkmark.seal.fill")
+            Label("Tiny Clips Pro", systemImage: "checkmark.seal.fill")
                 .font(.headline)
                 .foregroundStyle(.green)
 

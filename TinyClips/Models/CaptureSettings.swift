@@ -39,7 +39,8 @@ struct CaptureRegion: Sendable {
         guard let display = content.displays.first(where: { $0.displayID == self.displayID }) else {
             throw CaptureError.displayNotFound
         }
-        let excludedApps = content.applications.filter {
+        let includeTinyClips = CaptureSettings.shared.includeTinyClipsInCapture
+        let excludedApps: [SCRunningApplication] = includeTinyClips ? [] : content.applications.filter {
             $0.bundleIdentifier == Bundle.main.bundleIdentifier
         }
         return SCContentFilter(display: display, excludingApplications: excludedApps, exceptingWindows: [])
@@ -145,6 +146,7 @@ class CaptureSettings: ObservableObject {
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
     @AppStorage("alwaysCaptureMainDisplay") var alwaysCaptureMainDisplay: Bool = false
     @AppStorage("showRegionIndicator") var showRegionIndicator: Bool = true
+    @AppStorage("includeTinyClipsInCapture") var includeTinyClipsInCapture: Bool = false
 
 #if APPSTORE
     var hasCustomSaveDirectory: Bool {
@@ -170,7 +172,8 @@ class CaptureSettings: ObservableObject {
             "videoCountdownEnabled", "videoCountdownDuration",
             "gifCountdownEnabled", "gifCountdownDuration",
             "screenshotCountdownEnabled", "screenshotCountdownDuration",
-            "hasCompletedOnboarding", "alwaysCaptureMainDisplay", "showRegionIndicator"
+            "hasCompletedOnboarding", "alwaysCaptureMainDisplay", "showRegionIndicator",
+            "includeTinyClipsInCapture"
         ]
 #if APPSTORE
         let masKeys: [String] = ["saveDirectoryBookmark", "saveDirectoryDisplayPath"]

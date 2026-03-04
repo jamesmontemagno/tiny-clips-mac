@@ -160,6 +160,8 @@ struct SettingsView: View {
             ))
             Toggle("Always capture main display", isOn: $settings.alwaysCaptureMainDisplay)
                 .help("Skip the display picker when multiple monitors are connected")
+            Toggle("Include TinyClips in captures", isOn: $settings.includeTinyClipsInCapture)
+                .help("For developer/demo use. When enabled, TinyClips windows can appear in screenshots, recordings, and window selection.")
             Button("Reset All Settings to Defaults…") {
                 resetAllSettings()
             }
