@@ -3,6 +3,7 @@ import SwiftUI
 import AppKit
 import ScreenCaptureKit
 import UniformTypeIdentifiers
+import Security
 
 // MARK: - Capture Region
 
@@ -38,7 +39,8 @@ struct CaptureRegion: Sendable {
         guard let display = content.displays.first(where: { $0.displayID == self.displayID }) else {
             throw CaptureError.displayNotFound
         }
-        let excludedApps = content.applications.filter {
+        let includeTinyClips = CaptureSettings.shared.includeTinyClipsInCapture
+        let excludedApps: [SCRunningApplication] = includeTinyClips ? [] : content.applications.filter {
             $0.bundleIdentifier == Bundle.main.bundleIdentifier
         }
         return SCContentFilter(display: display, excludingApplications: excludedApps, exceptingWindows: [])
@@ -119,6 +121,8 @@ class CaptureSettings: ObservableObject {
     @AppStorage("copyToClipboard") var copyToClipboard: Bool = true
     @AppStorage("showInFinder") var showInFinder: Bool = false
     @AppStorage("showSaveNotifications") var showSaveNotifications: Bool = false
+    @AppStorage("fileNameTemplate") var fileNameTemplate: String = "TinyClips {date} at {time}"
+    @AppStorage("uploadcareEnabled") var uploadcareEnabled: Bool = false
     @AppStorage("gifFrameRate") var gifFrameRate: Double = 10
     @AppStorage("gifMaxWidth") var gifMaxWidth: Int = 640
     @AppStorage("videoFrameRate") var videoFrameRate: Int = 30
@@ -142,6 +146,7 @@ class CaptureSettings: ObservableObject {
     @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
     @AppStorage("alwaysCaptureMainDisplay") var alwaysCaptureMainDisplay: Bool = false
     @AppStorage("showRegionIndicator") var showRegionIndicator: Bool = true
+    @AppStorage("includeTinyClipsInCapture") var includeTinyClipsInCapture: Bool = false
 
 #if APPSTORE
     var hasCustomSaveDirectory: Bool {
@@ -158,6 +163,8 @@ class CaptureSettings: ObservableObject {
         // Remove all keys in one pass so only a single objectWillChange fires
         let keys: [String] = [
             "saveDirectory", "copyToClipboard", "showInFinder", "showSaveNotifications",
+            "fileNameTemplate",
+            "uploadcareEnabled",
             "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showTrimmer",
             "recordAudio", "recordMicrophone", "showScreenshotEditor", "showGifTrimmer",
             "saveImmediatelyScreenshot", "saveImmediatelyVideo", "saveImmediatelyGif",
@@ -165,7 +172,8 @@ class CaptureSettings: ObservableObject {
             "videoCountdownEnabled", "videoCountdownDuration",
             "gifCountdownEnabled", "gifCountdownDuration",
             "screenshotCountdownEnabled", "screenshotCountdownDuration",
-            "hasCompletedOnboarding", "alwaysCaptureMainDisplay", "showRegionIndicator"
+            "hasCompletedOnboarding", "alwaysCaptureMainDisplay", "showRegionIndicator",
+            "includeTinyClipsInCapture"
         ]
 #if APPSTORE
         let masKeys: [String] = ["saveDirectoryBookmark", "saveDirectoryDisplayPath"]
@@ -175,6 +183,128 @@ class CaptureSettings: ObservableObject {
         for key in keys + masKeys {
             UserDefaults.standard.removeObject(forKey: key)
         }
+        UploadcareCredentialsStore.shared.clearAll()
         objectWillChange.send()
+    }
+}
+
+// MARK: - Uploadcare credentials
+
+final class UploadcareCredentialsStore {
+    static let shared = UploadcareCredentialsStore()
+
+    struct Credentials: Codable {
+        var publicKey: String
+        var secretKey: String
+
+        static let empty = Credentials(publicKey: "", secretKey: "")
+    }
+
+    private enum Account {
+        static let credentials = "uploadcare-credentials"
+    }
+
+    private let service = "com.refractored.tinyclips.uploadcare"
+    private var cachedCredentials: Credentials?
+    private init() {}
+
+    func credentials() -> Credentials {
+        if let cachedCredentials {
+            return cachedCredentials
+        }
+        let loaded = loadCredentialsFromKeychain() ?? .empty
+        cachedCredentials = loaded
+        return loaded
+    }
+
+    func setPublicKey(_ value: String) {
+        var updated = credentials()
+        updated.publicKey = value
+        persistCredentials(updated)
+    }
+
+    func setSecretKey(_ value: String) {
+        var updated = credentials()
+        updated.secretKey = value
+        persistCredentials(updated)
+    }
+
+    func clearAll() {
+        cachedCredentials = .empty
+        removeKeychainValue(for: Account.credentials)
+    }
+
+    private func loadCredentialsFromKeychain() -> Credentials? {
+        guard let data = keychainData(for: Account.credentials),
+              let decoded = try? JSONDecoder().decode(Credentials.self, from: data) else {
+            return nil
+        }
+        return Credentials(
+            publicKey: decoded.publicKey.trimmingCharacters(in: .whitespacesAndNewlines),
+            secretKey: decoded.secretKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
+
+    private func persistCredentials(_ credentials: Credentials) {
+        let normalized = Credentials(
+            publicKey: credentials.publicKey.trimmingCharacters(in: .whitespacesAndNewlines),
+            secretKey: credentials.secretKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        cachedCredentials = normalized
+
+        if normalized.publicKey.isEmpty && normalized.secretKey.isEmpty {
+            removeKeychainValue(for: Account.credentials)
+            return
+        }
+
+        guard let data = try? JSONEncoder().encode(normalized) else { return }
+        setKeychainData(data, for: Account.credentials)
+    }
+
+    private func keychainData(for account: String) -> Data? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess,
+              let data = item as? Data else {
+            return nil
+        }
+        return data
+    }
+
+    private func setKeychainData(_ data: Data, for account: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        let attributes: [String: Any] = [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+
+        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if updateStatus == errSecItemNotFound {
+            var add = query
+            add[kSecValueData as String] = data
+            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            _ = SecItemAdd(add as CFDictionary, nil)
+        }
+    }
+
+    private func removeKeychainValue(for account: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
     }
 }

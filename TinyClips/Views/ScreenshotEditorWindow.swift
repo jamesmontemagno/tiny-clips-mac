@@ -160,12 +160,15 @@ private struct ScreenshotEditorView: View {
 
             // Line width
             Picker("", selection: $viewModel.lineWidth) {
-                Text("Thin").tag(CGFloat(2))
-                Text("Medium").tag(CGFloat(4))
-                Text("Thick").tag(CGFloat(6))
+                Text("1 px").tag(CGFloat(1))
+                Text("2 px").tag(CGFloat(2))
+                Text("4 px").tag(CGFloat(4))
+                Text("6 px").tag(CGFloat(6))
+                Text("8 px").tag(CGFloat(8))
+                Text("10 px").tag(CGFloat(10))
             }
             .labelsHidden()
-            .frame(width: 90)
+            .frame(width: 96)
 
             // Undo
             Button {
@@ -456,7 +459,7 @@ private struct CanvasView: View {
             let start = linePoints.start
             let end = linePoints.end
             let angle = atan2(end.y - start.y, end.x - start.x)
-            let headLength: CGFloat = 14
+            let headLength = max(18, lineWidth * 4.0)
             let headAngle: CGFloat = .pi / 6
 
             let wing1 = CGPoint(
@@ -1088,7 +1091,8 @@ private class EditorViewModel: ObservableObject {
         let nsColor = NSColor(annotation.color)
         let cgColor = nsColor.cgColor
         ctx.setStrokeColor(cgColor)
-        ctx.setLineWidth(annotation.lineWidth * 2) // scale up for pixel density
+        let strokeWidth = exportStrokeWidth(baseWidth: annotation.lineWidth, outputWidth: outputSize.width)
+        ctx.setLineWidth(strokeWidth)
 
         switch annotation.tool {
         case .rectangle:
@@ -1108,7 +1112,7 @@ private class EditorViewModel: ObservableObject {
                 y: outputSize.height - ((line.end.y * fullSize.height) - cropOrigin.y)
             )
             let angle = atan2(end.y - start.y, end.x - start.x)
-            let headLength: CGFloat = 20
+            let headLength = max(26, strokeWidth * 5.0)
             let headAngle: CGFloat = .pi / 6
 
             let wing1 = CGPoint(
@@ -1209,6 +1213,11 @@ private class EditorViewModel: ObservableObject {
         case .crop, .move:
             break
         }
+    }
+
+    private func exportStrokeWidth(baseWidth: CGFloat, outputWidth: CGFloat) -> CGFloat {
+        let widthScale = max(1.0, outputWidth / 900.0)
+        return baseWidth * widthScale
     }
 }
 

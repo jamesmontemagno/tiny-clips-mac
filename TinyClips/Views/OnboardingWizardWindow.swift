@@ -8,7 +8,7 @@ class OnboardingWizardWindow: NSWindow, NSWindowDelegate {
 
     convenience init(onComplete: @escaping (Bool) -> Void) {
         self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 340),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 390),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -51,6 +51,7 @@ private enum OnboardingStep: Int, CaseIterable {
     case welcome
     case screen
     case optional
+    case settings
 
     var title: String {
         switch self {
@@ -60,11 +61,14 @@ private enum OnboardingStep: Int, CaseIterable {
             return "Allow Screen Recording"
         case .optional:
             return "Optional Permissions"
+        case .settings:
+            return "Common Capture Settings"
         }
     }
 }
 
 private struct OnboardingWizardView: View {
+    @ObservedObject private var settings = CaptureSettings.shared
     @State private var step: OnboardingStep = .welcome
     @State private var screenGranted = false
     @State private var microphoneGranted = false
@@ -89,6 +93,8 @@ private struct OnboardingWizardView: View {
                     screenPermissionContent
                 case .optional:
                     optionalPermissionsContent
+                case .settings:
+                    commonSettingsContent
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -231,6 +237,39 @@ private struct OnboardingWizardView: View {
         }
     }
 
+    private var commonSettingsContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Choose your default capture behavior. You can change this any time in Settings.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Toggle("Copy capture to clipboard", isOn: $settings.copyToClipboard)
+
+            Divider()
+
+            editorDefaultsRow(
+                title: "Screenshots",
+                openLabel: "Open editor after capture",
+                openBinding: $settings.showScreenshotEditor,
+                saveBinding: $settings.saveImmediatelyScreenshot
+            )
+
+            editorDefaultsRow(
+                title: "Videos",
+                openLabel: "Open trimmer after recording",
+                openBinding: $settings.showTrimmer,
+                saveBinding: $settings.saveImmediatelyVideo
+            )
+
+            editorDefaultsRow(
+                title: "GIFs",
+                openLabel: "Open trimmer after recording",
+                openBinding: $settings.showGifTrimmer,
+                saveBinding: $settings.saveImmediatelyGif
+            )
+        }
+    }
+
     private var primaryButtonTitle: String {
         switch step {
         case .welcome:
@@ -238,6 +277,8 @@ private struct OnboardingWizardView: View {
         case .screen:
             return "Next"
         case .optional:
+            return "Next"
+        case .settings:
             return "Finish"
         }
     }
@@ -249,6 +290,8 @@ private struct OnboardingWizardView: View {
         case .screen:
             step = .optional
         case .optional:
+            step = .settings
+        case .settings:
             onFinish()
         }
     }
@@ -302,6 +345,29 @@ private struct OnboardingWizardView: View {
 
             Text(isGranted ? grantedText : deniedText)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private func editorDefaultsRow(
+        title: String,
+        openLabel: String,
+        openBinding: Binding<Bool>,
+        saveBinding: Binding<Bool>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Toggle(openLabel, isOn: openBinding)
+                .onChange(of: openBinding.wrappedValue) { _, isEnabled in
+                    if !isEnabled {
+                        saveBinding.wrappedValue = true
+                    }
+                }
+
+            Toggle("Save immediately", isOn: saveBinding)
+                .disabled(!openBinding.wrappedValue)
         }
     }
 }

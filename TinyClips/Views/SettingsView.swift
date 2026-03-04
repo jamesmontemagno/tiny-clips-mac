@@ -16,6 +16,7 @@ enum SettingsTab: String, CaseIterable {
     case screenshot = "Screenshot"
     case video = "Video"
     case gif = "GIF"
+    case pro = "Pro"
     case about = "About"
 
     var icon: String {
@@ -24,8 +25,17 @@ enum SettingsTab: String, CaseIterable {
         case .screenshot: return "camera"
         case .video: return "video"
         case .gif: return "photo.on.rectangle"
+        case .pro: return "star"
         case .about: return "info.circle"
         }
+    }
+
+    static var displayCases: [SettingsTab] {
+#if APPSTORE
+        return allCases
+#else
+        return allCases.filter { $0 != .pro }
+#endif
     }
 }
 
@@ -33,22 +43,20 @@ struct SettingsView: View {
     @ObservedObject private var settings = CaptureSettings.shared
     @ObservedObject private var sparkleController = SparkleController.shared
     @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
-    @State private var selectedTab: SettingsTab = .general
+    @State private var selectedTab: SettingsTab? = .general
+    @State private var splitVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("", selection: $selectedTab) {
-                ForEach(SettingsTab.allCases, id: \.self) { tab in
-                    Label(tab.rawValue, systemImage: tab.icon).tag(tab)
-                }
+        NavigationSplitView(columnVisibility: $splitVisibility) {
+            List(SettingsTab.displayCases, id: \.self, selection: $selectedTab) { tab in
+                Label(tab.rawValue, systemImage: tab.icon)
+                    .tag(tab as SettingsTab?)
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
-
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
+        } detail: {
             Form {
-                switch selectedTab {
+                switch selectedTab ?? .general {
                 case .general:
                     generalSection
                 case .screenshot:
@@ -57,13 +65,16 @@ struct SettingsView: View {
                     videoSection
                 case .gif:
                     gifSection
+                case .pro:
+                    proSection
                 case .about:
                     aboutSection
                 }
             }
             .formStyle(.grouped)
         }
-        .frame(width: 420, height: 340)
+        .navigationSplitViewStyle(.balanced)
+        .frame(width: 720, height: 460)
     }
 
     // MARK: - General
@@ -104,6 +115,39 @@ struct SettingsView: View {
                 }
             }
 #endif
+            VStack(alignment: .leading, spacing: 6) {
+                TextField("File name template", text: $settings.fileNameTemplate)
+                    .textFieldStyle(.roundedBorder)
+
+                HStack(spacing: 10) {
+                    Button("Classic") {
+                        settings.fileNameTemplate = "TinyClips {date} at {time}"
+                    }
+                    .buttonStyle(.link)
+
+                    Button("Type + Date") {
+                        settings.fileNameTemplate = "{type} {date} at {time}"
+                    }
+                    .buttonStyle(.link)
+
+                    Button("Date First") {
+                        settings.fileNameTemplate = "{date} {time} {type}"
+                    }
+                    .buttonStyle(.link)
+                }
+                .font(.caption)
+
+                Text("Tokens: {app}, {type}, {date}, {time}, {datetime}")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("Preview: \(SaveService.shared.namingPreview(for: .screenshot))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
             Toggle("Copy to clipboard", isOn: $settings.copyToClipboard)
             Toggle("Show in Finder after save", isOn: $settings.showInFinder)
             Toggle("Show notification after save", isOn: $settings.showSaveNotifications)
@@ -116,6 +160,8 @@ struct SettingsView: View {
             ))
             Toggle("Always capture main display", isOn: $settings.alwaysCaptureMainDisplay)
                 .help("Skip the display picker when multiple monitors are connected")
+            Toggle("Include TinyClips in captures", isOn: $settings.includeTinyClipsInCapture)
+                .help("For developer/demo use. When enabled, TinyClips windows can appear in screenshots, recordings, and window selection.")
             Button("Reset All Settings to Defaults…") {
                 resetAllSettings()
             }
@@ -282,6 +328,15 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Pro
+
+    @ViewBuilder
+    private var proSection: some View {
+#if APPSTORE
+        ProSettingsSection()
+#endif
+    }
+
     // MARK: - About
 
     @ViewBuilder
@@ -368,3 +423,40 @@ struct SettingsView: View {
         }
     }
 }
+
+// MARK: - Pro Settings Section (APPSTORE only)
+
+#if APPSTORE
+private struct ProSettingsSection: View {
+    @ObservedObject private var storeService = StoreService.shared
+
+    var body: some View {
+        if storeService.isPro {
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("TinyClips Pro")
+                            .font(.headline)
+                        if let plan = storeService.activeProPlan {
+                            Text("Plan: \(plan.label) — thank you for your support!")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("Active — thank you for your support!")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Label("Active", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                        .font(.callout)
+                }
+            }
+
+        } else {
+            ProSubscriptionView()
+        }
+    }
+}
+#endif
