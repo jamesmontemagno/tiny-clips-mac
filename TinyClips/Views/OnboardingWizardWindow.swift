@@ -73,15 +73,13 @@ private struct OnboardingWizardView: View {
     @State private var screenGranted = false
     @State private var microphoneGranted = false
     @State private var notificationsGranted = false
+    @State private var showSkipConfirmation = false
 
     let onFinish: () -> Void
     let onSkip: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Welcome to TinyClips")
-                .font(.title2.weight(.semibold))
-
             Text(step.title)
                 .font(.headline)
 
@@ -115,7 +113,7 @@ private struct OnboardingWizardView: View {
                 }
 
                 Button("Skip") {
-                    onSkip()
+                    showSkipConfirmation = true
                 }
                 .keyboardShortcut(.cancelAction)
 
@@ -128,6 +126,14 @@ private struct OnboardingWizardView: View {
         .padding(20)
         .onAppear {
             refreshStatus()
+        }
+        .alert("Skip setup?", isPresented: $showSkipConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Skip Setup", role: .destructive) {
+                onSkip()
+            }
+        } message: {
+            Text("You can run setup later from Settings.")
         }
     }
 
@@ -243,29 +249,28 @@ private struct OnboardingWizardView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            Toggle("Copy capture to clipboard", isOn: $settings.copyToClipboard)
-
-            Divider()
-
             editorDefaultsRow(
                 title: "Screenshots",
                 openLabel: "Open editor after capture",
                 openBinding: $settings.showScreenshotEditor,
-                saveBinding: $settings.saveImmediatelyScreenshot
+                saveBinding: $settings.saveImmediatelyScreenshot,
+                copyBinding: $settings.copyScreenshotToClipboard
             )
 
             editorDefaultsRow(
                 title: "Videos",
                 openLabel: "Open trimmer after recording",
                 openBinding: $settings.showTrimmer,
-                saveBinding: $settings.saveImmediatelyVideo
+                saveBinding: $settings.saveImmediatelyVideo,
+                copyBinding: $settings.copyVideoToClipboard
             )
 
             editorDefaultsRow(
                 title: "GIFs",
                 openLabel: "Open trimmer after recording",
                 openBinding: $settings.showGifTrimmer,
-                saveBinding: $settings.saveImmediatelyGif
+                saveBinding: $settings.saveImmediatelyGif,
+                copyBinding: $settings.copyGifToClipboard
             )
         }
     }
@@ -352,22 +357,36 @@ private struct OnboardingWizardView: View {
         title: String,
         openLabel: String,
         openBinding: Binding<Bool>,
-        saveBinding: Binding<Bool>
+        saveBinding: Binding<Bool>,
+        copyBinding: Binding<Bool>
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            Toggle(openLabel, isOn: openBinding)
+            toggleRow(openLabel, binding: openBinding)
                 .onChange(of: openBinding.wrappedValue) { _, isEnabled in
                     if !isEnabled {
                         saveBinding.wrappedValue = true
                     }
                 }
 
-            Toggle("Save immediately", isOn: saveBinding)
+            toggleRow("Save immediately", binding: saveBinding)
                 .disabled(!openBinding.wrappedValue)
+            toggleRow("Copy to clipboard", binding: copyBinding)
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func toggleRow(_ title: String, binding: Binding<Bool>) -> some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.callout)
+            Spacer()
+            Toggle("", isOn: binding)
+                .labelsHidden()
         }
     }
 }

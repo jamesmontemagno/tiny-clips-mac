@@ -148,7 +148,6 @@ struct SettingsView: View {
                     .truncationMode(.middle)
             }
 
-            Toggle("Copy to clipboard", isOn: $settings.copyToClipboard)
             Toggle("Show in Finder after save", isOn: $settings.showInFinder)
             Toggle("Show notification after save", isOn: $settings.showSaveNotifications)
         }
@@ -183,6 +182,7 @@ struct SettingsView: View {
 
             Toggle("Save immediately", isOn: $settings.saveImmediatelyScreenshot)
                 .disabled(!settings.showScreenshotEditor)
+            Toggle("Copy to clipboard", isOn: $settings.copyScreenshotToClipboard)
 
             Picker("Default format:", selection: $settings.screenshotFormat) {
                 ForEach(ImageFormat.allCases, id: \.rawValue) { format in
@@ -246,6 +246,7 @@ struct SettingsView: View {
                 }
             Toggle("Save immediately", isOn: $settings.saveImmediatelyVideo)
                 .disabled(!settings.showTrimmer)
+            Toggle("Copy to clipboard", isOn: $settings.copyVideoToClipboard)
         }
 
         Section("Countdown") {
@@ -304,6 +305,7 @@ struct SettingsView: View {
                 }
             Toggle("Save immediately", isOn: $settings.saveImmediatelyGif)
                 .disabled(!settings.showGifTrimmer)
+            Toggle("Copy to clipboard", isOn: $settings.copyGifToClipboard)
         }
 
         Section("Countdown") {

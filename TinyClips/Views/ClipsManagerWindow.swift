@@ -1014,10 +1014,23 @@ private struct ClipsManagerContentView: View {
         .onAppear { viewModel.load() }
     #if APPSTORE
         .sheet(isPresented: $showProUpsell) {
-            VStack {
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button {
+                        showProUpsell = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Close")
+                }
+                .padding(.top, 12)
+                .padding(.horizontal, 12)
+
                 ProSubscriptionView()
-                Button("Close") { showProUpsell = false }
-                    .padding(.bottom, 12)
             }
             .frame(minWidth: 500, minHeight: 500)
         }
@@ -1071,17 +1084,19 @@ private struct ClipsManagerContentView: View {
                 collection: viewModel.collection(for: item),
                 uploadcareLink: viewModel.uploadcareLink(for: item),
                 isFavorite: viewModel.isFavorite(item),
-                onToggleFavorite: { viewModel.toggleFavorite(item) },
+                onToggleFavorite: requiresPro { viewModel.toggleFavorite(item) },
                 tagSuggestions: viewModel.availableTags,
                 collectionSuggestions: viewModel.availableCollections,
                 onSaveMetadata: { name, tags, notes, collection in
-                    viewModel.setDisplayName(item, name: name)
-                    viewModel.setTags(item, tags: tags)
-                    viewModel.setNotes(item, notes: notes)
-                    viewModel.setCollection(item, collection: collection)
-                    viewModel.load()
+                    requiresPro {
+                        viewModel.setDisplayName(item, name: name)
+                        viewModel.setTags(item, tags: tags)
+                        viewModel.setNotes(item, notes: notes)
+                        viewModel.setCollection(item, collection: collection)
+                        viewModel.load()
+                    }()
                 },
-                onEditMedia: { viewModel.editClip(item) },
+                onEditMedia: requiresPro { viewModel.editClip(item) },
                 onReveal: { viewModel.revealInFinder(item) },
                 onCopyUploadcareLink: { viewModel.copyUploadcareLink(item) }
             )
@@ -2106,6 +2121,9 @@ private struct ClipDetailPopover: View {
                         }
                     }
                 }
+                Text("Notes")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 TextEditor(text: $draftNotes)
                     .font(.body)
                     .frame(height: 100)
@@ -2144,7 +2162,8 @@ private struct ClipDetailPopover: View {
             }
         }
         .padding(16)
-        .frame(width: 520, height: 560)
+        .frame(width: 520, alignment: .topLeading)
+        .fixedSize(horizontal: false, vertical: true)
         .onAppear {
             draftTitle = title
             draftTagList = tags

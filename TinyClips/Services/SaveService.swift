@@ -172,7 +172,7 @@ class SaveService {
     func handleSavedFile(url: URL, type: CaptureType) {
         let settings = CaptureSettings.shared
 
-        if settings.copyToClipboard {
+        if settings.shouldCopyToClipboard(for: type) {
             copyToClipboard(url: url, type: type)
         }
 

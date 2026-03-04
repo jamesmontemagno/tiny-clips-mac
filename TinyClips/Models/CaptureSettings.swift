@@ -118,7 +118,9 @@ class CaptureSettings: ObservableObject {
     @AppStorage("saveDirectoryBookmark") var saveDirectoryBookmark: Data = Data()
     @AppStorage("saveDirectoryDisplayPath") var saveDirectoryDisplayPath: String = ""
 #endif
-    @AppStorage("copyToClipboard") var copyToClipboard: Bool = true
+    @AppStorage("copyScreenshotToClipboard") var copyScreenshotToClipboard: Bool = true
+    @AppStorage("copyVideoToClipboard") var copyVideoToClipboard: Bool = false
+    @AppStorage("copyGifToClipboard") var copyGifToClipboard: Bool = false
     @AppStorage("showInFinder") var showInFinder: Bool = false
     @AppStorage("showSaveNotifications") var showSaveNotifications: Bool = false
     @AppStorage("fileNameTemplate") var fileNameTemplate: String = "TinyClips {date} at {time}"
@@ -159,10 +161,22 @@ class CaptureSettings: ObservableObject {
         set { screenshotFormat = newValue.rawValue }
     }
 
+    func shouldCopyToClipboard(for type: CaptureType) -> Bool {
+        switch type {
+        case .screenshot:
+            return copyScreenshotToClipboard
+        case .video:
+            return copyVideoToClipboard
+        case .gif:
+            return copyGifToClipboard
+        }
+    }
+
     func resetToDefaults() {
         // Remove all keys in one pass so only a single objectWillChange fires
         let keys: [String] = [
-            "saveDirectory", "copyToClipboard", "showInFinder", "showSaveNotifications",
+            "saveDirectory", "copyToClipboard", "copyScreenshotToClipboard", "copyVideoToClipboard", "copyGifToClipboard",
+            "showInFinder", "showSaveNotifications",
             "fileNameTemplate",
             "uploadcareEnabled",
             "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showTrimmer",
