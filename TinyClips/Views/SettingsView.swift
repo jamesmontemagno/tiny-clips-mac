@@ -43,22 +43,20 @@ struct SettingsView: View {
     @ObservedObject private var settings = CaptureSettings.shared
     @ObservedObject private var sparkleController = SparkleController.shared
     @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
-    @State private var selectedTab: SettingsTab = .general
+    @State private var selectedTab: SettingsTab? = .general
+    @State private var splitVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("", selection: $selectedTab) {
-                ForEach(SettingsTab.displayCases, id: \.self) { tab in
-                    Label(tab.rawValue, systemImage: tab.icon).tag(tab)
-                }
+        NavigationSplitView(columnVisibility: $splitVisibility) {
+            List(SettingsTab.displayCases, id: \.self, selection: $selectedTab) { tab in
+                Label(tab.rawValue, systemImage: tab.icon)
+                    .tag(tab as SettingsTab?)
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 4)
-
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
+        } detail: {
             Form {
-                switch selectedTab {
+                switch selectedTab ?? .general {
                 case .general:
                     generalSection
                 case .screenshot:
@@ -75,7 +73,8 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
         }
-        .frame(width: 420, height: 340)
+        .navigationSplitViewStyle(.balanced)
+        .frame(width: 720, height: 460)
     }
 
     // MARK: - General

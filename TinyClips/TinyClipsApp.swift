@@ -15,9 +15,15 @@ struct TinyClipsApp: App {
             MenuBarContentView(captureManager: captureManager, sparkleController: sparkleController)
         }
 
-        Settings {
+        Window("Clips Manager", id: "clips-manager") {
+            clipsManagerRootView()
+        }
+        .defaultSize(width: 980, height: 540)
+
+        Window("Tiny Clips Settings", id: "settings-window") {
             SettingsView()
         }
+        .defaultSize(width: 720, height: 460)
     }
 }
 
@@ -26,7 +32,7 @@ struct TinyClipsApp: App {
 private struct MenuBarContentView: View {
     @ObservedObject var captureManager: CaptureManager
     @ObservedObject var sparkleController: SparkleController
-    @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         if !captureManager.isRecording {
@@ -60,7 +66,10 @@ private struct MenuBarContentView: View {
         }
 #endif
         Button("Clips Manager…") {
-            captureManager.showClipsManager()
+            openWindow(id: "clips-manager")
+            DispatchQueue.main.async {
+                NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+            }
         }
 
         Button("Guide…") {
@@ -68,29 +77,9 @@ private struct MenuBarContentView: View {
         }
 
         Button("Settings…") {
-            openSettings()
+            openWindow(id: "settings-window")
             DispatchQueue.main.async {
                 NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
-
-                if let settingsWindow = NSApp.windows.first(where: {
-                    $0.isVisible && $0.title.localizedCaseInsensitiveContains("settings")
-                }) {
-                    settingsWindow.collectionBehavior.insert(.moveToActiveSpace)
-                    settingsWindow.makeKeyAndOrderFront(nil)
-                    settingsWindow.orderFrontRegardless()
-                }
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
-
-                if let settingsWindow = NSApp.windows.first(where: {
-                    $0.isVisible && $0.title.localizedCaseInsensitiveContains("settings")
-                }) {
-                    settingsWindow.collectionBehavior.insert(.moveToActiveSpace)
-                    settingsWindow.makeKeyAndOrderFront(nil)
-                    settingsWindow.orderFrontRegardless()
-                }
             }
         }
         .keyboardShortcut(",", modifiers: .command)
@@ -133,7 +122,6 @@ class CaptureManager: ObservableObject {
     private var countdownWindow: CountdownWindow?
     private var onboardingWindow: OnboardingWizardWindow?
     private var guideWindow: GuideWindow?
-    private var clipsManagerWindow: ClipsManagerWindow?
     private var screenPickerWindow: ScreenPickerWindow?
     private let hotKeyManager = HotKeyManager()
 
@@ -662,26 +650,6 @@ class CaptureManager: ObservableObject {
         }
         onboardingWindow = window
 
-        DispatchQueue.main.async {
-            self.bringWindowToFront(window)
-        }
-    }
-
-    func showClipsManager() {
-        if let clipsManagerWindow {
-            DispatchQueue.main.async {
-                self.bringWindowToFront(clipsManagerWindow)
-            }
-            return
-        }
-
-        let window = ClipsManagerWindow(onClose: { [weak self] in
-            DispatchQueue.main.async {
-                self?.clipsManagerWindow = nil
-            }
-        })
-
-        self.clipsManagerWindow = window
         DispatchQueue.main.async {
             self.bringWindowToFront(window)
         }

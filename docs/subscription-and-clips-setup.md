@@ -66,32 +66,34 @@ The Clips Manager uses read-only mode for free users:
 
 ## 5. Uploadcare (Bring Your Own Account)
 
-TinyClips does not ship with Uploadcare credentials. Users configure their own Uploadcare account in Settings.
+TinyClips does not ship with Uploadcare credentials. Users configure their own Uploadcare account in Clips Manager Upload Settings.
 
 ### User setup
 
 1. Create an Uploadcare account: <https://uploadcare.com/>
 2. Open **Uploadcare Dashboard → Project → API Keys**
-3. Copy your project **Public API Key**
-4. In TinyClips **Settings → General**:
+3. Copy your project **Public API Key** and **Secret API Key**
+4. In TinyClips **Clips Manager → gear (Upload Settings)**:
    - Enable **Uploadcare uploads**
    - Paste your **Uploadcare public API key**
-   - (Optional) Set your Uploadcare CDN subdomain
+   - Paste your **Uploadcare secret API key** (password field with Show/Hide)
+   - TinyClips stores both keys in your macOS Keychain
 
 ### Behavior
 
 - Upload action appears in Clips Manager list/grid/context menu.
-- TinyClips uploads directly to Uploadcare Upload API (`/base/`) using the user key.
+- TinyClips uploads directly to Uploadcare Upload API (`/base/`) using signed upload fields (`signature` + `expire`).
+- TinyClips resolves the saved link from Uploadcare REST API `GET /files/{uuid}/` (`original_file_url` fallback `url`).
 - Returned Uploadcare URL is copied to clipboard after a successful upload.
-- If key is missing/invalid, TinyClips shows an upload error and no upload is performed.
+- If keys are missing/invalid, TinyClips shows an upload error and no upload is performed.
 
 ### Verification checklist
 
-- [ ] Uploadcare toggle + key fields are visible and save correctly
+- [ ] Uploadcare toggle + public/secret key fields are visible and save correctly
 - [ ] Upload a screenshot clip to Uploadcare succeeds
 - [ ] Upload a video/GIF clip under 100 MiB succeeds
 - [ ] Returned Uploadcare URL is copied to clipboard
-- [ ] Missing key path shows clear error
+- [ ] Missing/invalid key path shows clear error
 
 ---
 

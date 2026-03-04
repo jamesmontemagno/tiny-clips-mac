@@ -1,5 +1,6 @@
 import AppKit
 import UserNotifications
+import CryptoKit
 
 class SaveService {
     static let shared = SaveService()
@@ -233,6 +234,7 @@ struct UploadcareUploadResult {
 
 enum UploadcareError: LocalizedError {
     case missingPublicKey
+    case missingSecretKey
     case fileTooLarge
     case invalidResponse
     case api(statusCode: Int, message: String)
@@ -241,6 +243,8 @@ enum UploadcareError: LocalizedError {
         switch self {
         case .missingPublicKey:
             return "Uploadcare public API key is missing."
+        case .missingSecretKey:
+            return "Uploadcare secret API key is missing."
         case .fileTooLarge:
             return "Uploadcare direct upload supports files up to 100 MiB. Please upload a smaller file."
         case .invalidResponse:
@@ -256,10 +260,19 @@ final class UploadcareService {
 
     private init() {}
 
-    func upload(fileURL: URL, publicKey: String, cdnSubdomain: String) async throws -> UploadcareUploadResult {
+    func upload(
+        fileURL: URL,
+        publicKey: String,
+        secretKey: String,
+        onProgress: @escaping (Double) -> Void = { _ in }
+    ) async throws -> UploadcareUploadResult {
         let key = publicKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
             throw UploadcareError.missingPublicKey
+        }
+        let secret = secretKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !secret.isEmpty else {
+            throw UploadcareError.missingSecretKey
         }
 
         let values = try fileURL.resourceValues(forKeys: [.fileSizeKey])
@@ -276,6 +289,10 @@ final class UploadcareService {
         var body = Data()
         body.appendFormField(named: "UPLOADCARE_PUB_KEY", value: key, boundary: boundary)
         body.appendFormField(named: "UPLOADCARE_STORE", value: "auto", boundary: boundary)
+        let expire = Int(Date().timeIntervalSince1970) + 1_800
+        let signature = makeSignedUploadSignature(secretKey: secret, expire: expire)
+        body.appendFormField(named: "signature", value: signature, boundary: boundary)
+        body.appendFormField(named: "expire", value: String(expire), boundary: boundary)
 
         let fileData = try Data(contentsOf: fileURL)
         body.appendFileField(
@@ -287,7 +304,25 @@ final class UploadcareService {
         )
         body.appendString("--\(boundary)--\r\n")
 
-        let (data, response) = try await URLSession.shared.upload(for: request, from: body)
+        onProgress(0)
+        let delegate = UploadcareUploadProgressDelegate(onProgress: onProgress)
+        let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
+        defer { session.finishTasksAndInvalidate() }
+
+        let (data, response): (Data, URLResponse) = try await withCheckedThrowingContinuation { continuation in
+            let task = session.uploadTask(with: request, from: body) { data, response, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                guard let data, let response else {
+                    continuation.resume(throwing: UploadcareError.invalidResponse)
+                    return
+                }
+                continuation.resume(returning: (data, response))
+            }
+            task.resume()
+        }
         guard let http = response as? HTTPURLResponse else {
             throw UploadcareError.invalidResponse
         }
@@ -305,7 +340,8 @@ final class UploadcareService {
             throw UploadcareError.invalidResponse
         }
 
-        let url = makeCDNURL(uuid: parsed.file, cdnSubdomain: cdnSubdomain)
+        let url = try await fetchCanonicalFileURL(uuid: parsed.file, publicKey: key, secretKey: secret)
+        onProgress(1)
         return UploadcareUploadResult(uuid: parsed.file, fileURL: url)
     }
 
@@ -319,19 +355,54 @@ final class UploadcareService {
         }
     }
 
-    private func makeCDNURL(uuid: String, cdnSubdomain: String) -> URL {
-        let trimmed = cdnSubdomain
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "https://", with: "")
-            .replacingOccurrences(of: "http://", with: "")
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-
-        if trimmed.isEmpty {
-            return URL(string: "https://ucarecdn.com/\(uuid)/")!
+    private func fetchCanonicalFileURL(uuid: String, publicKey: String, secretKey: String) async throws -> URL {
+        struct FileInfoResponse: Decodable {
+            let original_file_url: String?
+            let url: String?
         }
 
-        let host = trimmed.contains(".") ? trimmed : "\(trimmed).ucarecdn.com"
-        return URL(string: "https://\(host)/\(uuid)/") ?? URL(string: "https://ucarecdn.com/\(uuid)/")!
+        for attempt in 0..<20 {
+            var request = URLRequest(url: URL(string: "https://api.uploadcare.com/files/\(uuid)/")!)
+            request.httpMethod = "GET"
+            request.setValue("application/vnd.uploadcare-v0.7+json", forHTTPHeaderField: "Accept")
+            request.setValue("Uploadcare.Simple \(publicKey):\(secretKey)", forHTTPHeaderField: "Authorization")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw UploadcareError.invalidResponse
+            }
+
+            if (200..<300).contains(http.statusCode) {
+                if let parsed = try? JSONDecoder().decode(FileInfoResponse.self, from: data) {
+                    if let raw = parsed.original_file_url, let url = URL(string: raw), !raw.isEmpty {
+                        return url
+                    }
+                    if let raw = parsed.url, let url = URL(string: raw), !raw.isEmpty {
+                        return url
+                    }
+                }
+            } else if http.statusCode != 404 && http.statusCode != 423 {
+                throw UploadcareError.api(
+                    statusCode: http.statusCode,
+                    message: uploadcareErrorMessage(from: data, statusCode: http.statusCode)
+                )
+            }
+
+            if attempt < 19 {
+                try await Task.sleep(nanoseconds: 500_000_000)
+            }
+        }
+
+        throw UploadcareError.api(
+            statusCode: 0,
+            message: "Could not resolve your Uploadcare file URL from REST API. Please verify your Uploadcare keys and try again."
+        )
+    }
+
+    private func makeSignedUploadSignature(secretKey: String, expire: Int) -> String {
+        let key = SymmetricKey(data: Data(secretKey.utf8))
+        let signature = HMAC<SHA256>.authenticationCode(for: Data(String(expire).utf8), using: key)
+        return signature.map { String(format: "%02x", $0) }.joined()
     }
 
     private func uploadcareErrorMessage(from data: Data, statusCode: Int) -> String {
@@ -347,6 +418,20 @@ final class UploadcareService {
             }
         }
         return "Uploadcare upload failed (HTTP \(statusCode))."
+    }
+}
+
+private final class UploadcareUploadProgressDelegate: NSObject, URLSessionTaskDelegate {
+    private let onProgress: (Double) -> Void
+
+    init(onProgress: @escaping (Double) -> Void) {
+        self.onProgress = onProgress
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64, totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
+        guard totalBytesExpectedToSend > 0 else { return }
+        let progress = min(max(Double(totalBytesSent) / Double(totalBytesExpectedToSend), 0), 1)
+        onProgress(progress)
     }
 }
 
