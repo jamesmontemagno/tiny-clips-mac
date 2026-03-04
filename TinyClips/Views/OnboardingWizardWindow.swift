@@ -254,7 +254,10 @@ private struct OnboardingWizardView: View {
                 openLabel: "Open editor after capture",
                 openBinding: $settings.showScreenshotEditor,
                 saveBinding: $settings.saveImmediatelyScreenshot,
-                copyBinding: $settings.copyScreenshotToClipboard
+                copyBinding: $settings.copyScreenshotToClipboard,
+                openHelp: "Open the screenshot editor after capture so you can annotate or crop before finishing.",
+                saveHelp: "When enabled, screenshots save right away instead of waiting for editor actions.",
+                copyHelp: "Copy saved screenshots to the clipboard as an image."
             )
 
             editorDefaultsRow(
@@ -262,7 +265,10 @@ private struct OnboardingWizardView: View {
                 openLabel: "Open trimmer after recording",
                 openBinding: $settings.showTrimmer,
                 saveBinding: $settings.saveImmediatelyVideo,
-                copyBinding: $settings.copyVideoToClipboard
+                copyBinding: $settings.copyVideoToClipboard,
+                openHelp: "Open the video trimmer after recording so you can trim before finishing.",
+                saveHelp: "When enabled, videos save right away instead of waiting for trimmer actions.",
+                copyHelp: "Copy saved videos to the clipboard as a file URL."
             )
 
             editorDefaultsRow(
@@ -270,7 +276,10 @@ private struct OnboardingWizardView: View {
                 openLabel: "Open trimmer after recording",
                 openBinding: $settings.showGifTrimmer,
                 saveBinding: $settings.saveImmediatelyGif,
-                copyBinding: $settings.copyGifToClipboard
+                copyBinding: $settings.copyGifToClipboard,
+                openHelp: "Open the GIF trimmer after recording so you can trim before finishing.",
+                saveHelp: "When enabled, GIFs save right away instead of waiting for trimmer actions.",
+                copyHelp: "Copy saved GIFs to the clipboard as a file URL."
             )
         }
     }
@@ -358,35 +367,42 @@ private struct OnboardingWizardView: View {
         openLabel: String,
         openBinding: Binding<Bool>,
         saveBinding: Binding<Bool>,
-        copyBinding: Binding<Bool>
+        copyBinding: Binding<Bool>,
+        openHelp: String,
+        saveHelp: String,
+        copyHelp: String
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            toggleRow(openLabel, binding: openBinding)
+            toggleRow(openLabel, binding: openBinding, helpText: openHelp)
                 .onChange(of: openBinding.wrappedValue) { _, isEnabled in
                     if !isEnabled {
                         saveBinding.wrappedValue = true
                     }
                 }
 
-            toggleRow("Save immediately", binding: saveBinding)
+            toggleRow("Save immediately", binding: saveBinding, isIndented: true, helpText: saveHelp)
                 .disabled(!openBinding.wrappedValue)
-            toggleRow("Copy to clipboard", binding: copyBinding)
+            toggleRow("Copy to clipboard", binding: copyBinding, helpText: copyHelp)
         }
         .padding(12)
         .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    private func toggleRow(_ title: String, binding: Binding<Bool>) -> some View {
-        HStack(spacing: 10) {
-            Text(title)
-                .font(.callout)
-            Spacer()
-            Toggle("", isOn: binding)
-                .labelsHidden()
+    @ViewBuilder
+    private func toggleRow(_ title: String, binding: Binding<Bool>, isIndented: Bool = false, helpText: String? = nil) -> some View {
+        let row = Toggle(title, isOn: binding)
+            .toggleStyle(.checkbox)
+            .font(.callout)
+            .padding(.leading, isIndented ? 18 : 0)
+
+        if let helpText {
+            row.help(helpText)
+        } else {
+            row
         }
     }
 }

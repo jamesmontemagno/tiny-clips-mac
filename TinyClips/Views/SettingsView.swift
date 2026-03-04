@@ -172,23 +172,13 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var screenshotSection: some View {
-        Section {
-            Toggle("Open editor after capture", isOn: $settings.showScreenshotEditor)
-                .onChange(of: settings.showScreenshotEditor) { _, isEnabled in
-                    if !isEnabled {
-                        settings.saveImmediatelyScreenshot = true
-                    }
-                }
-
-            Toggle("Save immediately", isOn: $settings.saveImmediatelyScreenshot)
-                .disabled(!settings.showScreenshotEditor)
-            Toggle("Copy to clipboard", isOn: $settings.copyScreenshotToClipboard)
-
+        Section("Capture Settings") {
             Picker("Default format:", selection: $settings.screenshotFormat) {
                 ForEach(ImageFormat.allCases, id: \.rawValue) { format in
                     Text(format.label).tag(format.rawValue)
                 }
             }
+            .help("Choose the default file format for screenshots.")
 
             if settings.imageFormat == .jpeg {
                 HStack {
@@ -198,6 +188,7 @@ struct SettingsView: View {
                         .monospacedDigit()
                         .frame(width: 40, alignment: .trailing)
                 }
+                .help("Adjust JPEG compression quality. Higher values keep more detail but create larger files.")
             }
 
             Picker("Default scale:", selection: $settings.screenshotScale) {
@@ -206,10 +197,29 @@ struct SettingsView: View {
                 Text("50%").tag(50)
                 Text("25%").tag(25)
             }
+            .help("Resize the saved screenshot relative to captured pixels.")
+        }
+
+        Section("After Capture") {
+            Toggle("Open editor after capture", isOn: $settings.showScreenshotEditor)
+                .help("Open the screenshot editor after capture so you can annotate or crop.")
+                .onChange(of: settings.showScreenshotEditor) { _, isEnabled in
+                    if !isEnabled {
+                        settings.saveImmediatelyScreenshot = true
+                    }
+                }
+
+            Toggle("Save immediately", isOn: $settings.saveImmediatelyScreenshot)
+                .help("Save immediately instead of waiting for actions in the editor.")
+                .disabled(!settings.showScreenshotEditor)
+
+            Toggle("Copy to clipboard", isOn: $settings.copyScreenshotToClipboard)
+                .help("Copy saved screenshots to the clipboard as an image.")
         }
 
         Section("Countdown") {
             Toggle("Countdown before screenshot", isOn: $settings.screenshotCountdownEnabled)
+                .help("Wait before capturing so you can prepare the screen.")
             if settings.screenshotCountdownEnabled {
                 HStack {
                     Text("Duration:")
@@ -222,6 +232,7 @@ struct SettingsView: View {
                         .monospacedDigit()
                         .frame(width: 30, alignment: .trailing)
                 }
+                .help("Set the countdown duration in seconds.")
             }
         }
     }
@@ -230,27 +241,40 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var videoSection: some View {
-        Section {
+        Section("Capture Settings") {
             Picker("Frame rate:", selection: $settings.videoFrameRate) {
                 Text("24 fps").tag(24)
                 Text("30 fps").tag(30)
                 Text("60 fps").tag(60)
             }
+            .help("Choose the target frame rate for video recordings.")
+
             Toggle("Record system audio", isOn: $settings.recordAudio)
+                .help("Include system audio in the recording.")
             Toggle("Record microphone", isOn: $settings.recordMicrophone)
+                .help("Include microphone input in the recording.")
+            Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
+                .help("Show a visible border around the selected capture area while recording.")
+        }
+
+        Section("After Capture") {
             Toggle("Open trimmer after recording", isOn: $settings.showTrimmer)
+                .help("Open the trimmer when recording ends so you can trim before saving.")
                 .onChange(of: settings.showTrimmer) { _, isEnabled in
                     if !isEnabled {
                         settings.saveImmediatelyVideo = true
                     }
                 }
             Toggle("Save immediately", isOn: $settings.saveImmediatelyVideo)
+                .help("Save immediately instead of waiting for actions in the trimmer.")
                 .disabled(!settings.showTrimmer)
             Toggle("Copy to clipboard", isOn: $settings.copyVideoToClipboard)
+                .help("Copy saved videos to the clipboard as a file URL.")
         }
 
         Section("Countdown") {
             Toggle("Countdown before recording", isOn: $settings.videoCountdownEnabled)
+                .help("Wait before recording starts so you can prepare the screen.")
             if settings.videoCountdownEnabled {
                 HStack {
                     Text("Duration:")
@@ -263,11 +287,8 @@ struct SettingsView: View {
                         .monospacedDigit()
                         .frame(width: 30, alignment: .trailing)
                 }
+                .help("Set the countdown duration in seconds.")
             }
-        }
-        
-        Section("Display") {
-            Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
         }
     }
 
@@ -275,7 +296,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var gifSection: some View {
-        Section {
+        Section("Capture Settings") {
             HStack {
                 Text("Frame rate:")
                 Slider(value: $settings.gifFrameRate, in: 5...30, step: 1)
@@ -283,6 +304,7 @@ struct SettingsView: View {
                     .monospacedDigit()
                     .frame(width: 50, alignment: .trailing)
             }
+            .help("Choose the frame rate for GIF recording.")
             HStack {
                 Text("Max width:")
                 Slider(
@@ -297,19 +319,29 @@ struct SettingsView: View {
                     .monospacedDigit()
                     .frame(width: 60, alignment: .trailing)
             }
+            .help("Limit GIF output width to reduce file size.")
+            Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
+                .help("Show a visible border around the selected capture area while recording.")
+        }
+
+        Section("After Capture") {
             Toggle("Open trimmer after recording", isOn: $settings.showGifTrimmer)
+                .help("Open the trimmer when recording ends so you can trim before saving.")
                 .onChange(of: settings.showGifTrimmer) { _, isEnabled in
                     if !isEnabled {
                         settings.saveImmediatelyGif = true
                     }
                 }
             Toggle("Save immediately", isOn: $settings.saveImmediatelyGif)
+                .help("Save immediately instead of waiting for actions in the trimmer.")
                 .disabled(!settings.showGifTrimmer)
             Toggle("Copy to clipboard", isOn: $settings.copyGifToClipboard)
+                .help("Copy saved GIFs to the clipboard as a file URL.")
         }
 
         Section("Countdown") {
             Toggle("Countdown before recording", isOn: $settings.gifCountdownEnabled)
+                .help("Wait before recording starts so you can prepare the screen.")
             if settings.gifCountdownEnabled {
                 HStack {
                     Text("Duration:")
@@ -322,11 +354,8 @@ struct SettingsView: View {
                         .monospacedDigit()
                         .frame(width: 30, alignment: .trailing)
                 }
+                .help("Set the countdown duration in seconds.")
             }
-        }
-        
-        Section("Display") {
-            Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
         }
     }
 
