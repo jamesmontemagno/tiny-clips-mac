@@ -2,8 +2,17 @@ import AppKit
 import UserNotifications
 import CryptoKit
 
-class SaveService {
+class SaveService: NSObject, UNUserNotificationCenterDelegate {
     static let shared = SaveService()
+    private let notificationURLKey = "savedFileURL"
+
+    override init() {
+        super.init()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            UNUserNotificationCenter.current().delegate = self
+        }
+    }
 
 #if APPSTORE
     private let saveDirectoryBookmarkKey = "saveDirectoryBookmark"
@@ -204,6 +213,7 @@ class SaveService {
         content.title = "\(type.label) Saved"
         content.body = url.lastPathComponent
         content.sound = .default
+        content.userInfo = [notificationURLKey: url.path]
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
@@ -212,6 +222,31 @@ class SaveService {
         )
 
         UNUserNotificationCenter.current().add(request)
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        defer { completionHandler() }
+
+        guard let savedFilePath = response.notification.request.content.userInfo[notificationURLKey] as? String else {
+            return
+        }
+
+        let savedFileURL = URL(fileURLWithPath: savedFilePath)
+        DispatchQueue.main.async {
+            NSWorkspace.shared.activateFileViewerSelecting([savedFileURL])
+        }
     }
 
     @MainActor
