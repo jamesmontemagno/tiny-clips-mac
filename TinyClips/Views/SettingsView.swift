@@ -74,7 +74,7 @@ struct SettingsView: View {
             .formStyle(.grouped)
         }
         .navigationSplitViewStyle(.balanced)
-        .frame(width: 720, height: 460)
+        .frame(minWidth: 720, minHeight: 460)
     }
 
     // MARK: - General
@@ -384,7 +384,7 @@ struct SettingsView: View {
                     }
                     Text("TinyClips")
                         .font(.headline)
-                    Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")
+                    Text("v\(appVersion) (\(appBuild))")
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -394,7 +394,7 @@ struct SettingsView: View {
 
         Section {
             Link("GitHub Repository", destination: URL(string: "https://github.com/jamesmontemagno/tiny-clips-mac")!)
-            Link("Report an Issue", destination: URL(string: "https://github.com/jamesmontemagno/tiny-clips-mac/issues/new")!)
+            Link("Report an Issue", destination: reportIssueURL)
         }
 
 #if !APPSTORE
@@ -452,6 +452,36 @@ struct SettingsView: View {
             guard alert.runModal() == .alertFirstButtonReturn else { return }
             settings.resetToDefaults()
         }
+    }
+
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Unknown"
+    }
+
+    private var appBuild: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "Unknown"
+    }
+
+    private var distributionChannel: String {
+#if APPSTORE
+        return "Mac App Store"
+#else
+        return "Direct Download"
+#endif
+    }
+
+    private var reportIssueURL: URL {
+        var components = URLComponents(string: "https://github.com/jamesmontemagno/tiny-clips-mac/issues/new")!
+        components.queryItems = [
+            URLQueryItem(name: "template", value: "bug_report.yml"),
+            URLQueryItem(name: "labels", value: "bug"),
+            URLQueryItem(name: "title", value: "[Bug]: "),
+            URLQueryItem(name: "version", value: appVersion),
+            URLQueryItem(name: "build", value: appBuild),
+            URLQueryItem(name: "distribution", value: distributionChannel),
+            URLQueryItem(name: "macos", value: ProcessInfo.processInfo.operatingSystemVersionString)
+        ]
+        return components.url!
     }
 }
 
