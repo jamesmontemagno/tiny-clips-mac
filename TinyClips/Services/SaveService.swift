@@ -7,7 +7,10 @@ class SaveService: NSObject, UNUserNotificationCenterDelegate {
 
     override init() {
         super.init()
-        UNUserNotificationCenter.current().delegate = self
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            UNUserNotificationCenter.current().delegate = self
+        }
     }
 
 #if APPSTORE
