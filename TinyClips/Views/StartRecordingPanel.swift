@@ -79,6 +79,9 @@ private struct StartRecordingView: View {
             }
             .buttonStyle(.plain)
             .help(systemAudio ? "System audio: ON" : "System audio: OFF")
+            .accessibilityLabel("System audio")
+            .accessibilityValue(systemAudio ? "On" : "Off")
+            .accessibilityHint("Toggles recording system audio.")
 
             // Microphone toggle
             Button {
@@ -93,6 +96,9 @@ private struct StartRecordingView: View {
             }
             .buttonStyle(.plain)
             .help(microphone ? "Microphone: ON" : "Microphone: OFF")
+            .accessibilityLabel("Microphone")
+            .accessibilityValue(microphone ? "On" : "Off")
+            .accessibilityHint("Toggles microphone recording.")
 
             Divider()
                 .frame(height: 20)
@@ -116,6 +122,8 @@ private struct StartRecordingView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
+            .keyboardShortcut(.defaultAction)
+            .accessibilityHint("Starts recording with the selected audio options.")
 
             // Cancel button
             Button {
@@ -130,6 +138,9 @@ private struct StartRecordingView: View {
             }
             .buttonStyle(.plain)
             .help("Cancel")
+            .keyboardShortcut(.cancelAction)
+            .accessibilityLabel("Cancel recording setup")
+            .accessibilityHint("Closes this panel without recording.")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

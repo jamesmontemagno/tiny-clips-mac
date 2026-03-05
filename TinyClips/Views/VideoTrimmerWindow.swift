@@ -88,6 +88,8 @@ private struct VideoTrimmerView: View {
             .frame(height: 44)
             .padding(.horizontal, 16)
             .padding(.top, 4)
+            .accessibilityLabel("Trim range")
+            .accessibilityHint("Adjust the start and end handles to choose the segment to save.")
 
             // Trim time labels
             HStack {
@@ -105,6 +107,45 @@ private struct VideoTrimmerView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 2)
+
+            HStack(spacing: 12) {
+                let maxStart = max(0, viewModel.trimEnd - 0.1)
+                let minEnd = min(viewModel.duration, viewModel.trimStart + 0.1)
+
+                Stepper(
+                    value: Binding(
+                        get: { viewModel.trimStart },
+                        set: { newValue in
+                            viewModel.trimStart = min(max(0, newValue), maxStart)
+                            viewModel.seek(to: viewModel.trimStart)
+                        }
+                    ),
+                    in: 0...maxStart,
+                    step: 0.1
+                ) {
+                    Text("Start: \(formatTime(viewModel.trimStart))")
+                        .monospacedDigit()
+                }
+
+                Stepper(
+                    value: Binding(
+                        get: { viewModel.trimEnd },
+                        set: { newValue in
+                            let clamped = min(max(minEnd, newValue), viewModel.duration)
+                            viewModel.trimEnd = clamped
+                            viewModel.seek(to: min(viewModel.currentTime, clamped))
+                        }
+                    ),
+                    in: minEnd...max(minEnd, viewModel.duration),
+                    step: 0.1
+                ) {
+                    Text("End: \(formatTime(viewModel.trimEnd))")
+                        .monospacedDigit()
+                }
+            }
+            .font(.caption)
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
 
             HStack {
                 Text("Speed")

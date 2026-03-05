@@ -82,6 +82,7 @@ private struct OnboardingWizardView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text(step.title)
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             Group {
                 switch step {
@@ -360,6 +361,9 @@ private struct OnboardingWizardView: View {
             Text(isGranted ? grantedText : deniedText)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(isGranted ? grantedText : deniedText)
     }
 
     private func editorDefaultsRow(

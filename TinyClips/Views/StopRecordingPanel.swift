@@ -50,6 +50,8 @@ private struct StopRecordingView: View {
                 .monospacedDigit()
                 .foregroundStyle(.white)
                 .font(.system(size: 13, weight: .medium))
+                .accessibilityLabel("Elapsed recording time")
+                .accessibilityValue(formattedTime)
 
             Button(action: onStop) {
                 Image(systemName: "stop.fill")
@@ -60,6 +62,9 @@ private struct StopRecordingView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
+            .keyboardShortcut(".", modifiers: .command)
+            .accessibilityLabel("Stop recording")
+            .accessibilityHint("Stops the current recording.")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

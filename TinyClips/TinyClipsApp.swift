@@ -40,16 +40,19 @@ private struct MenuBarContentView: View {
                 captureManager.takeScreenshot()
             }
             .keyboardShortcut("5", modifiers: [.control, .option, .command])
+            .accessibilityHint("Starts screenshot capture.")
 
             Button("Record Video...") {
                 captureManager.startVideoRecording()
             }
             .keyboardShortcut("6", modifiers: [.control, .option, .command])
+            .accessibilityHint("Starts video recording.")
 
             Button("Record GIF...") {
                 captureManager.startGifRecording()
             }
             .keyboardShortcut("7", modifiers: [.control, .option, .command])
+            .accessibilityHint("Starts GIF recording.")
 
             Divider()
         } else {
@@ -57,6 +60,7 @@ private struct MenuBarContentView: View {
                 captureManager.stopRecording()
             }
             .keyboardShortcut(".", modifiers: .command)
+            .accessibilityHint("Stops the current recording.")
 
             Divider()
         }
@@ -83,6 +87,7 @@ private struct MenuBarContentView: View {
             }
         }
         .keyboardShortcut(",", modifiers: .command)
+        .accessibilityHint("Opens TinyClips settings.")
 
         Divider()
 

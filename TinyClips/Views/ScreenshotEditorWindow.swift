@@ -149,6 +149,8 @@ private struct ScreenshotEditorView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("\(tool.label) tool")
+                .accessibilityValue(viewModel.selectedTool == tool ? "Selected" : "Not selected")
             }
 
             Spacer()
@@ -157,6 +159,8 @@ private struct ScreenshotEditorView: View {
             ColorPicker("", selection: $viewModel.selectedColor)
                 .labelsHidden()
                 .frame(width: 30)
+                .accessibilityLabel("Annotation color")
+                .accessibilityHint("Selects the color for drawing and text.")
 
             // Line width
             Picker("", selection: $viewModel.lineWidth) {
@@ -169,6 +173,8 @@ private struct ScreenshotEditorView: View {
             }
             .labelsHidden()
             .frame(width: 96)
+            .accessibilityLabel("Line width")
+            .accessibilityValue("\(Int(viewModel.lineWidth)) pixels")
 
             // Undo
             Button {
@@ -178,6 +184,8 @@ private struct ScreenshotEditorView: View {
             }
             .disabled(viewModel.annotations.isEmpty)
             .keyboardShortcut("z", modifiers: .command)
+            .accessibilityLabel("Undo")
+            .accessibilityHint("Removes the last annotation.")
         }
     }
 
@@ -1256,6 +1264,8 @@ private struct InlineTextEditor: View {
                         .frame(width: 20, height: 20)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Decrease text size")
+                .accessibilityHint("Reduces text size by two points.")
 
                 Text("\(Int(fontSize))pt")
                     .font(.system(size: 11))
@@ -1271,6 +1281,8 @@ private struct InlineTextEditor: View {
                         .frame(width: 20, height: 20)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Increase text size")
+                .accessibilityHint("Increases text size by two points.")
             }
         }
         .padding(.horizontal, 8)

@@ -973,6 +973,8 @@ private struct ClipsManagerContentView: View {
                         Image(systemName: "xmark.circle.fill")
                     }
                     .help("Clear filters")
+                    .accessibilityLabel("Clear filters")
+                    .accessibilityHint("Resets type, date, and tag filters.")
                 }
 
                 // View mode toggle
@@ -984,6 +986,8 @@ private struct ClipsManagerContentView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 64)
+                .accessibilityLabel("View mode")
+                .accessibilityValue(viewModel.viewMode == .grid ? "Grid" : "List")
 
                 Button {
                     viewModel.load()
@@ -991,6 +995,8 @@ private struct ClipsManagerContentView: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .help("Refresh")
+                .accessibilityLabel("Refresh clips")
+                .accessibilityHint("Reloads clips from disk.")
 
                 if isPro {
                     Button(viewModel.selectionMode ? "Done" : "Select") {
@@ -1008,6 +1014,7 @@ private struct ClipsManagerContentView: View {
                         Image(systemName: "gearshape")
                     }
                     .help("Clip Manager settings")
+                    .accessibilityLabel("Clip Manager settings")
                 }
             }
         }
@@ -1026,6 +1033,7 @@ private struct ClipsManagerContentView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Close")
+                    .accessibilityLabel("Close")
                 }
                 .padding(.top, 12)
                 .padding(.horizontal, 12)
@@ -1489,6 +1497,8 @@ private struct ClipGridCell: View {
                         .background(.ultraThinMaterial, in: Circle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isFavorite ? "Remove favorite" : "Add favorite")
+                .accessibilityHint("Toggles favorite state for this clip.")
                 .padding(8)
             }
             .overlay(alignment: .topTrailing) {
@@ -1500,6 +1510,8 @@ private struct ClipGridCell: View {
                             .background(.ultraThinMaterial, in: Circle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(isSelected ? "Deselect clip" : "Select clip")
+                    .accessibilityHint("Toggles clip selection.")
                     .padding(8)
                 } else {
                     Text(item.typeLabel)
@@ -1607,6 +1619,7 @@ private struct ClipGridCell: View {
         }
         .buttonStyle(.plain)
         .help(help)
+        .accessibilityLabel(help)
     }
 }
 
@@ -1656,6 +1669,7 @@ private struct ClipListRow: View {
                         .foregroundStyle(isSelected ? .green : .secondary)
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel(isSelected ? "Deselect clip" : "Select clip")
             }
 
             // Thumbnail
@@ -1748,30 +1762,35 @@ private struct ClipListRow: View {
                 }
                 .buttonStyle(.borderless)
                 .help(isFavorite ? "Remove Favorite" : "Add Favorite")
+                .accessibilityLabel(isFavorite ? "Remove favorite" : "Add favorite")
 
                 Button { onOpenDetails() } label: {
                     Image(systemName: "info.circle")
                 }
                 .buttonStyle(.borderless)
                 .help("Details")
+                .accessibilityLabel("Show details")
 
                 Button { onCopy() } label: {
                     Image(systemName: "doc.on.doc")
                 }
                 .buttonStyle(.borderless)
                 .help("Copy")
+                .accessibilityLabel("Copy clip")
 
                 Button { onReveal() } label: {
                     Image(systemName: "folder.badge.questionmark")
                 }
                 .buttonStyle(.borderless)
                 .help("Show in Finder")
+                .accessibilityLabel("Show in Finder")
 
                 ShareLink(item: item.url) {
                     Image(systemName: "square.and.arrow.up")
                 }
                 .buttonStyle(.borderless)
                 .help("Share")
+                .accessibilityLabel("Share clip")
 
                 Button { onUpload() } label: {
                     if isUploading {
@@ -1784,6 +1803,7 @@ private struct ClipListRow: View {
                 .buttonStyle(.borderless)
                 .help("Upload to Uploadcare")
                 .disabled(isUploading || !canUpload)
+                .accessibilityLabel("Upload to Uploadcare")
 
                 if hasUploadcareLink {
                     Button { onCopyUploadcareLink() } label: {
@@ -1791,6 +1811,7 @@ private struct ClipListRow: View {
                     }
                     .buttonStyle(.borderless)
                     .help("Copy Uploadcare Link")
+                    .accessibilityLabel("Copy Uploadcare link")
                 }
 
                 Button(role: .destructive) { onDelete() } label: {
@@ -1799,6 +1820,7 @@ private struct ClipListRow: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Delete")
+                .accessibilityLabel("Delete clip")
             }
         }
         .padding(.vertical, 4)
@@ -1936,6 +1958,7 @@ private struct FlowTagWrap: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Remove tag")
                 }
                 .font(.caption)
                 .padding(.horizontal, 8)
@@ -2023,6 +2046,7 @@ private struct ClipDetailPopover: View {
                         .foregroundStyle(isFavorite ? .yellow : .secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(isFavorite ? "Remove favorite" : "Add favorite")
 
                 Button {
                     dismiss()
@@ -2032,6 +2056,7 @@ private struct ClipDetailPopover: View {
                 }
                 .buttonStyle(.plain)
                 .help("Close")
+                .accessibilityLabel("Close details")
             }
 
             Text(item.url.lastPathComponent)
