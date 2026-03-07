@@ -1,5 +1,8 @@
 import SwiftUI
 import ScreenCaptureKit
+#if APPSTORE
+import StoreKit
+#endif
 
 @main
 struct TinyClipsApp: App {
@@ -8,6 +11,7 @@ struct TinyClipsApp: App {
 
     init() {
         _ = SparkleController.shared
+        NSApplication.shared.setActivationPolicy(CaptureSettings.shared.showInDock ? .regular : .accessory)
     }
 
     var body: some Scene {
@@ -33,6 +37,10 @@ private struct MenuBarContentView: View {
     @ObservedObject var captureManager: CaptureManager
     @ObservedObject var sparkleController: SparkleController
     @Environment(\.openWindow) private var openWindow
+#if APPSTORE
+    @AppStorage("appStoreClipCountForReview") private var appStoreClipCountForReview = 0
+    @AppStorage("appStoreReviewRequested") private var appStoreReviewRequested = false
+#endif
 
     var body: some View {
         if !captureManager.isRecording {
@@ -72,9 +80,18 @@ private struct MenuBarContentView: View {
         Button("Clips Manager…") {
             openWindow(id: "clips-manager")
             DispatchQueue.main.async {
-                NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+                NSRunningApplication.current.activate(options: [.activateAllWindows])
             }
         }
+
+#if APPSTORE
+        if appStoreClipCountForReview >= 25 && !appStoreReviewRequested {
+            Button("Rate TinyClips…") {
+                appStoreReviewRequested = true
+                requestAppStoreReview()
+            }
+        }
+#endif
 
         Button("Guide…") {
             captureManager.showGuide()
@@ -83,7 +100,7 @@ private struct MenuBarContentView: View {
         Button("Settings…") {
             openWindow(id: "settings-window")
             DispatchQueue.main.async {
-                NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+                NSRunningApplication.current.activate(options: [.activateAllWindows])
             }
         }
         .keyboardShortcut(",", modifiers: .command)
@@ -96,6 +113,12 @@ private struct MenuBarContentView: View {
         }
         .keyboardShortcut("q", modifiers: .command)
     }
+
+#if APPSTORE
+    private func requestAppStoreReview() {
+        SKStoreReviewController.requestReview()
+    }
+#endif
 }
 
 @MainActor
@@ -141,12 +164,12 @@ class CaptureManager: ObservableObject {
     private func bringWindowToFront(_ window: NSWindow) {
         window.collectionBehavior.insert(.moveToActiveSpace)
 
-        NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
         }

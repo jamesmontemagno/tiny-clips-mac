@@ -123,8 +123,27 @@ class CaptureSettings: ObservableObject {
     @AppStorage("copyGifToClipboard") var copyGifToClipboard: Bool = false
     @AppStorage("showInFinder") var showInFinder: Bool = false
     @AppStorage("showSaveNotifications") var showSaveNotifications: Bool = false
+    @AppStorage("showInDock") var showInDock: Bool = false
     @AppStorage("fileNameTemplate") var fileNameTemplate: String = "TinyClips {date} at {time}"
     @AppStorage("uploadcareEnabled") var uploadcareEnabled: Bool = false
+    @AppStorage("clipsManagerShowAutoTags") var clipsManagerShowAutoTags: Bool = true
+    @AppStorage("clipsManagerShowNotesPreview") var clipsManagerShowNotesPreview: Bool = true
+    @AppStorage("clipsManagerShowQuickActions") var clipsManagerShowQuickActions: Bool = true
+    @AppStorage("clipsManagerShowUploadStatus") var clipsManagerShowUploadStatus: Bool = true
+    @AppStorage("clipsManagerConfirmDelete") var clipsManagerConfirmDelete: Bool = true
+    @AppStorage("clipsManagerCompactListDensity") var clipsManagerCompactListDensity: Bool = false
+    @AppStorage("clipsManagerSelectionRowTapSelects") var clipsManagerSelectionRowTapSelects: Bool = true
+    @AppStorage("clipsManagerIgnoreNonTinyClipsFiles") var clipsManagerIgnoreNonTinyClipsFiles: Bool = false
+    @AppStorage("clipsManagerRememberLastState") var clipsManagerRememberLastState: Bool = true
+    @AppStorage("clipsManagerDefaultViewMode") var clipsManagerDefaultViewMode: String = "grid"
+    @AppStorage("clipsManagerDefaultSortOption") var clipsManagerDefaultSortOption: String = "Newest First"
+    @AppStorage("clipsManagerDefaultFilterType") var clipsManagerDefaultFilterType: String = "All"
+    @AppStorage("clipsManagerDefaultDateFilter") var clipsManagerDefaultDateFilter: String = "Any Date"
+    @AppStorage("clipsManagerAutoRefreshSeconds") var clipsManagerAutoRefreshSeconds: Int = 0
+    @AppStorage("clipsManagerArchiveOldClips") var clipsManagerArchiveOldClips: Bool = false
+    @AppStorage("clipsManagerArchiveAfterDays") var clipsManagerArchiveAfterDays: Int = 30
+    @AppStorage("clipsManagerAutoUploadAfterSave") var clipsManagerAutoUploadAfterSave: Bool = false
+    @AppStorage("clipsManagerAutoCopyUploadLink") var clipsManagerAutoCopyUploadLink: Bool = false
     @AppStorage("gifFrameRate") var gifFrameRate: Double = 10
     @AppStorage("gifMaxWidth") var gifMaxWidth: Int = 640
     @AppStorage("videoFrameRate") var videoFrameRate: Int = 30
@@ -176,9 +195,16 @@ class CaptureSettings: ObservableObject {
         // Remove all keys in one pass so only a single objectWillChange fires
         let keys: [String] = [
             "saveDirectory", "copyToClipboard", "copyScreenshotToClipboard", "copyVideoToClipboard", "copyGifToClipboard",
-            "showInFinder", "showSaveNotifications",
+            "showInFinder", "showSaveNotifications", "showInDock",
             "fileNameTemplate",
-            "uploadcareEnabled",
+            "uploadcareEnabled", "clipsManagerShowAutoTags", "clipsManagerShowNotesPreview", "clipsManagerShowQuickActions",
+            "clipsManagerShowUploadStatus", "clipsManagerConfirmDelete", "clipsManagerCompactListDensity",
+            "clipsManagerSelectionRowTapSelects", "clipsManagerIgnoreNonTinyClipsFiles", "clipsManagerRememberLastState",
+            "clipsManagerDefaultViewMode", "clipsManagerDefaultSortOption", "clipsManagerDefaultFilterType", "clipsManagerDefaultDateFilter",
+            "clipsManagerAutoRefreshSeconds", "clipsManagerArchiveOldClips", "clipsManagerArchiveAfterDays",
+            "clipsManagerAutoUploadAfterSave", "clipsManagerAutoCopyUploadLink",
+            "clipsManagerLastViewMode", "clipsManagerLastSortOption", "clipsManagerLastFilterType", "clipsManagerLastDateFilter",
+            "clipsManagerLastSmartCollection", "clipsManagerLastSearchText", "clipsManagerLastSelectedTag", "clipsManagerLastSelectedCollection",
             "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showTrimmer",
             "recordAudio", "recordMicrophone", "showScreenshotEditor", "showGifTrimmer",
             "saveImmediatelyScreenshot", "saveImmediatelyVideo", "saveImmediatelyGif",
@@ -187,7 +213,8 @@ class CaptureSettings: ObservableObject {
             "gifCountdownEnabled", "gifCountdownDuration",
             "screenshotCountdownEnabled", "screenshotCountdownDuration",
             "hasCompletedOnboarding", "alwaysCaptureMainDisplay", "showRegionIndicator",
-            "includeTinyClipsInCapture"
+            "includeTinyClipsInCapture",
+            "appStoreClipCountForReview", "appStoreReviewRequested"
         ]
 #if APPSTORE
         let masKeys: [String] = ["saveDirectoryBookmark", "saveDirectoryDisplayPath"]

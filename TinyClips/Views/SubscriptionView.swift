@@ -51,11 +51,12 @@ struct ProSubscriptionView: View {
 
     private var featureList: some View {
         VStack(alignment: .leading, spacing: 12) {
-            featureRow(icon: "photo.stack", text: "Clips Manager — browse, organize, and manage all captures")
-            featureRow(icon: "tag", text: "Tags, collections, favorites, and custom names")
-            featureRow(icon: "sparkles", text: "Auto-tags and smart collections")
-            featureRow(icon: "wand.and.stars", text: "Powerful organization tools for screenshots, videos, and GIFs")
-            featureRow(icon: "square.grid.2x2", text: "Grid and list views with thumbnail previews")
+            featureRow(icon: "photo.stack", text: "Clips Manager power tools for screenshots, videos, and GIFs")
+            featureRow(icon: "tag", text: "Custom names, tags, notes, collections, and favorites")
+            featureRow(icon: "checkmark.circle", text: "Batch actions: select multiple clips, then favorite, tag, or delete")
+            featureRow(icon: "wand.and.stars", text: "Edit screenshots and trim videos/GIFs right from the manager")
+            featureRow(icon: "icloud.and.arrow.up", text: "Upload to Uploadcare and copy shareable links instantly")
+            featureRow(icon: "heart.fill", text: "Support independent development")
         }
         .padding(20)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))

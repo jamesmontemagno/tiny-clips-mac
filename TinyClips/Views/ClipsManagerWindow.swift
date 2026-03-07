@@ -29,7 +29,6 @@ func clipsManagerRootView() -> some View {
 // MARK: - Clip Item Model
 
 struct ClipItem: Identifiable {
-    let id = UUID()
     let url: URL
     let type: CaptureType
     let date: Date
@@ -67,6 +66,7 @@ struct ClipItem: Identifiable {
     }
 
     var filePath: String { url.path }
+    var id: String { filePath }
 }
 
 // MARK: - Metadata
@@ -210,24 +210,25 @@ private final class ClipMetadataStore {
 @MainActor
 private class ClipsViewModel: ObservableObject {
     @Published var clips: [ClipItem] = []
-    @Published var thumbnails: [UUID: NSImage] = [:]
+    @Published var thumbnails: [String: NSImage] = [:]
     @Published var isLoading = false
-    @Published var sortOption: SortOption = .newest
-    @Published var filterType: FilterType = .all
-    @Published var smartCollection: SmartCollection = .all
-    @Published var dateFilter: DateFilter = .allTime
-    @Published var viewMode: ViewMode = .grid
-    @Published var searchText = ""
-    @Published var selectedTag: String = ""
-    @Published var selectedCollection: String = ""
+    @Published var sortOption: SortOption = .newest { didSet { persistUIStateIfNeeded() } }
+    @Published var filterType: FilterType = .all { didSet { persistUIStateIfNeeded() } }
+    @Published var smartCollection: SmartCollection = .all { didSet { persistUIStateIfNeeded() } }
+    @Published var dateFilter: DateFilter = .allTime { didSet { persistUIStateIfNeeded() } }
+    @Published var viewMode: ViewMode = .grid { didSet { persistUIStateIfNeeded() } }
+    @Published var searchText = "" { didSet { persistUIStateIfNeeded() } }
+    @Published var selectedTag: String = "" { didSet { persistUIStateIfNeeded() } }
+    @Published var selectedCollection: String = "" { didSet { persistUIStateIfNeeded() } }
     @Published var selectionMode = false
-    @Published var selectedClipIDs: Set<UUID> = []
-    @Published var uploadingClipIDs: Set<UUID> = []
+    @Published var selectedClipIDs: Set<String> = []
+    @Published var uploadingClipIDs: Set<String> = []
     @Published var uploadStatusByPath: [String: String] = [:]
     @Published var uploadProgressByPath: [String: Double] = [:]
     @Published private var metadataByPath: [String: ClipMetadata] = [:]
 
     private let metadataStore = ClipMetadataStore.shared
+    private let defaults = UserDefaults.standard
 
     private var editorWindows: [NSWindow] = []
 
@@ -284,8 +285,12 @@ private class ClipsViewModel: ObservableObject {
         case last30Days = "Last 30 Days"
     }
 
-    enum ViewMode {
+    enum ViewMode: String {
         case grid, list
+    }
+
+    init() {
+        applyInitialPreferences()
     }
 
     var filteredSortedClips: [ClipItem] {
@@ -390,6 +395,7 @@ private class ClipsViewModel: ObservableObject {
 
     private func scanForClips() async -> [URL] {
         let directories = clipDirectories()
+        archiveOldClipsIfNeeded(in: directories)
         var urls: [URL] = []
         for dir in directories {
             urls.append(contentsOf: filesInDirectory(dir))
@@ -440,6 +446,7 @@ private class ClipsViewModel: ObservableObject {
 #endif
 
     private func filesInDirectory(_ dir: URL) -> [URL] {
+        let settings = CaptureSettings.shared
         guard let contents = try? FileManager.default.contentsOfDirectory(
             at: dir,
             includingPropertiesForKeys: [.creationDateKey, .fileSizeKey, .isRegularFileKey],
@@ -448,7 +455,138 @@ private class ClipsViewModel: ObservableObject {
         return contents.filter {
             let isRegularFile = (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) ?? false
             let ext = $0.pathExtension.lowercased()
-            return isRegularFile && ["png", "jpg", "jpeg", "mp4", "gif"].contains(ext)
+            guard isRegularFile && ["png", "jpg", "jpeg", "mp4", "gif"].contains(ext) else { return false }
+            if settings.clipsManagerIgnoreNonTinyClipsFiles {
+                return $0.lastPathComponent.hasPrefix("TinyClips ")
+            }
+            return true
+        }
+    }
+
+    func archiveOldClipsNow() {
+        archiveOldClipsIfNeeded(in: clipDirectories())
+        load()
+    }
+
+    func applyStatePreferences() {
+        let settings = CaptureSettings.shared
+
+        if settings.clipsManagerRememberLastState {
+            if let savedViewMode = ViewMode(rawValue: defaults.string(forKey: "clipsManagerLastViewMode") ?? "") {
+                viewMode = savedViewMode
+            } else if let defaultViewMode = ViewMode(rawValue: settings.clipsManagerDefaultViewMode) {
+                viewMode = defaultViewMode
+            }
+
+            if let savedSort = SortOption(rawValue: defaults.string(forKey: "clipsManagerLastSortOption") ?? "") {
+                sortOption = savedSort
+            } else if let defaultSort = SortOption(rawValue: settings.clipsManagerDefaultSortOption) {
+                sortOption = defaultSort
+            }
+
+            if let savedType = FilterType(rawValue: defaults.string(forKey: "clipsManagerLastFilterType") ?? "") {
+                filterType = savedType
+            } else if let defaultType = FilterType(rawValue: settings.clipsManagerDefaultFilterType) {
+                filterType = defaultType
+            }
+
+            if let savedDate = DateFilter(rawValue: defaults.string(forKey: "clipsManagerLastDateFilter") ?? "") {
+                dateFilter = savedDate
+            } else if let defaultDate = DateFilter(rawValue: settings.clipsManagerDefaultDateFilter) {
+                dateFilter = defaultDate
+            }
+
+            if let savedCollection = SmartCollection(rawValue: defaults.string(forKey: "clipsManagerLastSmartCollection") ?? "") {
+                smartCollection = savedCollection
+            } else {
+                smartCollection = .all
+            }
+
+            searchText = defaults.string(forKey: "clipsManagerLastSearchText") ?? ""
+            selectedTag = defaults.string(forKey: "clipsManagerLastSelectedTag") ?? ""
+            selectedCollection = defaults.string(forKey: "clipsManagerLastSelectedCollection") ?? ""
+        } else {
+            if let defaultViewMode = ViewMode(rawValue: settings.clipsManagerDefaultViewMode) {
+                viewMode = defaultViewMode
+            } else {
+                viewMode = .grid
+            }
+            sortOption = SortOption(rawValue: settings.clipsManagerDefaultSortOption) ?? .newest
+            filterType = FilterType(rawValue: settings.clipsManagerDefaultFilterType) ?? .all
+            dateFilter = DateFilter(rawValue: settings.clipsManagerDefaultDateFilter) ?? .allTime
+            smartCollection = .all
+            searchText = ""
+            selectedTag = ""
+            selectedCollection = ""
+        }
+    }
+
+    func persistUIStateIfNeeded() {
+        guard CaptureSettings.shared.clipsManagerRememberLastState else { return }
+        defaults.set(viewMode.rawValue, forKey: "clipsManagerLastViewMode")
+        defaults.set(sortOption.rawValue, forKey: "clipsManagerLastSortOption")
+        defaults.set(filterType.rawValue, forKey: "clipsManagerLastFilterType")
+        defaults.set(dateFilter.rawValue, forKey: "clipsManagerLastDateFilter")
+        defaults.set(smartCollection.rawValue, forKey: "clipsManagerLastSmartCollection")
+        defaults.set(searchText, forKey: "clipsManagerLastSearchText")
+        defaults.set(selectedTag, forKey: "clipsManagerLastSelectedTag")
+        defaults.set(selectedCollection, forKey: "clipsManagerLastSelectedCollection")
+    }
+
+    private func applyInitialPreferences() {
+        let settings = CaptureSettings.shared
+        viewMode = ViewMode(rawValue: settings.clipsManagerDefaultViewMode) ?? .grid
+        sortOption = SortOption(rawValue: settings.clipsManagerDefaultSortOption) ?? .newest
+        filterType = FilterType(rawValue: settings.clipsManagerDefaultFilterType) ?? .all
+        dateFilter = DateFilter(rawValue: settings.clipsManagerDefaultDateFilter) ?? .allTime
+        if settings.clipsManagerRememberLastState {
+            applyStatePreferences()
+        }
+    }
+
+    private func archiveOldClipsIfNeeded(in directories: [URL]) {
+        let settings = CaptureSettings.shared
+        guard settings.clipsManagerArchiveOldClips else { return }
+        guard settings.clipsManagerArchiveAfterDays > 0 else { return }
+
+        let cutoff = Calendar.current.date(byAdding: .day, value: -settings.clipsManagerArchiveAfterDays, to: Date()) ?? .distantPast
+
+        for directory in directories {
+            let archiveDirectory = directory.appendingPathComponent("Archive", isDirectory: true)
+            try? FileManager.default.createDirectory(at: archiveDirectory, withIntermediateDirectories: true)
+
+            let candidates = filesInDirectory(directory).filter { url in
+                let created = (try? url.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantFuture
+                return created < cutoff
+            }
+
+            for url in candidates {
+                let targetURL = uniqueArchivedURL(in: archiveDirectory, originalName: url.lastPathComponent)
+                do {
+                    try FileManager.default.moveItem(at: url, to: targetURL)
+                } catch {
+                    SaveService.shared.showError("Could not archive \(url.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func uniqueArchivedURL(in directory: URL, originalName: String) -> URL {
+        let initial = directory.appendingPathComponent(originalName)
+        if !FileManager.default.fileExists(atPath: initial.path) {
+            return initial
+        }
+
+        let ext = initial.pathExtension
+        let stem = initial.deletingPathExtension().lastPathComponent
+        var suffix = 2
+        while true {
+            let candidateName = ext.isEmpty ? "\(stem) \(suffix)" : "\(stem) \(suffix).\(ext)"
+            let candidateURL = directory.appendingPathComponent(candidateName)
+            if !FileManager.default.fileExists(atPath: candidateURL.path) {
+                return candidateURL
+            }
+            suffix += 1
         }
     }
 
@@ -893,6 +1031,7 @@ private class ClipsViewModel: ObservableObject {
 
 private struct ClipsManagerContentView: View {
     let isPro: Bool
+    @ObservedObject private var settings = CaptureSettings.shared
     @StateObject private var viewModel = ClipsViewModel()
     @State private var renameClip: ClipItem?
     @State private var tagEditorClip: ClipItem?
@@ -1018,7 +1157,21 @@ private struct ClipsManagerContentView: View {
                 }
             }
         }
-        .onAppear { viewModel.load() }
+        .onAppear {
+            viewModel.applyStatePreferences()
+            viewModel.load()
+        }
+        .task(id: settings.clipsManagerAutoRefreshSeconds) {
+            let interval = settings.clipsManagerAutoRefreshSeconds
+            guard interval > 0 else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
+                if Task.isCancelled { break }
+                await MainActor.run {
+                    viewModel.load()
+                }
+            }
+        }
     #if APPSTORE
         .sheet(isPresented: $showProUpsell) {
             VStack(spacing: 0) {
@@ -1044,8 +1197,10 @@ private struct ClipsManagerContentView: View {
         }
     #endif
         .sheet(isPresented: $showUploadcareSettings) {
-            ClipManagerUploadcareSettingsView()
-                .frame(width: 460, height: 360)
+            ClipManagerUploadcareSettingsView(onRunArchiveNow: {
+                viewModel.archiveOldClipsNow()
+            })
+                .frame(width: 500, height: 460)
         }
         .sheet(item: $renameClip) { item in
             ClipRenamePopover(
@@ -1155,7 +1310,11 @@ private struct ClipsManagerContentView: View {
     }
 
     private func confirmDelete(_ item: ClipItem) {
-        pendingDeleteClip = item
+        if settings.clipsManagerConfirmDelete {
+            pendingDeleteClip = item
+        } else {
+            viewModel.delete(item)
+        }
     }
 
     private var proUpsellBanner: some View {
@@ -1273,7 +1432,13 @@ private struct ClipsManagerContentView: View {
 
             Button("Favorite") { viewModel.favoriteSelected() }
                 .disabled(viewModel.selectedItems.isEmpty)
-            Button("Delete", role: .destructive) { showBatchDeleteConfirmation = true }
+            Button("Delete", role: .destructive) {
+                if settings.clipsManagerConfirmDelete {
+                    showBatchDeleteConfirmation = true
+                } else {
+                    viewModel.deleteSelected()
+                }
+            }
                 .disabled(viewModel.selectedItems.isEmpty)
 
             TextField("Tag", text: $batchTag)
@@ -1342,12 +1507,16 @@ private struct ClipsManagerContentView: View {
                         tags: viewModel.tags(for: item),
                         autoTags: viewModel.autoTags(for: item),
                         notes: viewModel.note(for: item),
+                        showAutoTags: settings.clipsManagerShowAutoTags,
+                        showNotesPreview: settings.clipsManagerShowNotesPreview,
+                        showUploadStatus: settings.clipsManagerShowUploadStatus,
                         uploadStatus: viewModel.uploadStatus(for: item),
                         uploadProgress: viewModel.uploadProgress(for: item),
                         hasUploadcareLink: viewModel.uploadcareLink(for: item)?.isEmpty == false,
                         isFavorite: viewModel.isFavorite(item),
                         isSelectionMode: viewModel.selectionMode,
                         isSelected: viewModel.isSelected(item),
+                        rowTapSelectsInSelectionMode: settings.clipsManagerSelectionRowTapSelects,
                         thumbnail: viewModel.thumbnails[item.id],
                         onDelete: requiresPro { confirmDelete(item) },
                         onCopy: { viewModel.copyToClipboard(item) },
@@ -1387,6 +1556,12 @@ private struct ClipsManagerContentView: View {
                 tags: viewModel.tags(for: item),
                 autoTags: viewModel.autoTags(for: item),
                 notes: viewModel.note(for: item),
+                showAutoTags: settings.clipsManagerShowAutoTags,
+                showNotesPreview: settings.clipsManagerShowNotesPreview,
+                showQuickActions: settings.clipsManagerShowQuickActions,
+                showUploadStatus: settings.clipsManagerShowUploadStatus,
+                compactDensity: settings.clipsManagerCompactListDensity,
+                rowTapSelectsInSelectionMode: settings.clipsManagerSelectionRowTapSelects,
                 uploadStatus: viewModel.uploadStatus(for: item),
                 uploadProgress: viewModel.uploadProgress(for: item),
                 hasUploadcareLink: viewModel.uploadcareLink(for: item)?.isEmpty == false,
@@ -1429,12 +1604,16 @@ private struct ClipGridCell: View {
     let tags: [String]
     let autoTags: [String]
     let notes: String
+    let showAutoTags: Bool
+    let showNotesPreview: Bool
+    let showUploadStatus: Bool
     let uploadStatus: String?
     let uploadProgress: Double?
     let hasUploadcareLink: Bool
     let isFavorite: Bool
     let isSelectionMode: Bool
     let isSelected: Bool
+    let rowTapSelectsInSelectionMode: Bool
     let thumbnail: NSImage?
     let onDelete: () -> Void
     let onCopy: () -> Void
@@ -1488,6 +1667,7 @@ private struct ClipGridCell: View {
             }
             .frame(width: 220, height: 135)
             .clipShape(RoundedRectangle(cornerRadius: 8))
+            .contentShape(RoundedRectangle(cornerRadius: 8))
             .overlay(alignment: .topLeading) {
                 Button(action: onToggleFavorite) {
                     Image(systemName: isFavorite ? "star.fill" : "star")
@@ -1527,7 +1707,9 @@ private struct ClipGridCell: View {
             .onHover { isHovered = $0 }
             .onTapGesture {
                 if isSelectionMode {
-                    onToggleSelection()
+                    if rowTapSelectsInSelectionMode {
+                        onToggleSelection()
+                    }
                 } else {
                     onOpenDetails()
                 }
@@ -1543,7 +1725,7 @@ private struct ClipGridCell: View {
                     .font(.caption)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                if !tags.isEmpty || !autoTags.isEmpty {
+                if !tags.isEmpty || (showAutoTags && !autoTags.isEmpty) {
                     HStack(spacing: 4) {
                         ForEach(tags.prefix(2), id: \.self) { tag in
                             Text(tag)
@@ -1552,27 +1734,29 @@ private struct ClipGridCell: View {
                                 .padding(.vertical, 1)
                                 .background(.blue.opacity(0.15), in: Capsule())
                         }
-                        ForEach(autoTags.prefix(2), id: \.self) { tag in
-                            Text(tag)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                        if showAutoTags {
+                            ForEach(autoTags.prefix(2), id: \.self) { tag in
+                                Text(tag)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
                     }
                     .lineLimit(1)
                 }
-                if !notes.isEmpty {
+                if showNotesPreview && !notes.isEmpty {
                     Text(notes)
                         .font(.caption2)
                         .lineLimit(1)
                         .foregroundStyle(.tertiary)
                 }
-                if let uploadStatus {
+                if showUploadStatus, let uploadStatus {
                     Text(uploadStatus)
                         .font(.caption2)
                         .foregroundStyle(uploadStatus == "Upload failed" ? .red : .secondary)
                         .lineLimit(1)
                 }
-                if let uploadProgress {
+                if showUploadStatus, let uploadProgress {
                     ProgressView(value: uploadProgress)
                         .progressViewStyle(.linear)
                         .frame(maxWidth: 120)
@@ -1631,6 +1815,12 @@ private struct ClipListRow: View {
     let tags: [String]
     let autoTags: [String]
     let notes: String
+    let showAutoTags: Bool
+    let showNotesPreview: Bool
+    let showQuickActions: Bool
+    let showUploadStatus: Bool
+    let compactDensity: Bool
+    let rowTapSelectsInSelectionMode: Bool
     let uploadStatus: String?
     let uploadProgress: Double?
     let hasUploadcareLink: Bool
@@ -1660,6 +1850,9 @@ private struct ClipListRow: View {
         f.timeStyle = .short
         return f
     }()
+    private var thumbnailSize: CGSize {
+        compactDensity ? CGSize(width: 52, height: 39) : CGSize(width: 60, height: 45)
+    }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -1668,7 +1861,9 @@ private struct ClipListRow: View {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(isSelected ? .green : .secondary)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.plain)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
                 .accessibilityLabel(isSelected ? "Deselect clip" : "Select clip")
             }
 
@@ -1676,12 +1871,12 @@ private struct ClipListRow: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(.quaternary)
-                    .frame(width: 60, height: 45)
+                    .frame(width: thumbnailSize.width, height: thumbnailSize.height)
                 if let thumbnail {
                     Image(nsImage: thumbnail)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 60, height: 45)
+                        .frame(width: thumbnailSize.width, height: thumbnailSize.height)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                 } else {
                     Image(systemName: item.typeIcon)
@@ -1716,7 +1911,7 @@ private struct ClipListRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                if !tags.isEmpty || !autoTags.isEmpty {
+                if !tags.isEmpty || (showAutoTags && !autoTags.isEmpty) {
                     HStack(spacing: 4) {
                         ForEach(tags, id: \.self) { tag in
                             Text(tag)
@@ -1725,27 +1920,29 @@ private struct ClipListRow: View {
                                 .padding(.vertical, 1)
                                 .background(.blue.opacity(0.15), in: Capsule())
                         }
-                        ForEach(autoTags.prefix(3), id: \.self) { tag in
-                            Text(tag)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                        if showAutoTags {
+                            ForEach(autoTags.prefix(3), id: \.self) { tag in
+                                Text(tag)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
                         }
                     }
                     .lineLimit(1)
                 }
-                if !notes.isEmpty {
+                if showNotesPreview && !notes.isEmpty {
                     Text(notes)
                         .font(.caption2)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .foregroundStyle(.tertiary)
                 }
-                if let uploadStatus {
+                if showUploadStatus, let uploadStatus {
                     Text(uploadStatus)
                         .font(.caption2)
                         .foregroundStyle(uploadStatus == "Upload failed" ? .red : .secondary)
                 }
-                if let uploadProgress {
+                if showUploadStatus, let uploadProgress {
                     ProgressView(value: uploadProgress)
                         .progressViewStyle(.linear)
                         .frame(width: 120)
@@ -1754,79 +1951,85 @@ private struct ClipListRow: View {
 
             Spacer()
 
-            // Actions
-            HStack(spacing: 8) {
-                Button { onToggleFavorite() } label: {
-                    Image(systemName: isFavorite ? "star.fill" : "star")
-                        .foregroundStyle(isFavorite ? .yellow : .secondary)
-                }
-                .buttonStyle(.borderless)
-                .help(isFavorite ? "Remove Favorite" : "Add Favorite")
-                .accessibilityLabel(isFavorite ? "Remove favorite" : "Add favorite")
-
-                Button { onOpenDetails() } label: {
-                    Image(systemName: "info.circle")
-                }
-                .buttonStyle(.borderless)
-                .help("Details")
-                .accessibilityLabel("Show details")
-
-                Button { onCopy() } label: {
-                    Image(systemName: "doc.on.doc")
-                }
-                .buttonStyle(.borderless)
-                .help("Copy")
-                .accessibilityLabel("Copy clip")
-
-                Button { onReveal() } label: {
-                    Image(systemName: "folder.badge.questionmark")
-                }
-                .buttonStyle(.borderless)
-                .help("Show in Finder")
-                .accessibilityLabel("Show in Finder")
-
-                ShareLink(item: item.url) {
-                    Image(systemName: "square.and.arrow.up")
-                }
-                .buttonStyle(.borderless)
-                .help("Share")
-                .accessibilityLabel("Share clip")
-
-                Button { onUpload() } label: {
-                    if isUploading {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Image(systemName: "icloud.and.arrow.up")
-                    }
-                }
-                .buttonStyle(.borderless)
-                .help("Upload to Uploadcare")
-                .disabled(isUploading || !canUpload)
-                .accessibilityLabel("Upload to Uploadcare")
-
-                if hasUploadcareLink {
-                    Button { onCopyUploadcareLink() } label: {
-                        Image(systemName: "link")
+            if showQuickActions {
+                // Actions
+                HStack(spacing: 8) {
+                    Button { onToggleFavorite() } label: {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .foregroundStyle(isFavorite ? .yellow : .secondary)
                     }
                     .buttonStyle(.borderless)
-                    .help("Copy Uploadcare Link")
-                    .accessibilityLabel("Copy Uploadcare link")
-                }
+                    .help(isFavorite ? "Remove Favorite" : "Add Favorite")
+                    .accessibilityLabel(isFavorite ? "Remove favorite" : "Add favorite")
 
-                Button(role: .destructive) { onDelete() } label: {
-                    Image(systemName: "trash")
-                        .foregroundStyle(.red)
+                    Button { onOpenDetails() } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Details")
+                    .accessibilityLabel("Show details")
+
+                    Button { onCopy() } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Copy")
+                    .accessibilityLabel("Copy clip")
+
+                    Button { onReveal() } label: {
+                        Image(systemName: "folder.badge.questionmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Show in Finder")
+                    .accessibilityLabel("Show in Finder")
+
+                    ShareLink(item: item.url) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Share")
+                    .accessibilityLabel("Share clip")
+
+                    Button { onUpload() } label: {
+                        if isUploading {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "icloud.and.arrow.up")
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Upload to Uploadcare")
+                    .disabled(isUploading || !canUpload)
+                    .accessibilityLabel("Upload to Uploadcare")
+
+                    if hasUploadcareLink {
+                        Button { onCopyUploadcareLink() } label: {
+                            Image(systemName: "link")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Copy Uploadcare Link")
+                        .accessibilityLabel("Copy Uploadcare link")
+                    }
+
+                    Button(role: .destructive) { onDelete() } label: {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Delete")
+                    .accessibilityLabel("Delete clip")
                 }
-                .buttonStyle(.borderless)
-                .help("Delete")
-                .accessibilityLabel("Delete clip")
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, compactDensity ? 2 : 4)
         .contentShape(Rectangle())
         .onTapGesture {
-            if !isSelectionMode {
+            if isSelectionMode {
+                if rowTapSelectsInSelectionMode {
+                    onToggleSelection()
+                }
+            } else {
                 onOpenDetails()
             }
         }
@@ -2302,54 +2505,132 @@ private struct ClipCollectionPopover: View {
 private struct ClipManagerUploadcareSettingsView: View {
     @ObservedObject private var settings = CaptureSettings.shared
     @Environment(\.dismiss) private var dismiss
+    let onRunArchiveNow: () -> Void
+
     @State private var showSecretKey = false
     @State private var publicKey = ""
     @State private var secretKey = ""
 
+    private let refreshIntervals = [0, 15, 30, 60, 120, 300]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Upload Settings")
-                .font(.title3.weight(.semibold))
-
-            Text("Upload to your own Uploadcare account from Clips Manager.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Toggle("Enable Uploadcare uploads", isOn: $settings.uploadcareEnabled)
-
-            if settings.uploadcareEnabled {
-                TextField("Uploadcare public API key", text: $publicKey)
-                    .textFieldStyle(.roundedBorder)
-                HStack(spacing: 8) {
-                    Group {
-                        if showSecretKey {
-                            TextField("Uploadcare secret API key", text: $secretKey)
-                        } else {
-                            SecureField("Uploadcare secret API key", text: $secretKey)
-                        }
-                    }
-                    .textFieldStyle(.roundedBorder)
-
-                    Button(showSecretKey ? "Hide" : "Show") {
-                        showSecretKey.toggle()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-                Link("Create Uploadcare account / find API keys", destination: URL(string: "https://app.uploadcare.com/projects/-/api-keys/")!)
-                    .font(.caption)
-                Text("TinyClips does not ship with Uploadcare credentials or manage your account.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text("Your secret key is used for signed uploads and REST API URL resolution.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Text("Uploadcare API keys are stored in your macOS Keychain.")
-                    .font(.caption2)
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Clips Manager Settings")
+                    .font(.title3.weight(.semibold))
+                Text("Configure uploads and Clips Manager behavior.")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 6)
 
-            Spacer()
+            Form {
+                Section("Uploads") {
+                    Toggle("Enable Uploadcare uploads", isOn: $settings.uploadcareEnabled)
+
+                    if settings.uploadcareEnabled {
+                        TextField("Uploadcare public API key", text: $publicKey)
+                        HStack(spacing: 8) {
+                            Group {
+                                if showSecretKey {
+                                    TextField("Uploadcare secret API key", text: $secretKey)
+                                } else {
+                                    SecureField("Uploadcare secret API key", text: $secretKey)
+                                }
+                            }
+
+                            Button(showSecretKey ? "Hide" : "Show") {
+                                showSecretKey.toggle()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                        Link("Create Uploadcare account / find API keys", destination: URL(string: "https://app.uploadcare.com/projects/-/api-keys/")!)
+                            .font(.caption)
+                        Text("TinyClips does not ship with Uploadcare credentials or manage your account.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("Your secret key is used for signed uploads and REST API URL resolution.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("Uploadcare API keys are stored in your macOS Keychain.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Toggle("Auto-upload new captures to Uploadcare", isOn: $settings.clipsManagerAutoUploadAfterSave)
+                        .disabled(!settings.uploadcareEnabled)
+                    Toggle("Automatically copy uploaded link to clipboard", isOn: $settings.clipsManagerAutoCopyUploadLink)
+                        .disabled(!settings.clipsManagerAutoUploadAfterSave || !settings.uploadcareEnabled)
+                }
+
+                Section("Display") {
+                    Toggle("Show auto-tags in clips", isOn: $settings.clipsManagerShowAutoTags)
+                    Toggle("Show notes preview in clips", isOn: $settings.clipsManagerShowNotesPreview)
+                    Toggle("Show quick action buttons in list view", isOn: $settings.clipsManagerShowQuickActions)
+                    Toggle("Show upload status in clips", isOn: $settings.clipsManagerShowUploadStatus)
+                    Toggle("Use compact list density", isOn: $settings.clipsManagerCompactListDensity)
+                }
+
+                Section("Behavior") {
+                    Toggle("Always confirm delete", isOn: $settings.clipsManagerConfirmDelete)
+                    Toggle("Row tap selects in selection mode", isOn: $settings.clipsManagerSelectionRowTapSelects)
+                    Toggle("Remember last sidebar/search state", isOn: $settings.clipsManagerRememberLastState)
+                    Toggle("Ignore non-TinyClips files", isOn: $settings.clipsManagerIgnoreNonTinyClipsFiles)
+                }
+
+                Section("Defaults") {
+                    Picker("Default view", selection: $settings.clipsManagerDefaultViewMode) {
+                        Text("Grid").tag("grid")
+                        Text("List").tag("list")
+                    }
+
+                    Picker("Default sort", selection: $settings.clipsManagerDefaultSortOption) {
+                        ForEach(ClipsViewModel.SortOption.allCases, id: \.self) { option in
+                            Text(option.rawValue).tag(option.rawValue)
+                        }
+                    }
+
+                    Picker("Default type filter", selection: $settings.clipsManagerDefaultFilterType) {
+                        ForEach(ClipsViewModel.FilterType.allCases, id: \.self) { option in
+                            Text(option.rawValue).tag(option.rawValue)
+                        }
+                    }
+
+                    Picker("Default date filter", selection: $settings.clipsManagerDefaultDateFilter) {
+                        ForEach(ClipsViewModel.DateFilter.allCases, id: \.self) { option in
+                            Text(option.rawValue).tag(option.rawValue)
+                        }
+                    }
+                }
+
+                Section("Automation") {
+                    Picker("Auto-refresh interval", selection: $settings.clipsManagerAutoRefreshSeconds) {
+                        ForEach(refreshIntervals, id: \.self) { seconds in
+                            Text(refreshIntervalLabel(seconds)).tag(seconds)
+                        }
+                    }
+
+                    Toggle("Archive old clips automatically", isOn: $settings.clipsManagerArchiveOldClips)
+                    if settings.clipsManagerArchiveOldClips {
+                        Stepper(value: $settings.clipsManagerArchiveAfterDays, in: 1...365) {
+                            Text("Archive clips older than \(settings.clipsManagerArchiveAfterDays) day(s)")
+                        }
+                        Button("Archive now") {
+                            onRunArchiveNow()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
 
             HStack {
                 Spacer()
@@ -2358,8 +2639,11 @@ private struct ClipManagerUploadcareSettingsView: View {
                 }
                 .keyboardShortcut(.defaultAction)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.bar)
         }
-        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             if settings.uploadcareEnabled {
                 let credentials = UploadcareCredentialsStore.shared.credentials()
@@ -2373,11 +2657,37 @@ private struct ClipManagerUploadcareSettingsView: View {
             publicKey = credentials.publicKey
             secretKey = credentials.secretKey
         }
+        .onChange(of: settings.clipsManagerRememberLastState) { _, enabled in
+            if !enabled {
+                clearRememberedState()
+            }
+        }
         .onChange(of: publicKey) { _, updated in
             UploadcareCredentialsStore.shared.setPublicKey(updated)
         }
         .onChange(of: secretKey) { _, updated in
             UploadcareCredentialsStore.shared.setSecretKey(updated)
+        }
+    }
+
+    private func refreshIntervalLabel(_ seconds: Int) -> String {
+        if seconds == 0 { return "Off" }
+        return "\(seconds) seconds"
+    }
+
+    private func clearRememberedState() {
+        let keys = [
+            "clipsManagerLastViewMode",
+            "clipsManagerLastSortOption",
+            "clipsManagerLastFilterType",
+            "clipsManagerLastDateFilter",
+            "clipsManagerLastSmartCollection",
+            "clipsManagerLastSearchText",
+            "clipsManagerLastSelectedTag",
+            "clipsManagerLastSelectedCollection"
+        ]
+        for key in keys {
+            UserDefaults.standard.removeObject(forKey: key)
         }
     }
 }

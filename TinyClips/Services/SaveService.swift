@@ -181,6 +181,13 @@ class SaveService: NSObject, UNUserNotificationCenterDelegate {
     func handleSavedFile(url: URL, type: CaptureType) {
         let settings = CaptureSettings.shared
 
+#if APPSTORE
+        UserDefaults.standard.set(
+            UserDefaults.standard.integer(forKey: "appStoreClipCountForReview") + 1,
+            forKey: "appStoreClipCountForReview"
+        )
+#endif
+
         if settings.shouldCopyToClipboard(for: type) {
             copyToClipboard(url: url, type: type)
         }
@@ -192,6 +199,8 @@ class SaveService: NSObject, UNUserNotificationCenterDelegate {
         if settings.showSaveNotifications {
             showNotification(type: type, url: url)
         }
+
+        startAutomaticUploadIfNeeded(for: url)
     }
 
     private func copyToClipboard(url: URL, type: CaptureType) {
@@ -206,6 +215,46 @@ class SaveService: NSObject, UNUserNotificationCenterDelegate {
         case .video, .gif:
             pasteboard.writeObjects([url as NSURL])
         }
+    }
+
+    @MainActor
+    private func startAutomaticUploadIfNeeded(for url: URL) {
+        let settings = CaptureSettings.shared
+        guard settings.clipsManagerAutoUploadAfterSave else { return }
+        guard settings.uploadcareEnabled else { return }
+
+        let credentials = UploadcareCredentialsStore.shared.credentials()
+        let publicKey = credentials.publicKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secretKey = credentials.secretKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !publicKey.isEmpty, !secretKey.isEmpty else { return }
+
+        let shouldCopyLink = settings.clipsManagerAutoCopyUploadLink
+
+        Task {
+            do {
+                let result = try await UploadcareService.shared.upload(
+                    fileURL: url,
+                    publicKey: publicKey,
+                    secretKey: secretKey
+                )
+                if shouldCopyLink {
+                    await MainActor.run {
+                        self.copyTextToClipboard(result.fileURL.absoluteString)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.showError("Automatic Uploadcare upload failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func copyTextToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 
     private func showNotification(type: CaptureType, url: URL) {

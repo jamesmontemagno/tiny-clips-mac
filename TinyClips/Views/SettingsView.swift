@@ -43,8 +43,10 @@ struct SettingsView: View {
     @ObservedObject private var settings = CaptureSettings.shared
     @ObservedObject private var sparkleController = SparkleController.shared
     @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
+    @Environment(\.openWindow) private var openWindow
     @State private var selectedTab: SettingsTab? = .general
     @State private var splitVisibility: NavigationSplitViewVisibility = .all
+    @State private var showDisableDockWarning = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $splitVisibility) {
@@ -75,6 +77,16 @@ struct SettingsView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 720, minHeight: 460)
+        .alert("Hide Dock icon?", isPresented: $showDisableDockWarning) {
+            Button("Cancel", role: .cancel) {}
+            Button("Hide Dock Icon", role: .destructive) {
+                settings.showInDock = false
+                applyDockVisibility(false)
+                reopenSettingsWindow()
+            }
+        } message: {
+            Text("TinyClips may briefly close the Settings window when switching out of Dock mode.")
+        }
     }
 
     // MARK: - General
@@ -157,6 +169,8 @@ struct SettingsView: View {
                 get: { launchAtLogin.isEnabled },
                 set: { launchAtLogin.setEnabled($0) }
             ))
+            Toggle("Show TinyClips in Dock (enables ⌘⇥)", isOn: showInDockBinding)
+                .help("When enabled, TinyClips appears in Command-Tab and can participate in normal app/window switching.")
             Toggle("Always capture main display", isOn: $settings.alwaysCaptureMainDisplay)
                 .help("Skip the display picker when multiple monitors are connected")
             Toggle("Include TinyClips in captures", isOn: $settings.includeTinyClipsInCapture)
@@ -451,6 +465,35 @@ struct SettingsView: View {
 
             guard alert.runModal() == .alertFirstButtonReturn else { return }
             settings.resetToDefaults()
+            applyDockVisibility(settings.showInDock)
+        }
+    }
+
+    private func applyDockVisibility(_ showInDock: Bool) {
+        NSApplication.shared.setActivationPolicy(showInDock ? .regular : .accessory)
+        if showInDock {
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
+        }
+    }
+
+    private var showInDockBinding: Binding<Bool> {
+        Binding(
+            get: { settings.showInDock },
+            set: { isEnabled in
+                if isEnabled {
+                    settings.showInDock = true
+                    applyDockVisibility(true)
+                } else {
+                    showDisableDockWarning = true
+                }
+            }
+        )
+    }
+
+    private func reopenSettingsWindow() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            openWindow(id: "settings-window")
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
         }
     }
 
