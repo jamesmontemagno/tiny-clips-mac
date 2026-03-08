@@ -24,6 +24,7 @@ class CapturePickerPanel: NSPanel {
     override var canBecomeKey: Bool { true }
 
     convenience init(
+        captureType: CaptureType = .screenshot,
         countdownEnabled: Bool,
         countdownDuration: Int,
         onCapture: @escaping (CapturePickerMode, Bool, Int) -> Void,
@@ -48,6 +49,7 @@ class CapturePickerPanel: NSPanel {
         self.isMovableByWindowBackground = true
 
         let hostingView = NSHostingView(rootView: CapturePickerView(
+            captureType: captureType,
             countdownEnabled: Binding(
                 get: { [weak self] in self?.countdownEnabled ?? false },
                 set: { [weak self] in self?.countdownEnabled = $0 }
@@ -173,6 +175,7 @@ class CapturePickerPanel: NSPanel {
 
 private struct CapturePickerView: View {
     @Environment(\.colorScheme) private var colorScheme
+    let captureType: CaptureType
     @Binding var countdownEnabled: Bool
     @Binding var countdownDuration: Int
 
@@ -180,11 +183,13 @@ private struct CapturePickerView: View {
     let onCancel: () -> Void
 
     init(
+        captureType: CaptureType,
         countdownEnabled: Binding<Bool>,
         countdownDuration: Binding<Int>,
         onCapture: @escaping (CapturePickerMode, Bool, Int) -> Void,
         onCancel: @escaping () -> Void
     ) {
+        self.captureType = captureType
         _countdownEnabled = countdownEnabled
         _countdownDuration = countdownDuration
         self.onCapture = onCapture
@@ -195,8 +200,37 @@ private struct CapturePickerView: View {
         countdownEnabled ? "\(countdownDuration)s" : "Off"
     }
 
+    private var modeIcon: String {
+        switch captureType {
+        case .screenshot: return "camera.fill"
+        case .video: return "video.fill"
+        case .gif: return "photo.stack"
+        }
+    }
+
+    private var modeLabel: String {
+        switch captureType {
+        case .screenshot: return "Screenshot"
+        case .video: return "Video"
+        case .gif: return "GIF"
+        }
+    }
+
     var body: some View {
         HStack(spacing: 8) {
+            HStack(spacing: 4) {
+                Image(systemName: modeIcon)
+                    .font(.system(size: 11))
+                Text(modeLabel)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(.secondary)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(modeLabel) mode")
+
+            Divider()
+                .frame(height: 20)
+                .overlay(.primary.opacity(0.2))
             Button { onCapture(.region, countdownEnabled, countdownDuration) } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "viewfinder.rectangular")
@@ -212,6 +246,8 @@ private struct CapturePickerView: View {
             }
             .buttonStyle(.plain)
             .help("Select a region (R)")
+            .keyboardShortcut("r", modifiers: [])
+            .accessibilityHint("Starts region capture.")
 
             Button { onCapture(.screen, countdownEnabled, countdownDuration) } label: {
                 HStack(spacing: 5) {
@@ -228,6 +264,8 @@ private struct CapturePickerView: View {
             }
             .buttonStyle(.plain)
             .help("Full screen (S)")
+            .keyboardShortcut("s", modifiers: [])
+            .accessibilityHint("Starts full screen capture.")
 
             Button { onCapture(.window, countdownEnabled, countdownDuration) } label: {
                 HStack(spacing: 5) {
@@ -244,6 +282,8 @@ private struct CapturePickerView: View {
             }
             .buttonStyle(.plain)
             .help("Select a window (W)")
+            .keyboardShortcut("w", modifiers: [])
+            .accessibilityHint("Starts window capture.")
 
             Divider()
                 .frame(height: 20)
@@ -278,6 +318,9 @@ private struct CapturePickerView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
             .help("Countdown timer")
+            .accessibilityLabel("Countdown timer")
+            .accessibilityValue(countdownEnabled ? "\(countdownDuration) seconds" : "Off")
+            .accessibilityHint("Choose a delay before capture starts.")
 
             Button { onCancel() } label: {
                 Image(systemName: "xmark")
@@ -289,6 +332,9 @@ private struct CapturePickerView: View {
             }
             .buttonStyle(.plain)
             .help("Cancel (Esc)")
+            .keyboardShortcut(.cancelAction)
+            .accessibilityLabel("Cancel capture")
+            .accessibilityHint("Closes the capture picker.")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

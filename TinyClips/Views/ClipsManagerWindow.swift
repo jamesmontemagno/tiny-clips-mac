@@ -1,0 +1,2708 @@
+import AppKit
+import SwiftUI
+import AVFoundation
+import SwiftData
+import ImageIO
+
+// MARK: - Root View (Pro gating)
+
+private struct ClipsManagerRootView: View {
+#if APPSTORE
+    @ObservedObject private var storeService = StoreService.shared
+
+    var body: some View {
+        ClipsManagerContentView(isPro: storeService.isPro)
+    }
+#else
+    var body: some View {
+        ClipsManagerContentView(isPro: true)
+    }
+#endif
+}
+
+@MainActor
+func clipsManagerRootView() -> some View {
+    ClipsManagerRootView()
+        .frame(minWidth: 700, minHeight: 460)
+}
+
+// MARK: - Clip Item Model
+
+struct ClipItem: Identifiable {
+    let url: URL
+    let type: CaptureType
+    let date: Date
+    let fileSize: Int64
+
+    init?(url: URL) {
+        let ext = url.pathExtension.lowercased()
+        switch ext {
+        case "png", "jpg", "jpeg": self.type = .screenshot
+        case "mp4": self.type = .video
+        case "gif": self.type = .gif
+        default: return nil
+        }
+        let resources = try? url.resourceValues(forKeys: [.creationDateKey, .fileSizeKey])
+        self.date = resources?.creationDate ?? Date()
+        self.fileSize = Int64(resources?.fileSize ?? 0)
+        self.url = url
+    }
+
+    var typeLabel: String { type.label }
+
+    var formattedSize: String {
+        let bytes = Double(fileSize)
+        if bytes < 1_024 { return "\(fileSize) B" }
+        if bytes < 1_048_576 { return String(format: "%.1f KB", bytes / 1_024) }
+        return String(format: "%.1f MB", bytes / 1_048_576)
+    }
+
+    var typeIcon: String {
+        switch type {
+        case .screenshot: return "photo"
+        case .video: return "video"
+        case .gif: return "photo.on.rectangle"
+        }
+    }
+
+    var filePath: String { url.path }
+    var id: String { filePath }
+}
+
+// MARK: - Metadata
+
+private struct ClipMetadata {
+    var displayName: String?
+    var tags: [String]
+    var isFavorite: Bool
+    var notes: String
+    var collection: String?
+    var uploadcareURL: String?
+}
+
+@Model
+private final class ClipMetadataRecord {
+    @Attribute(.unique) var clipPath: String
+    var displayName: String?
+    var tagsBlob: String
+    var isFavorite: Bool
+    var notes: String
+    var collection: String?
+    var uploadcareURL: String?
+
+    init(
+        clipPath: String,
+        displayName: String? = nil,
+        tags: [String] = [],
+        isFavorite: Bool = false,
+        notes: String = "",
+        collection: String? = nil,
+        uploadcareURL: String? = nil
+    ) {
+        self.clipPath = clipPath
+        self.displayName = displayName
+        self.tagsBlob = tags.joined(separator: "\n")
+        self.isFavorite = isFavorite
+        self.notes = notes
+        self.collection = collection
+        self.uploadcareURL = uploadcareURL
+    }
+
+    var tags: [String] {
+        get {
+            tagsBlob
+                .split(separator: "\n")
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+        set {
+            tagsBlob = newValue.joined(separator: "\n")
+        }
+    }
+}
+
+@MainActor
+private final class ClipMetadataStore {
+    static let shared = ClipMetadataStore()
+
+    private let modelContext: ModelContext?
+
+    private init() {
+        do {
+            let container = try ModelContainer(for: ClipMetadataRecord.self)
+            modelContext = ModelContext(container)
+        } catch {
+            modelContext = nil
+        }
+    }
+
+    func metadataMap() -> [String: ClipMetadata] {
+        guard let modelContext else { return [:] }
+
+        let descriptor = FetchDescriptor<ClipMetadataRecord>()
+        guard let records = try? modelContext.fetch(descriptor) else { return [:] }
+
+        return records.reduce(into: [String: ClipMetadata]()) { partial, record in
+            partial[record.clipPath] = ClipMetadata(
+                displayName: record.displayName,
+                tags: record.tags,
+                isFavorite: record.isFavorite,
+                notes: record.notes,
+                collection: record.collection,
+                uploadcareURL: record.uploadcareURL
+            )
+        }
+    }
+
+    func upsert(path: String, mutate: (inout ClipMetadata) -> Void) {
+        guard let modelContext else { return }
+
+        var descriptor = FetchDescriptor<ClipMetadataRecord>(
+            predicate: #Predicate { $0.clipPath == path }
+        )
+        descriptor.fetchLimit = 1
+
+        let record = (try? modelContext.fetch(descriptor).first) ?? ClipMetadataRecord(clipPath: path)
+        if record.modelContext == nil {
+            modelContext.insert(record)
+        }
+
+        var metadata = ClipMetadata(
+            displayName: record.displayName,
+            tags: record.tags,
+            isFavorite: record.isFavorite,
+            notes: record.notes,
+            collection: record.collection,
+            uploadcareURL: record.uploadcareURL
+        )
+        mutate(&metadata)
+
+        record.displayName = metadata.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        record.tags = metadata.tags
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        record.isFavorite = metadata.isFavorite
+        record.notes = metadata.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCollection = metadata.collection?.trimmingCharacters(in: .whitespacesAndNewlines)
+        record.collection = (trimmedCollection?.isEmpty == false) ? trimmedCollection : nil
+        record.uploadcareURL = metadata.uploadcareURL?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        try? modelContext.save()
+    }
+
+    func remove(path: String) {
+        guard let modelContext else { return }
+
+        var descriptor = FetchDescriptor<ClipMetadataRecord>(
+            predicate: #Predicate { $0.clipPath == path }
+        )
+        descriptor.fetchLimit = 1
+
+        if let record = try? modelContext.fetch(descriptor).first {
+            modelContext.delete(record)
+            try? modelContext.save()
+        }
+    }
+}
+
+// MARK: - Clips View Model
+
+@MainActor
+private class ClipsViewModel: ObservableObject {
+    @Published var clips: [ClipItem] = []
+    @Published var thumbnails: [String: NSImage] = [:]
+    @Published var isLoading = false
+    @Published var sortOption: SortOption = .newest { didSet { persistUIStateIfNeeded() } }
+    @Published var filterType: FilterType = .all { didSet { persistUIStateIfNeeded() } }
+    @Published var smartCollection: SmartCollection = .all { didSet { persistUIStateIfNeeded() } }
+    @Published var dateFilter: DateFilter = .allTime { didSet { persistUIStateIfNeeded() } }
+    @Published var viewMode: ViewMode = .grid { didSet { persistUIStateIfNeeded() } }
+    @Published var searchText = "" { didSet { persistUIStateIfNeeded() } }
+    @Published var selectedTag: String = "" { didSet { persistUIStateIfNeeded() } }
+    @Published var selectedCollection: String = "" { didSet { persistUIStateIfNeeded() } }
+    @Published var selectionMode = false
+    @Published var selectedClipIDs: Set<String> = []
+    @Published var uploadingClipIDs: Set<String> = []
+    @Published var uploadStatusByPath: [String: String] = [:]
+    @Published var uploadProgressByPath: [String: Double] = [:]
+    @Published private var metadataByPath: [String: ClipMetadata] = [:]
+
+    private let metadataStore = ClipMetadataStore.shared
+    private let defaults = UserDefaults.standard
+
+    private var editorWindows: [NSWindow] = []
+
+#if APPSTORE
+    private var activeScopedURL: URL?
+#endif
+
+    enum SortOption: String, CaseIterable {
+        case newest = "Newest First"
+        case oldest = "Oldest First"
+        case largest = "Largest"
+        case name = "Name"
+        case favoritesFirst = "Favorites First"
+    }
+
+    enum FilterType: String, CaseIterable {
+        case all = "All"
+        case screenshots = "Screenshots"
+        case videos = "Videos"
+        case gifs = "GIFs"
+        case favorites = "Favorites"
+    }
+
+    enum SmartCollection: String, CaseIterable {
+        case all = "All Clips"
+        case recent = "Recent"
+        case thisWeek = "This Week"
+        case thisMonth = "This Month"
+        case largeFiles = "Large Files"
+        case favorites = "Favorites"
+        case screenshots = "Screenshots"
+        case videos = "Videos"
+        case gifs = "GIFs"
+
+        var icon: String {
+            switch self {
+            case .all: return "tray.2"
+            case .recent: return "clock"
+            case .thisWeek: return "calendar"
+            case .thisMonth: return "calendar.badge.clock"
+            case .largeFiles: return "externaldrive"
+            case .favorites: return "star"
+            case .screenshots: return "camera"
+            case .videos: return "video"
+            case .gifs: return "photo.on.rectangle"
+            }
+        }
+    }
+
+    enum DateFilter: String, CaseIterable {
+        case allTime = "Any Date"
+        case today = "Today"
+        case last7Days = "Last 7 Days"
+        case last30Days = "Last 30 Days"
+    }
+
+    enum ViewMode: String {
+        case grid, list
+    }
+
+    init() {
+        applyInitialPreferences()
+    }
+
+    var filteredSortedClips: [ClipItem] {
+        var result = clips
+
+        // Smart collection filter
+        let now = Date()
+        switch smartCollection {
+        case .all: break
+        case .recent:
+            guard let threshold = Calendar.current.date(byAdding: .day, value: -1, to: now) else { break }
+            result = result.filter { $0.date >= threshold }
+        case .thisWeek:
+            guard let threshold = Calendar.current.date(byAdding: .day, value: -7, to: now) else { break }
+            result = result.filter { $0.date >= threshold }
+        case .thisMonth:
+            guard let threshold = Calendar.current.date(byAdding: .day, value: -30, to: now) else { break }
+            result = result.filter { $0.date >= threshold }
+        case .largeFiles:
+            result = result.filter { $0.fileSize > 5_242_880 }
+        case .favorites:
+            result = result.filter { isFavorite($0) }
+        case .screenshots:
+            result = result.filter { $0.type == .screenshot }
+        case .videos:
+            result = result.filter { $0.type == .video }
+        case .gifs:
+            result = result.filter { $0.type == .gif }
+        }
+
+        // Type filter (additional, on top of smart collection)
+        switch filterType {
+        case .all: break
+        case .screenshots: result = result.filter { $0.type == .screenshot }
+        case .videos: result = result.filter { $0.type == .video }
+        case .gifs: result = result.filter { $0.type == .gif }
+        case .favorites: result = result.filter { isFavorite($0) }
+        }
+
+        if dateFilter != .allTime {
+            let now = Date()
+            result = result.filter { item in
+                switch dateFilter {
+                case .allTime:
+                    return true
+                case .today:
+                    return Calendar.current.isDateInToday(item.date)
+                case .last7Days:
+                    guard let threshold = Calendar.current.date(byAdding: .day, value: -7, to: now) else { return true }
+                    return item.date >= threshold
+                case .last30Days:
+                    guard let threshold = Calendar.current.date(byAdding: .day, value: -30, to: now) else { return true }
+                    return item.date >= threshold
+                }
+            }
+        }
+
+        if !selectedTag.isEmpty {
+            result = result.filter { allTags(for: $0).contains(selectedTag) }
+        }
+
+        if !selectedCollection.isEmpty {
+            result = result.filter { collection(for: $0) == selectedCollection }
+        }
+
+        if !searchText.isEmpty {
+            result = result.filter { matchesSearch(item: $0, query: searchText) }
+        }
+
+        switch sortOption {
+        case .newest: result = result.sorted { $0.date > $1.date }
+        case .oldest: result = result.sorted { $0.date < $1.date }
+        case .largest: result = result.sorted { $0.fileSize > $1.fileSize }
+        case .name: result = result.sorted {
+                displayName(for: $0).localizedCaseInsensitiveCompare(displayName(for: $1)) == .orderedAscending
+            }
+        case .favoritesFirst:
+            result = result.sorted {
+                if isFavorite($0) == isFavorite($1) {
+                    return $0.date > $1.date
+                }
+                return isFavorite($0)
+            }
+        }
+
+        return result
+    }
+
+    // MARK: - Loading
+
+    func load() {
+        isLoading = true
+        selectedClipIDs = []
+        metadataByPath = metadataStore.metadataMap()
+        Task {
+            let urls = await scanForClips()
+            self.clips = urls.compactMap { ClipItem(url: $0) }
+            self.isLoading = false
+            loadThumbnails()
+        }
+    }
+
+    private func scanForClips() async -> [URL] {
+        let directories = clipDirectories()
+        archiveOldClipsIfNeeded(in: directories)
+        var urls: [URL] = []
+        for dir in directories {
+            urls.append(contentsOf: filesInDirectory(dir))
+        }
+        // Deduplicate by path
+        var seen = Set<String>()
+        return urls.filter { seen.insert($0.path).inserted }
+    }
+
+    private func clipDirectories() -> [URL] {
+#if APPSTORE
+        let bookmark = UserDefaults.standard.data(forKey: "saveDirectoryBookmark")
+        if let bookmark, !bookmark.isEmpty,
+           let customURL = resolveBookmark(bookmark) {
+            return [customURL]
+        }
+        var dirs: [URL] = []
+        if let pics = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first {
+            dirs.append(pics.appendingPathComponent("TinyClips"))
+        }
+        if let movies = FileManager.default.urls(for: .moviesDirectory, in: .userDomainMask).first {
+            dirs.append(movies.appendingPathComponent("TinyClips"))
+        }
+        return dirs
+#else
+        let dir = UserDefaults.standard.string(forKey: "saveDirectory") ?? (NSHomeDirectory() + "/Desktop")
+        return [URL(fileURLWithPath: dir)]
+#endif
+    }
+
+#if APPSTORE
+    private func resolveBookmark(_ data: Data) -> URL? {
+        var isStale = false
+        guard let url = try? URL(
+            resolvingBookmarkData: data,
+            options: [.withSecurityScope],
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        ), url.startAccessingSecurityScopedResource() else { return nil }
+        activeScopedURL?.stopAccessingSecurityScopedResource()
+        activeScopedURL = url
+        return url
+    }
+
+    deinit {
+        activeScopedURL?.stopAccessingSecurityScopedResource()
+    }
+#endif
+
+    private func filesInDirectory(_ dir: URL) -> [URL] {
+        let settings = CaptureSettings.shared
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: [.creationDateKey, .fileSizeKey, .isRegularFileKey],
+            options: .skipsHiddenFiles
+        ) else { return [] }
+        return contents.filter {
+            let isRegularFile = (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) ?? false
+            let ext = $0.pathExtension.lowercased()
+            guard isRegularFile && ["png", "jpg", "jpeg", "mp4", "gif"].contains(ext) else { return false }
+            if settings.clipsManagerIgnoreNonTinyClipsFiles {
+                return $0.lastPathComponent.hasPrefix("TinyClips ")
+            }
+            return true
+        }
+    }
+
+    func archiveOldClipsNow() {
+        archiveOldClipsIfNeeded(in: clipDirectories())
+        load()
+    }
+
+    func applyStatePreferences() {
+        let settings = CaptureSettings.shared
+
+        if settings.clipsManagerRememberLastState {
+            if let savedViewMode = ViewMode(rawValue: defaults.string(forKey: "clipsManagerLastViewMode") ?? "") {
+                viewMode = savedViewMode
+            } else if let defaultViewMode = ViewMode(rawValue: settings.clipsManagerDefaultViewMode) {
+                viewMode = defaultViewMode
+            }
+
+            if let savedSort = SortOption(rawValue: defaults.string(forKey: "clipsManagerLastSortOption") ?? "") {
+                sortOption = savedSort
+            } else if let defaultSort = SortOption(rawValue: settings.clipsManagerDefaultSortOption) {
+                sortOption = defaultSort
+            }
+
+            if let savedType = FilterType(rawValue: defaults.string(forKey: "clipsManagerLastFilterType") ?? "") {
+                filterType = savedType
+            } else if let defaultType = FilterType(rawValue: settings.clipsManagerDefaultFilterType) {
+                filterType = defaultType
+            }
+
+            if let savedDate = DateFilter(rawValue: defaults.string(forKey: "clipsManagerLastDateFilter") ?? "") {
+                dateFilter = savedDate
+            } else if let defaultDate = DateFilter(rawValue: settings.clipsManagerDefaultDateFilter) {
+                dateFilter = defaultDate
+            }
+
+            if let savedCollection = SmartCollection(rawValue: defaults.string(forKey: "clipsManagerLastSmartCollection") ?? "") {
+                smartCollection = savedCollection
+            } else {
+                smartCollection = .all
+            }
+
+            searchText = defaults.string(forKey: "clipsManagerLastSearchText") ?? ""
+            selectedTag = defaults.string(forKey: "clipsManagerLastSelectedTag") ?? ""
+            selectedCollection = defaults.string(forKey: "clipsManagerLastSelectedCollection") ?? ""
+        } else {
+            if let defaultViewMode = ViewMode(rawValue: settings.clipsManagerDefaultViewMode) {
+                viewMode = defaultViewMode
+            } else {
+                viewMode = .grid
+            }
+            sortOption = SortOption(rawValue: settings.clipsManagerDefaultSortOption) ?? .newest
+            filterType = FilterType(rawValue: settings.clipsManagerDefaultFilterType) ?? .all
+            dateFilter = DateFilter(rawValue: settings.clipsManagerDefaultDateFilter) ?? .allTime
+            smartCollection = .all
+            searchText = ""
+            selectedTag = ""
+            selectedCollection = ""
+        }
+    }
+
+    func persistUIStateIfNeeded() {
+        guard CaptureSettings.shared.clipsManagerRememberLastState else { return }
+        defaults.set(viewMode.rawValue, forKey: "clipsManagerLastViewMode")
+        defaults.set(sortOption.rawValue, forKey: "clipsManagerLastSortOption")
+        defaults.set(filterType.rawValue, forKey: "clipsManagerLastFilterType")
+        defaults.set(dateFilter.rawValue, forKey: "clipsManagerLastDateFilter")
+        defaults.set(smartCollection.rawValue, forKey: "clipsManagerLastSmartCollection")
+        defaults.set(searchText, forKey: "clipsManagerLastSearchText")
+        defaults.set(selectedTag, forKey: "clipsManagerLastSelectedTag")
+        defaults.set(selectedCollection, forKey: "clipsManagerLastSelectedCollection")
+    }
+
+    private func applyInitialPreferences() {
+        let settings = CaptureSettings.shared
+        viewMode = ViewMode(rawValue: settings.clipsManagerDefaultViewMode) ?? .grid
+        sortOption = SortOption(rawValue: settings.clipsManagerDefaultSortOption) ?? .newest
+        filterType = FilterType(rawValue: settings.clipsManagerDefaultFilterType) ?? .all
+        dateFilter = DateFilter(rawValue: settings.clipsManagerDefaultDateFilter) ?? .allTime
+        if settings.clipsManagerRememberLastState {
+            applyStatePreferences()
+        }
+    }
+
+    private func archiveOldClipsIfNeeded(in directories: [URL]) {
+        let settings = CaptureSettings.shared
+        guard settings.clipsManagerArchiveOldClips else { return }
+        guard settings.clipsManagerArchiveAfterDays > 0 else { return }
+
+        let cutoff = Calendar.current.date(byAdding: .day, value: -settings.clipsManagerArchiveAfterDays, to: Date()) ?? .distantPast
+
+        for directory in directories {
+            let archiveDirectory = directory.appendingPathComponent("Archive", isDirectory: true)
+            try? FileManager.default.createDirectory(at: archiveDirectory, withIntermediateDirectories: true)
+
+            let candidates = filesInDirectory(directory).filter { url in
+                let created = (try? url.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantFuture
+                return created < cutoff
+            }
+
+            for url in candidates {
+                let targetURL = uniqueArchivedURL(in: archiveDirectory, originalName: url.lastPathComponent)
+                do {
+                    try FileManager.default.moveItem(at: url, to: targetURL)
+                } catch {
+                    SaveService.shared.showError("Could not archive \(url.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func uniqueArchivedURL(in directory: URL, originalName: String) -> URL {
+        let initial = directory.appendingPathComponent(originalName)
+        if !FileManager.default.fileExists(atPath: initial.path) {
+            return initial
+        }
+
+        let ext = initial.pathExtension
+        let stem = initial.deletingPathExtension().lastPathComponent
+        var suffix = 2
+        while true {
+            let candidateName = ext.isEmpty ? "\(stem) \(suffix)" : "\(stem) \(suffix).\(ext)"
+            let candidateURL = directory.appendingPathComponent(candidateName)
+            if !FileManager.default.fileExists(atPath: candidateURL.path) {
+                return candidateURL
+            }
+            suffix += 1
+        }
+    }
+
+    // MARK: - Thumbnails
+
+    private func loadThumbnails() {
+        let items = self.clips
+        for item in items {
+            let url = item.url
+            let type = item.type
+            let itemID = item.id
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                let image: NSImage?
+                switch type {
+                case .screenshot, .gif:
+                    image = NSImage(contentsOf: url)
+                case .video:
+                    let asset = AVURLAsset(url: url)
+                    let generator = AVAssetImageGenerator(asset: asset)
+                    generator.appliesPreferredTrackTransform = true
+                    generator.maximumSize = CGSize(width: 160, height: 120)
+                    let time = CMTime(seconds: 0, preferredTimescale: 600)
+                    var generatedImage: CGImage?
+                    let semaphore = DispatchSemaphore(value: 0)
+                    generator.generateCGImagesAsynchronously(forTimes: [NSValue(time: time)]) { _, cgImage, _, result, _ in
+                        if result == .succeeded {
+                            generatedImage = cgImage
+                        }
+                        semaphore.signal()
+                    }
+                    _ = semaphore.wait(timeout: .now() + 2)
+                    if let cgImage = generatedImage {
+                        image = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
+                    } else {
+                        image = nil
+                    }
+                }
+                DispatchQueue.main.async { [weak self] in
+                    self?.thumbnails[itemID] = image
+                }
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    func delete(_ item: ClipItem) {
+        do {
+            try FileManager.default.removeItem(at: item.url)
+            clips.removeAll { $0.id == item.id }
+            thumbnails.removeValue(forKey: item.id)
+            metadataStore.remove(path: item.filePath)
+            metadataByPath.removeValue(forKey: item.filePath)
+            uploadStatusByPath.removeValue(forKey: item.filePath)
+            uploadProgressByPath.removeValue(forKey: item.filePath)
+        } catch {
+            SaveService.shared.showError("Could not delete clip: \(error.localizedDescription)")
+        }
+    }
+
+    func copyToClipboard(_ item: ClipItem) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        switch item.type {
+        case .screenshot:
+            if let image = NSImage(contentsOf: item.url) {
+                pasteboard.writeObjects([image])
+            }
+        case .video, .gif:
+            pasteboard.writeObjects([item.url as NSURL])
+        }
+    }
+
+    func revealInFinder(_ item: ClipItem) {
+        NSWorkspace.shared.activateFileViewerSelecting([item.url])
+    }
+
+    var canUploadToUploadcare: Bool {
+        let settings = CaptureSettings.shared
+        guard settings.uploadcareEnabled else { return false }
+        let credentials = UploadcareCredentialsStore.shared.credentials()
+        return !credentials.publicKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !credentials.secretKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    func uploadToUploadcare(_ item: ClipItem) {
+        guard canUploadToUploadcare else {
+            SaveService.shared.showError("Configure Uploadcare in Clips Manager settings before uploading.")
+            return
+        }
+
+        guard uploadingClipIDs.insert(item.id).inserted else { return }
+        uploadStatusByPath[item.filePath] = "Uploading…"
+        uploadProgressByPath[item.filePath] = 0
+
+        let credentials = UploadcareCredentialsStore.shared.credentials()
+        let publicKey = credentials.publicKey
+        let secretKey = credentials.secretKey
+        let clipPath = item.filePath
+
+        Task {
+            defer { uploadingClipIDs.remove(item.id) }
+            do {
+                let result = try await UploadcareService.shared.upload(
+                    fileURL: item.url,
+                    publicKey: publicKey,
+                    secretKey: secretKey,
+                    onProgress: { [weak self] progress in
+                        Task { @MainActor in
+                            self?.uploadProgressByPath[clipPath] = progress
+                            self?.uploadStatusByPath[clipPath] = "Uploading… \(Int(progress * 100))%"
+                        }
+                    }
+                )
+                metadataStore.upsert(path: clipPath) { metadata in
+                    metadata.uploadcareURL = result.fileURL.absoluteString
+                }
+                metadataByPath = metadataStore.metadataMap()
+                uploadStatusByPath[clipPath] = "Uploaded"
+                uploadProgressByPath.removeValue(forKey: clipPath)
+                copyTextToClipboard(result.fileURL.absoluteString)
+            } catch {
+                uploadStatusByPath[clipPath] = "Upload failed"
+                uploadProgressByPath.removeValue(forKey: clipPath)
+                SaveService.shared.showError("Uploadcare upload failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func copyTextToClipboard(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
+    func displayName(for item: ClipItem) -> String {
+        let customName = metadataByPath[item.filePath]?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let customName, !customName.isEmpty {
+            return customName
+        }
+        return item.url.lastPathComponent
+    }
+
+    func note(for item: ClipItem) -> String {
+        metadataByPath[item.filePath]?.notes ?? ""
+    }
+
+    func uploadStatus(for item: ClipItem) -> String? {
+        uploadStatusByPath[item.filePath]
+    }
+
+    func uploadProgress(for item: ClipItem) -> Double? {
+        uploadProgressByPath[item.filePath]
+    }
+
+    func uploadcareLink(for item: ClipItem) -> String? {
+        metadataByPath[item.filePath]?.uploadcareURL
+    }
+
+    func copyUploadcareLink(_ item: ClipItem) {
+        guard let link = uploadcareLink(for: item), !link.isEmpty else {
+            SaveService.shared.showError("No Uploadcare link found for this clip yet.")
+            return
+        }
+        copyTextToClipboard(link)
+    }
+
+    func isFavorite(_ item: ClipItem) -> Bool {
+        metadataByPath[item.filePath]?.isFavorite ?? false
+    }
+
+    func tags(for item: ClipItem) -> [String] {
+        metadataByPath[item.filePath]?.tags ?? []
+    }
+
+    func autoTags(for item: ClipItem) -> [String] {
+        var tags: [String] = []
+        tags.append(item.type.rawValue)
+
+        let hour = Calendar.current.component(.hour, from: item.date)
+        switch hour {
+        case 5..<12: tags.append("morning")
+        case 12..<17: tags.append("afternoon")
+        case 17..<21: tags.append("evening")
+        default: tags.append("night")
+        }
+
+        let weekday = Calendar.current.component(.weekday, from: item.date)
+        tags.append((weekday == 1 || weekday == 7) ? "weekend" : "weekday")
+
+        switch item.fileSize {
+        case ..<102_400: tags.append("small")
+        case 102_400..<5_242_880: tags.append("medium")
+        default: tags.append("large")
+        }
+
+        return tags
+    }
+
+    func allTags(for item: ClipItem) -> [String] {
+        tags(for: item) + autoTags(for: item)
+    }
+
+    func setDisplayName(_ item: ClipItem, name: String) {
+        metadataStore.upsert(path: item.filePath) { metadata in
+            let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            metadata.displayName = trimmedName.isEmpty ? nil : trimmedName
+        }
+        metadataByPath = metadataStore.metadataMap()
+    }
+
+    func toggleFavorite(_ item: ClipItem) {
+        metadataStore.upsert(path: item.filePath) { metadata in
+            metadata.isFavorite.toggle()
+        }
+        metadataByPath = metadataStore.metadataMap()
+    }
+
+    func setTags(_ item: ClipItem, tags: [String]) {
+        metadataStore.upsert(path: item.filePath) { metadata in
+            metadata.tags = tags
+        }
+        metadataByPath = metadataStore.metadataMap()
+    }
+
+    func setNotes(_ item: ClipItem, notes: String) {
+        metadataStore.upsert(path: item.filePath) { metadata in
+            metadata.notes = notes
+        }
+        metadataByPath = metadataStore.metadataMap()
+    }
+
+    func collection(for item: ClipItem) -> String {
+        metadataByPath[item.filePath]?.collection ?? ""
+    }
+
+    func setCollection(_ item: ClipItem, collection: String) {
+        metadataStore.upsert(path: item.filePath) { metadata in
+            let trimmed = collection.trimmingCharacters(in: .whitespacesAndNewlines)
+            metadata.collection = trimmed.isEmpty ? nil : trimmed
+        }
+        metadataByPath = metadataStore.metadataMap()
+    }
+
+    var availableTags: [String] {
+        let userTags = clips.flatMap { self.tags(for: $0) }
+        let autoTags = clips.flatMap { self.autoTags(for: $0) }
+        return Array(Set(userTags + autoTags)).sorted()
+    }
+
+    var availableCollections: [String] {
+        let values = clips.map { collection(for: $0) }.filter { !$0.isEmpty }
+        return Array(Set(values)).sorted()
+    }
+
+    func isSelected(_ item: ClipItem) -> Bool {
+        selectedClipIDs.contains(item.id)
+    }
+
+    func toggleSelection(_ item: ClipItem) {
+        if selectedClipIDs.contains(item.id) {
+            selectedClipIDs.remove(item.id)
+        } else {
+            selectedClipIDs.insert(item.id)
+        }
+    }
+
+    func clearSelection() {
+        selectedClipIDs.removeAll()
+    }
+
+    var selectedItems: [ClipItem] {
+        clips.filter { selectedClipIDs.contains($0.id) }
+    }
+
+    func deleteSelected() {
+        let items = selectedItems
+        for item in items {
+            delete(item)
+        }
+        clearSelection()
+    }
+
+    func favoriteSelected() {
+        for item in selectedItems where !isFavorite(item) {
+            toggleFavorite(item)
+        }
+    }
+
+    func addTagToSelected(_ tag: String) {
+        let cleaned = tag.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !cleaned.isEmpty else { return }
+        for item in selectedItems {
+            var current = tags(for: item)
+            if !current.contains(cleaned) {
+                current.append(cleaned)
+                setTags(item, tags: current)
+            }
+        }
+    }
+
+    func editClip(_ item: ClipItem) {
+        switch item.type {
+        case .screenshot:
+            presentScreenshotEditor(item)
+        case .video:
+            presentVideoTrimmer(item)
+        case .gif:
+            presentGifTrimmer(item)
+        }
+    }
+
+    private func presentScreenshotEditor(_ item: ClipItem) {
+        var windowRef: ScreenshotEditorWindow?
+        let window = ScreenshotEditorWindow(imageURL: item.url) { [weak self] _ in
+            DispatchQueue.main.async {
+                if let windowRef {
+                    self?.releaseEditorWindow(windowRef)
+                }
+                self?.load()
+            }
+        }
+        windowRef = window
+        retainEditorWindow(window)
+    }
+
+    private func presentVideoTrimmer(_ item: ClipItem) {
+        var windowRef: VideoTrimmerWindow?
+        let window = VideoTrimmerWindow(videoURL: item.url) { [weak self] _ in
+            DispatchQueue.main.async {
+                if let windowRef {
+                    self?.releaseEditorWindow(windowRef)
+                }
+                self?.load()
+            }
+        }
+        windowRef = window
+        retainEditorWindow(window)
+    }
+
+    private func presentGifTrimmer(_ item: ClipItem) {
+        guard let gifData = makeGifCaptureData(from: item.url) else {
+            SaveService.shared.showError("Could not load GIF frames for trimming.")
+            return
+        }
+
+        let outputURL = item.url.deletingLastPathComponent()
+            .appendingPathComponent(item.url.deletingPathExtension().lastPathComponent + " (trimmed)")
+            .appendingPathExtension("gif")
+
+        var windowRef: GifTrimmerWindow?
+        let window = GifTrimmerWindow(gifData: gifData, outputURL: outputURL) { [weak self] _ in
+            DispatchQueue.main.async {
+                if let windowRef {
+                    self?.releaseEditorWindow(windowRef)
+                }
+                self?.load()
+            }
+        }
+        windowRef = window
+        retainEditorWindow(window)
+    }
+
+    private func retainEditorWindow(_ window: NSWindow) {
+        editorWindows.append(window)
+        DispatchQueue.main.async {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+
+    private func releaseEditorWindow(_ window: NSWindow) {
+        editorWindows.removeAll { $0 === window }
+    }
+
+    private func makeGifCaptureData(from url: URL) -> GifCaptureData? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let count = CGImageSourceGetCount(source)
+        guard count > 0 else { return nil }
+
+        var frames: [CGImage] = []
+        var frameDelay: Double = 0.08
+        var maxWidth: CGFloat = 0
+
+        for index in 0..<count {
+            guard let cgImage = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
+            frames.append(cgImage)
+            maxWidth = max(maxWidth, CGFloat(cgImage.width))
+
+            if index == 0,
+               let props = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any],
+               let gifDict = props[kCGImagePropertyGIFDictionary] as? [CFString: Any] {
+                if let unclamped = gifDict[kCGImagePropertyGIFUnclampedDelayTime] as? Double {
+                    frameDelay = unclamped
+                } else if let delayed = gifDict[kCGImagePropertyGIFDelayTime] as? Double {
+                    frameDelay = delayed
+                }
+            }
+        }
+
+        guard !frames.isEmpty else { return nil }
+        return GifCaptureData(frames: frames, frameDelay: frameDelay, maxWidth: maxWidth)
+    }
+
+    private func matchesSearch(item: ClipItem, query: String) -> Bool {
+        let loweredQuery = query.lowercased()
+        let tokens = loweredQuery.split(separator: " ").map(String.init)
+        let itemTags = allTags(for: item)
+        let itemNote = note(for: item).lowercased()
+        let itemName = displayName(for: item).lowercased()
+
+        for token in tokens where token.contains(":") {
+            if token.hasPrefix("type:") {
+                let value = String(token.dropFirst(5))
+                if value == "video" && item.type != .video { return false }
+                if value == "gif" && item.type != .gif { return false }
+                if (value == "shot" || value == "screenshot" || value == "image") && item.type != .screenshot { return false }
+            } else if token.hasPrefix("tag:") {
+                let value = String(token.dropFirst(4))
+                if !itemTags.contains(where: { $0.lowercased() == value }) { return false }
+            }
+        }
+
+        if loweredQuery.contains("fav") || loweredQuery.contains("favorite") {
+            if !isFavorite(item) { return false }
+        }
+
+        if loweredQuery.contains("today") && !Calendar.current.isDateInToday(item.date) {
+            return false
+        }
+
+        let plainTerms = tokens.filter { !$0.contains(":") }
+        if plainTerms.isEmpty { return true }
+
+        let searchable = [itemName, item.url.lastPathComponent.lowercased(), itemTags.joined(separator: " ").lowercased(), itemNote]
+            .joined(separator: " ")
+        return plainTerms.allSatisfy { searchable.localizedCaseInsensitiveContains($0) }
+    }
+}
+
+// MARK: - Clips Manager Content View
+
+private struct ClipsManagerContentView: View {
+    let isPro: Bool
+    @ObservedObject private var settings = CaptureSettings.shared
+    @StateObject private var viewModel = ClipsViewModel()
+    @State private var renameClip: ClipItem?
+    @State private var tagEditorClip: ClipItem?
+    @State private var notesClip: ClipItem?
+    @State private var detailClip: ClipItem?
+    @State private var collectionClip: ClipItem?
+    @State private var batchTag = ""
+    @State private var showProUpsell = false
+    @State private var showUploadcareSettings = false
+    @State private var sidebarVisibility: NavigationSplitViewVisibility = .automatic
+    @State private var pendingDeleteClip: ClipItem?
+    @State private var showBatchDeleteConfirmation = false
+
+    private let gridColumns = [
+        GridItem(.adaptive(minimum: 220, maximum: 220), spacing: 12)
+    ]
+
+    var body: some View {
+        NavigationSplitView(columnVisibility: $sidebarVisibility) {
+            sidebar
+                .navigationSplitViewColumnWidth(min: 140, ideal: 160, max: 200)
+        } detail: {
+            VStack(spacing: 0) {
+                if !isPro {
+                    proUpsellBanner
+                }
+                if viewModel.selectionMode && isPro {
+                    batchToolbar
+                }
+                content
+            }
+        }
+        .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "Search")
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                // Sort & Filter menu
+                Menu {
+                    Picker("Sort", selection: $viewModel.sortOption) {
+                        ForEach(ClipsViewModel.SortOption.allCases, id: \.self) { opt in
+                            Text(opt.rawValue).tag(opt)
+                        }
+                    }
+
+                    Divider()
+
+                    Picker("Type", selection: $viewModel.filterType) {
+                        ForEach(ClipsViewModel.FilterType.allCases, id: \.self) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+
+                    Divider()
+
+                    Picker("Date", selection: $viewModel.dateFilter) {
+                        ForEach(ClipsViewModel.DateFilter.allCases, id: \.self) { opt in
+                            Text(opt.rawValue).tag(opt)
+                        }
+                    }
+
+                    Divider()
+
+                    Picker("Tag", selection: $viewModel.selectedTag) {
+                        Text("All Tags").tag("")
+                        ForEach(viewModel.availableTags, id: \.self) { tag in
+                            Text(tag).tag(tag)
+                        }
+                    }
+                } label: {
+                    Label("Sort & Filter", systemImage: "line.3.horizontal.decrease.circle")
+                }
+
+                if viewModel.filterType != .all || viewModel.dateFilter != .allTime || !viewModel.selectedTag.isEmpty {
+                    Button {
+                        viewModel.filterType = .all
+                        viewModel.dateFilter = .allTime
+                        viewModel.selectedTag = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .help("Clear filters")
+                    .accessibilityLabel("Clear filters")
+                    .accessibilityHint("Resets type, date, and tag filters.")
+                }
+
+                // View mode toggle
+                Picker(selection: $viewModel.viewMode) {
+                    Image(systemName: "square.grid.2x2").tag(ClipsViewModel.ViewMode.grid)
+                    Image(systemName: "list.bullet").tag(ClipsViewModel.ViewMode.list)
+                } label: {
+                    EmptyView()
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 64)
+                .accessibilityLabel("View mode")
+                .accessibilityValue(viewModel.viewMode == .grid ? "Grid" : "List")
+
+                Button {
+                    viewModel.load()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("Refresh")
+                .accessibilityLabel("Refresh clips")
+                .accessibilityHint("Reloads clips from disk.")
+
+                if isPro {
+                    Button(viewModel.selectionMode ? "Done" : "Select") {
+                        viewModel.selectionMode.toggle()
+                        if !viewModel.selectionMode {
+                            viewModel.clearSelection()
+                        }
+                    }
+                }
+
+                if isPro {
+                    Button {
+                        showUploadcareSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .help("Clip Manager settings")
+                    .accessibilityLabel("Clip Manager settings")
+                }
+            }
+        }
+        .onAppear {
+            viewModel.applyStatePreferences()
+            viewModel.load()
+        }
+        .onChange(of: isPro) { _, upgraded in
+            if upgraded {
+                showProUpsell = false
+            }
+        }
+        .task(id: settings.clipsManagerAutoRefreshSeconds) {
+            let interval = settings.clipsManagerAutoRefreshSeconds
+            guard interval > 0 else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(interval) * 1_000_000_000)
+                if Task.isCancelled { break }
+                await MainActor.run {
+                    viewModel.load()
+                }
+            }
+        }
+    #if APPSTORE
+        .sheet(isPresented: $showProUpsell) {
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button {
+                        showProUpsell = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Close")
+                    .accessibilityLabel("Close")
+                }
+                .padding(.top, 12)
+                .padding(.horizontal, 12)
+
+                ProSubscriptionView()
+            }
+            .frame(minWidth: 500, minHeight: 500)
+        }
+    #endif
+        .sheet(isPresented: $showUploadcareSettings) {
+            ClipManagerUploadcareSettingsView(onRunArchiveNow: {
+                viewModel.archiveOldClipsNow()
+            })
+                .frame(width: 500, height: 460)
+        }
+        .sheet(item: $renameClip) { item in
+            ClipRenamePopover(
+                currentName: viewModel.displayName(for: item),
+                onSave: { newName in
+                    viewModel.setDisplayName(item, name: newName)
+                    renameClip = nil
+                },
+                onCancel: {
+                    renameClip = nil
+                }
+            )
+        }
+        .sheet(item: $tagEditorClip) { item in
+            ClipTagEditorPopover(
+                initialTags: viewModel.tags(for: item),
+                onSave: { tags in
+                    viewModel.setTags(item, tags: tags)
+                    tagEditorClip = nil
+                },
+                onCancel: {
+                    tagEditorClip = nil
+                }
+            )
+        }
+        .sheet(item: $notesClip) { item in
+            ClipNotesPopover(
+                initialNotes: viewModel.note(for: item),
+                onSave: { notes in
+                    viewModel.setNotes(item, notes: notes)
+                    notesClip = nil
+                },
+                onCancel: {
+                    notesClip = nil
+                }
+            )
+        }
+        .sheet(item: $detailClip) { item in
+            ClipDetailPopover(
+                item: item,
+                title: viewModel.displayName(for: item),
+                tags: viewModel.tags(for: item),
+                notes: viewModel.note(for: item),
+                collection: viewModel.collection(for: item),
+                uploadcareLink: viewModel.uploadcareLink(for: item),
+                isFavorite: viewModel.isFavorite(item),
+                onToggleFavorite: requiresPro { viewModel.toggleFavorite(item) },
+                tagSuggestions: viewModel.availableTags,
+                collectionSuggestions: viewModel.availableCollections,
+                onSaveMetadata: { name, tags, notes, collection in
+                    requiresPro {
+                        viewModel.setDisplayName(item, name: name)
+                        viewModel.setTags(item, tags: tags)
+                        viewModel.setNotes(item, notes: notes)
+                        viewModel.setCollection(item, collection: collection)
+                        viewModel.load()
+                    }()
+                },
+                onEditMedia: requiresPro { viewModel.editClip(item) },
+                onReveal: { viewModel.revealInFinder(item) },
+                onCopyUploadcareLink: { viewModel.copyUploadcareLink(item) }
+            )
+        }
+        .sheet(item: $collectionClip) { item in
+            ClipCollectionPopover(
+                initialCollection: viewModel.collection(for: item),
+                suggestions: viewModel.availableCollections,
+                onSave: { value in
+                    viewModel.setCollection(item, collection: value)
+                    collectionClip = nil
+                },
+                onCancel: {
+                    collectionClip = nil
+                }
+            )
+        }
+        .alert("Delete clip?", isPresented: Binding(
+            get: { pendingDeleteClip != nil },
+            set: { if !$0 { pendingDeleteClip = nil } }
+        )) {
+            Button("Delete", role: .destructive) {
+                if let pendingDeleteClip {
+                    viewModel.delete(pendingDeleteClip)
+                }
+                pendingDeleteClip = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDeleteClip = nil
+            }
+        } message: {
+            Text("This action cannot be undone.")
+        }
+        .alert("Delete selected clips?", isPresented: $showBatchDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                viewModel.deleteSelected()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove \(viewModel.selectedItems.count) clip(s).")
+        }
+    }
+
+    // MARK: - Pro Gating Helpers
+
+    private func requiresPro(_ action: @escaping () -> Void) -> () -> Void {
+        isPro ? action : { showProUpsell = true }
+    }
+
+    private func confirmDelete(_ item: ClipItem) {
+        if settings.clipsManagerConfirmDelete {
+            pendingDeleteClip = item
+        } else {
+            viewModel.delete(item)
+        }
+    }
+
+    private var proUpsellBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "star.fill")
+                .foregroundStyle(.yellow)
+            Text("Upgrade to Pro to organize, tag, and manage your clips.")
+                .font(.caption)
+            Spacer()
+            Button("Upgrade") {
+                showProUpsell = true
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.yellow.opacity(0.08))
+    }
+
+    private func colorForTag(_ tag: String) -> Color {
+        let palette: [Color] = [.blue, .purple, .pink, .orange, .green, .teal, .indigo]
+        let hash = tag.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return palette[hash % palette.count]
+    }
+
+    // MARK: - Sidebar
+
+    private var sidebar: some View {
+        List(selection: $viewModel.smartCollection) {
+            Section("Smart Collections") {
+                ForEach(ClipsViewModel.SmartCollection.allCases, id: \.self) { collection in
+                    Label(collection.rawValue, systemImage: collection.icon)
+                        .tag(collection)
+                }
+            }
+
+            if !viewModel.availableCollections.isEmpty {
+                Section("Collections") {
+                    Button {
+                        viewModel.selectedCollection = ""
+                    } label: {
+                        Label("All", systemImage: "folder")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(viewModel.selectedCollection.isEmpty ? .primary : .secondary)
+
+                    ForEach(viewModel.availableCollections, id: \.self) { collection in
+                        Button {
+                            viewModel.selectedCollection = collection
+                        } label: {
+                            Label(collection, systemImage: "folder.fill")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(viewModel.selectedCollection == collection ? .primary : .secondary)
+                    }
+                }
+            }
+
+            if !viewModel.availableTags.isEmpty {
+                Section("Tags") {
+                    Button {
+                        viewModel.selectedTag = ""
+                    } label: {
+                        HStack(spacing: 8) {
+                            Label("All Tags", systemImage: "tag")
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            viewModel.selectedTag.isEmpty ? Color.accentColor.opacity(0.24) : Color.clear,
+                            in: Capsule()
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(viewModel.selectedTag.isEmpty ? Color.accentColor : .secondary)
+
+                    ForEach(viewModel.availableTags, id: \.self) { tag in
+                        Button {
+                            viewModel.selectedTag = tag
+                        } label: {
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(colorForTag(tag))
+                                    .frame(width: 8, height: 8)
+                                Text(tag)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                viewModel.selectedTag == tag ? Color.accentColor.opacity(0.24) : Color.clear,
+                                in: Capsule()
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(viewModel.selectedTag == tag ? Color.accentColor : .secondary)
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+    }
+
+    // MARK: - Batch Toolbar
+
+    private var batchToolbar: some View {
+        HStack(spacing: 8) {
+            Text("\(viewModel.selectedItems.count) selected")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+
+            Button("Favorite") { viewModel.favoriteSelected() }
+                .disabled(viewModel.selectedItems.isEmpty)
+            Button("Delete", role: .destructive) {
+                if settings.clipsManagerConfirmDelete {
+                    showBatchDeleteConfirmation = true
+                } else {
+                    viewModel.deleteSelected()
+                }
+            }
+                .disabled(viewModel.selectedItems.isEmpty)
+
+            TextField("Tag", text: $batchTag)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 100)
+            Button("Add Tag") {
+                viewModel.addTagToSelected(batchTag)
+                batchTag = ""
+            }
+            .disabled(viewModel.selectedItems.isEmpty || batchTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.quaternary.opacity(0.5))
+    }
+
+    // MARK: - Content
+
+    @ViewBuilder
+    private var content: some View {
+        if viewModel.isLoading {
+            ProgressView("Loading clips…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.filteredSortedClips.isEmpty {
+            emptyState
+        } else {
+            switch viewModel.viewMode {
+            case .grid:
+                gridContent
+            case .list:
+                listContent
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "photo.on.rectangle")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+            Text(viewModel.searchText.isEmpty && viewModel.filterType == .all
+                 ? "No clips found"
+                 : "No clips match your filter")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            if viewModel.searchText.isEmpty && viewModel.filterType == .all {
+                Text("Captures will appear here after you take screenshots, record videos, or create GIFs.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 300)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Grid View
+
+    private var gridContent: some View {
+        ScrollView {
+            LazyVGrid(columns: gridColumns, spacing: 12) {
+                ForEach(viewModel.filteredSortedClips) { item in
+                    ClipGridCell(
+                        item: item,
+                        title: viewModel.displayName(for: item),
+                        tags: viewModel.tags(for: item),
+                        autoTags: viewModel.autoTags(for: item),
+                        notes: viewModel.note(for: item),
+                        showAutoTags: settings.clipsManagerShowAutoTags,
+                        showNotesPreview: settings.clipsManagerShowNotesPreview,
+                        showUploadStatus: settings.clipsManagerShowUploadStatus,
+                        uploadStatus: viewModel.uploadStatus(for: item),
+                        uploadProgress: viewModel.uploadProgress(for: item),
+                        hasUploadcareLink: viewModel.uploadcareLink(for: item)?.isEmpty == false,
+                        isFavorite: viewModel.isFavorite(item),
+                        isSelectionMode: viewModel.selectionMode,
+                        isSelected: viewModel.isSelected(item),
+                        rowTapSelectsInSelectionMode: settings.clipsManagerSelectionRowTapSelects,
+                        thumbnail: viewModel.thumbnails[item.id],
+                        onDelete: requiresPro { confirmDelete(item) },
+                        onCopy: { viewModel.copyToClipboard(item) },
+                        onReveal: { viewModel.revealInFinder(item) },
+                        onToggleFavorite: requiresPro { viewModel.toggleFavorite(item) },
+                        onRename: requiresPro { renameClip = item },
+                        onEditTags: requiresPro { tagEditorClip = item },
+                        onEditNotes: requiresPro { notesClip = item },
+                        onEditCollection: requiresPro { collectionClip = item },
+                        onOpenDetails: { detailClip = item },
+                        onEditMedia: requiresPro { viewModel.editClip(item) },
+                        onCopyUploadcareLink: { viewModel.copyUploadcareLink(item) },
+                        onUpload: requiresPro {
+                            if viewModel.canUploadToUploadcare {
+                                viewModel.uploadToUploadcare(item)
+                            } else {
+                                showUploadcareSettings = true
+                            }
+                        },
+                        canUpload: true,
+                        isUploading: viewModel.uploadingClipIDs.contains(item.id),
+                        onToggleSelection: { viewModel.toggleSelection(item) }
+                    )
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    // MARK: - List View
+
+    private var listContent: some View {
+        List(viewModel.filteredSortedClips) { item in
+            ClipListRow(
+                item: item,
+                title: viewModel.displayName(for: item),
+                tags: viewModel.tags(for: item),
+                autoTags: viewModel.autoTags(for: item),
+                notes: viewModel.note(for: item),
+                showAutoTags: settings.clipsManagerShowAutoTags,
+                showNotesPreview: settings.clipsManagerShowNotesPreview,
+                showQuickActions: settings.clipsManagerShowQuickActions,
+                showUploadStatus: settings.clipsManagerShowUploadStatus,
+                compactDensity: settings.clipsManagerCompactListDensity,
+                rowTapSelectsInSelectionMode: settings.clipsManagerSelectionRowTapSelects,
+                uploadStatus: viewModel.uploadStatus(for: item),
+                uploadProgress: viewModel.uploadProgress(for: item),
+                hasUploadcareLink: viewModel.uploadcareLink(for: item)?.isEmpty == false,
+                isFavorite: viewModel.isFavorite(item),
+                isSelectionMode: viewModel.selectionMode,
+                isSelected: viewModel.isSelected(item),
+                thumbnail: viewModel.thumbnails[item.id],
+                onDelete: requiresPro { confirmDelete(item) },
+                onCopy: { viewModel.copyToClipboard(item) },
+                onReveal: { viewModel.revealInFinder(item) },
+                onToggleFavorite: requiresPro { viewModel.toggleFavorite(item) },
+                onRename: requiresPro { renameClip = item },
+                onEditTags: requiresPro { tagEditorClip = item },
+                onEditNotes: requiresPro { notesClip = item },
+                onEditCollection: requiresPro { collectionClip = item },
+                onOpenDetails: { detailClip = item },
+                onEditMedia: requiresPro { viewModel.editClip(item) },
+                onCopyUploadcareLink: { viewModel.copyUploadcareLink(item) },
+                onUpload: requiresPro {
+                    if viewModel.canUploadToUploadcare {
+                        viewModel.uploadToUploadcare(item)
+                    } else {
+                        showUploadcareSettings = true
+                    }
+                },
+                canUpload: true,
+                isUploading: viewModel.uploadingClipIDs.contains(item.id),
+                onToggleSelection: { viewModel.toggleSelection(item) }
+            )
+        }
+        .listStyle(.plain)
+    }
+}
+
+// MARK: - Grid Cell
+
+private struct ClipGridCell: View {
+    let item: ClipItem
+    let title: String
+    let tags: [String]
+    let autoTags: [String]
+    let notes: String
+    let showAutoTags: Bool
+    let showNotesPreview: Bool
+    let showUploadStatus: Bool
+    let uploadStatus: String?
+    let uploadProgress: Double?
+    let hasUploadcareLink: Bool
+    let isFavorite: Bool
+    let isSelectionMode: Bool
+    let isSelected: Bool
+    let rowTapSelectsInSelectionMode: Bool
+    let thumbnail: NSImage?
+    let onDelete: () -> Void
+    let onCopy: () -> Void
+    let onReveal: () -> Void
+    let onToggleFavorite: () -> Void
+    let onRename: () -> Void
+    let onEditTags: () -> Void
+    let onEditNotes: () -> Void
+    let onEditCollection: () -> Void
+    let onOpenDetails: () -> Void
+    let onEditMedia: () -> Void
+    let onCopyUploadcareLink: () -> Void
+    let onUpload: () -> Void
+    let canUpload: Bool
+    let isUploading: Bool
+    let onToggleSelection: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(.quaternary)
+
+                if let thumbnail {
+                    Image(nsImage: thumbnail)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 220, height: 135)
+                } else {
+                    Image(systemName: item.typeIcon)
+                        .font(.system(size: 28))
+                        .foregroundStyle(.secondary)
+                }
+
+                // Hover overlay
+                if isHovered {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(.black.opacity(0.4))
+                    HStack(spacing: 12) {
+                        cellButton(icon: "doc.on.doc", help: "Copy", action: onCopy)
+                        cellButton(icon: "folder", help: "Reveal in Finder", action: onReveal)
+                        cellButton(icon: "pencil", help: item.type == .screenshot ? "Edit Screenshot" : "Trim Clip", action: onEditMedia)
+                        Spacer(minLength: 0)
+                        cellButton(icon: "trash", help: "Delete", action: onDelete)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 10)
+                }
+            }
+            .frame(width: 220, height: 135)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(alignment: .topLeading) {
+                Button(action: onToggleFavorite) {
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(isFavorite ? .yellow : .white.opacity(0.85))
+                        .padding(6)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isFavorite ? "Remove favorite" : "Add favorite")
+                .accessibilityHint("Toggles favorite state for this clip.")
+                .padding(8)
+            }
+            .overlay(alignment: .topTrailing) {
+                if isSelectionMode {
+                    Button(action: onToggleSelection) {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(isSelected ? .green : .white.opacity(0.9))
+                            .padding(6)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(isSelected ? "Deselect clip" : "Select clip")
+                    .accessibilityHint("Toggles clip selection.")
+                    .padding(8)
+                } else {
+                    Text(item.typeLabel)
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(8)
+                }
+            }
+            .onHover { isHovered = $0 }
+            .onTapGesture {
+                if isSelectionMode {
+                    if rowTapSelectsInSelectionMode {
+                        onToggleSelection()
+                    }
+                } else {
+                    onOpenDetails()
+                }
+            }
+            .onTapGesture(count: 2) {
+                if !isSelectionMode {
+                    onReveal()
+                }
+            }
+
+            VStack(spacing: 2) {
+                Text(title)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if !tags.isEmpty || (showAutoTags && !autoTags.isEmpty) {
+                    HStack(spacing: 4) {
+                        ForEach(tags.prefix(2), id: \.self) { tag in
+                            Text(tag)
+                                .font(.caption2)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(.blue.opacity(0.15), in: Capsule())
+                        }
+                        if showAutoTags {
+                            ForEach(autoTags.prefix(2), id: \.self) { tag in
+                                Text(tag)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                    .lineLimit(1)
+                }
+                if showNotesPreview && !notes.isEmpty {
+                    Text(notes)
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .foregroundStyle(.tertiary)
+                }
+                if showUploadStatus, let uploadStatus {
+                    Text(uploadStatus)
+                        .font(.caption2)
+                        .foregroundStyle(uploadStatus == "Upload failed" ? .red : .secondary)
+                        .lineLimit(1)
+                }
+                if showUploadStatus, let uploadProgress {
+                    ProgressView(value: uploadProgress)
+                        .progressViewStyle(.linear)
+                        .frame(maxWidth: 120)
+                }
+                Text(item.date, style: .date)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 220, alignment: .top)
+        .contextMenu {
+            Button(isFavorite ? "Remove Favorite" : "Add Favorite") { onToggleFavorite() }
+            Button("Rename…") { onRename() }
+            Button("Edit Tags…") { onEditTags() }
+            Button("Edit Notes…") { onEditNotes() }
+            Button("Set Collection…") { onEditCollection() }
+            Button("Details…") { onOpenDetails() }
+            Button(item.type == .screenshot ? "Edit Screenshot…" : "Trim Clip…") { onEditMedia() }
+            Divider()
+            Button("Open in Finder") { onReveal() }
+            Button("Copy") { onCopy() }
+            Divider()
+            ShareLink(item: item.url) {
+                Label("Share…", systemImage: "square.and.arrow.up")
+            }
+            Divider()
+            Button("Upload to Uploadcare") { onUpload() }
+                .disabled(isUploading || !canUpload)
+            if hasUploadcareLink {
+                Button("Copy Uploadcare Link") { onCopyUploadcareLink() }
+            }
+            Divider()
+            Button("Delete", role: .destructive) { onDelete() }
+        }
+    }
+
+    private func cellButton(icon: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+// MARK: - List Row
+
+private struct ClipListRow: View {
+    let item: ClipItem
+    let title: String
+    let tags: [String]
+    let autoTags: [String]
+    let notes: String
+    let showAutoTags: Bool
+    let showNotesPreview: Bool
+    let showQuickActions: Bool
+    let showUploadStatus: Bool
+    let compactDensity: Bool
+    let rowTapSelectsInSelectionMode: Bool
+    let uploadStatus: String?
+    let uploadProgress: Double?
+    let hasUploadcareLink: Bool
+    let isFavorite: Bool
+    let isSelectionMode: Bool
+    let isSelected: Bool
+    let thumbnail: NSImage?
+    let onDelete: () -> Void
+    let onCopy: () -> Void
+    let onReveal: () -> Void
+    let onToggleFavorite: () -> Void
+    let onRename: () -> Void
+    let onEditTags: () -> Void
+    let onEditNotes: () -> Void
+    let onEditCollection: () -> Void
+    let onOpenDetails: () -> Void
+    let onEditMedia: () -> Void
+    let onCopyUploadcareLink: () -> Void
+    let onUpload: () -> Void
+    let canUpload: Bool
+    let isUploading: Bool
+    let onToggleSelection: () -> Void
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .short
+        return f
+    }()
+    private var thumbnailSize: CGSize {
+        compactDensity ? CGSize(width: 52, height: 39) : CGSize(width: 60, height: 45)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if isSelectionMode {
+                Button(action: onToggleSelection) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(isSelected ? .green : .secondary)
+                }
+                .buttonStyle(.plain)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+                .accessibilityLabel(isSelected ? "Deselect clip" : "Select clip")
+            }
+
+            // Thumbnail
+            ZStack {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(.quaternary)
+                    .frame(width: thumbnailSize.width, height: thumbnailSize.height)
+                if let thumbnail {
+                    Image(nsImage: thumbnail)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: thumbnailSize.width, height: thumbnailSize.height)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                } else {
+                    Image(systemName: item.typeIcon)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            // Info
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if isFavorite {
+                        Image(systemName: "star.fill")
+                            .font(.caption)
+                            .foregroundStyle(.yellow)
+                    }
+                }
+                HStack(spacing: 8) {
+                    Label(item.typeLabel, systemImage: item.typeIcon)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("·")
+                        .foregroundStyle(.secondary)
+                    Text(Self.dateFormatter.string(from: item.date))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("·")
+                        .foregroundStyle(.secondary)
+                    Text(item.formattedSize)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if !tags.isEmpty || (showAutoTags && !autoTags.isEmpty) {
+                    HStack(spacing: 4) {
+                        ForEach(tags, id: \.self) { tag in
+                            Text(tag)
+                                .font(.caption2)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(.blue.opacity(0.15), in: Capsule())
+                        }
+                        if showAutoTags {
+                            ForEach(autoTags.prefix(3), id: \.self) { tag in
+                                Text(tag)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    }
+                    .lineLimit(1)
+                }
+                if showNotesPreview && !notes.isEmpty {
+                    Text(notes)
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundStyle(.tertiary)
+                }
+                if showUploadStatus, let uploadStatus {
+                    Text(uploadStatus)
+                        .font(.caption2)
+                        .foregroundStyle(uploadStatus == "Upload failed" ? .red : .secondary)
+                }
+                if showUploadStatus, let uploadProgress {
+                    ProgressView(value: uploadProgress)
+                        .progressViewStyle(.linear)
+                        .frame(width: 120)
+                }
+            }
+
+            Spacer()
+
+            if showQuickActions {
+                // Actions
+                HStack(spacing: 8) {
+                    Button { onToggleFavorite() } label: {
+                        Image(systemName: isFavorite ? "star.fill" : "star")
+                            .foregroundStyle(isFavorite ? .yellow : .secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .help(isFavorite ? "Remove Favorite" : "Add Favorite")
+                    .accessibilityLabel(isFavorite ? "Remove favorite" : "Add favorite")
+
+                    Button { onOpenDetails() } label: {
+                        Image(systemName: "info.circle")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Details")
+                    .accessibilityLabel("Show details")
+
+                    Button { onCopy() } label: {
+                        Image(systemName: "doc.on.doc")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Copy")
+                    .accessibilityLabel("Copy clip")
+
+                    Button { onReveal() } label: {
+                        Image(systemName: "folder.badge.questionmark")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Show in Finder")
+                    .accessibilityLabel("Show in Finder")
+
+                    ShareLink(item: item.url) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Share")
+                    .accessibilityLabel("Share clip")
+
+                    Button { onUpload() } label: {
+                        if isUploading {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "icloud.and.arrow.up")
+                        }
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Upload to Uploadcare")
+                    .disabled(isUploading || !canUpload)
+                    .accessibilityLabel("Upload to Uploadcare")
+
+                    if hasUploadcareLink {
+                        Button { onCopyUploadcareLink() } label: {
+                            Image(systemName: "link")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Copy Uploadcare Link")
+                        .accessibilityLabel("Copy Uploadcare link")
+                    }
+
+                    Button(role: .destructive) { onDelete() } label: {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Delete")
+                    .accessibilityLabel("Delete clip")
+                }
+            }
+        }
+        .padding(.vertical, compactDensity ? 2 : 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isSelectionMode {
+                if rowTapSelectsInSelectionMode {
+                    onToggleSelection()
+                }
+            } else {
+                onOpenDetails()
+            }
+        }
+        .contextMenu {
+            Button(isFavorite ? "Remove Favorite" : "Add Favorite") { onToggleFavorite() }
+            Button("Rename…") { onRename() }
+            Button("Edit Tags…") { onEditTags() }
+            Button("Edit Notes…") { onEditNotes() }
+            Button("Set Collection…") { onEditCollection() }
+            Button("Details…") { onOpenDetails() }
+            Button(item.type == .screenshot ? "Edit Screenshot…" : "Trim Clip…") { onEditMedia() }
+            Divider()
+            Button("Open in Finder") { onReveal() }
+            Button("Copy") { onCopy() }
+            Divider()
+            ShareLink(item: item.url) {
+                Label("Share…", systemImage: "square.and.arrow.up")
+            }
+            Divider()
+            Button("Upload to Uploadcare") { onUpload() }
+                .disabled(isUploading || !canUpload)
+            if hasUploadcareLink {
+                Button("Copy Uploadcare Link") { onCopyUploadcareLink() }
+            }
+            Divider()
+            Button("Delete", role: .destructive) { onDelete() }
+        }
+    }
+}
+
+// MARK: - Metadata Popovers
+
+private struct ClipRenamePopover: View {
+    let currentName: String
+    let onSave: (String) -> Void
+    let onCancel: () -> Void
+
+    @State private var newName = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Rename Clip")
+                .font(.headline)
+            TextField("Clip Name", text: $newName)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button("Cancel") { onCancel() }
+                Button("Save") { onSave(newName) }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(14)
+        .frame(width: 280)
+        .onAppear {
+            newName = currentName
+        }
+    }
+}
+
+private struct ClipTagEditorPopover: View {
+    let initialTags: [String]
+    let onSave: ([String]) -> Void
+    let onCancel: () -> Void
+
+    @State private var draftTags: [String] = []
+    @State private var newTag = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Edit Tags")
+                .font(.headline)
+
+            if !draftTags.isEmpty {
+                FlowTagWrap(tags: draftTags) { tag in
+                    draftTags.removeAll { $0 == tag }
+                }
+            }
+
+            HStack {
+                TextField("Add tag", text: $newTag)
+                    .textFieldStyle(.roundedBorder)
+                Button("Add") {
+                    addTag()
+                }
+                .disabled(newTag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") { onCancel() }
+                Button("Save") { onSave(draftTags) }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(14)
+        .frame(width: 320)
+        .onAppear {
+            draftTags = initialTags
+        }
+    }
+
+    private func addTag() {
+        let normalized = newTag
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !normalized.isEmpty else { return }
+        if !draftTags.contains(normalized) {
+            draftTags.append(normalized)
+        }
+        newTag = ""
+    }
+}
+
+private struct FlowTagWrap: View {
+    let tags: [String]
+    let onRemove: (String) -> Void
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 80), spacing: 6)], spacing: 6) {
+            ForEach(tags, id: \.self) { tag in
+                HStack(spacing: 6) {
+                    Text(tag)
+                        .lineLimit(1)
+                    Button {
+                        onRemove(tag)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Remove tag")
+                }
+                .font(.caption)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.quaternary, in: Capsule())
+            }
+        }
+    }
+}
+
+private struct ClipNotesPopover: View {
+    let initialNotes: String
+    let onSave: (String) -> Void
+    let onCancel: () -> Void
+
+    @State private var draft = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Clip Notes")
+                .font(.headline)
+            TextEditor(text: $draft)
+                .font(.body)
+                .frame(height: 120)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary, lineWidth: 1))
+            HStack {
+                Spacer()
+                Button("Cancel") { onCancel() }
+                Button("Save") { onSave(draft) }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(14)
+        .frame(width: 340)
+        .onAppear {
+            draft = initialNotes
+        }
+    }
+}
+
+private struct ClipDetailPopover: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let item: ClipItem
+    let title: String
+    let tags: [String]
+    let notes: String
+    let collection: String
+    let uploadcareLink: String?
+    let isFavorite: Bool
+    let onToggleFavorite: () -> Void
+    let tagSuggestions: [String]
+    let collectionSuggestions: [String]
+    let onSaveMetadata: (String, [String], String, String) -> Void
+    let onEditMedia: () -> Void
+    let onReveal: () -> Void
+    let onCopyUploadcareLink: () -> Void
+
+    @State private var draftTitle = ""
+    @State private var draftTagInput = ""
+    @State private var draftTagList: [String] = []
+    @State private var draftNotes = ""
+    @State private var draftCollection = ""
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    private var actionColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 76), spacing: 8)]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(title)
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer()
+                Button(action: onToggleFavorite) {
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                        .foregroundStyle(isFavorite ? .yellow : .secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isFavorite ? "Remove favorite" : "Add favorite")
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Close")
+                .accessibilityLabel("Close details")
+            }
+
+            Text(item.url.lastPathComponent)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            HStack(spacing: 6) {
+                Label(item.typeLabel, systemImage: item.typeIcon)
+                Text("·")
+                Text(Self.dateFormatter.string(from: item.date))
+                Text("·")
+                Text(item.formattedSize)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("Name", text: $draftTitle)
+                    .textFieldStyle(.roundedBorder)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Tags")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if !draftTagList.isEmpty {
+                        FlowTagWrap(tags: draftTagList) { tag in
+                            draftTagList.removeAll { $0 == tag }
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        TextField("Add tag", text: $draftTagInput)
+                            .textFieldStyle(.roundedBorder)
+                        Button("Add") {
+                            addDraftTag(draftTagInput)
+                            draftTagInput = ""
+                        }
+                        .disabled(draftTagInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+
+                    if !normalizedTagSuggestions.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(normalizedTagSuggestions, id: \.self) { suggestion in
+                                    Button {
+                                        toggleDraftTag(suggestion)
+                                    } label: {
+                                        Text(suggestion)
+                                            .font(.caption2)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(
+                                                draftTagList.contains(suggestion) ? Color.accentColor.opacity(0.24) : Color.secondary.opacity(0.14),
+                                                in: Capsule()
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(draftTagList.contains(suggestion) ? Color.accentColor : .primary)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                TextField("Collection", text: $draftCollection)
+                    .textFieldStyle(.roundedBorder)
+                if !normalizedCollectionSuggestions.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(normalizedCollectionSuggestions, id: \.self) { suggestion in
+                                Button(suggestion) { draftCollection = suggestion }
+                                    .buttonStyle(.plain)
+                                    .font(.caption2)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        draftCollection.trimmingCharacters(in: .whitespacesAndNewlines) == suggestion ? Color.accentColor.opacity(0.24) : Color.secondary.opacity(0.14),
+                                        in: Capsule()
+                                    )
+                                    .foregroundStyle(
+                                        draftCollection.trimmingCharacters(in: .whitespacesAndNewlines) == suggestion ? Color.accentColor : .primary
+                                    )
+                            }
+                        }
+                    }
+                }
+                Text("Notes")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $draftNotes)
+                    .font(.body)
+                    .frame(height: 100)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary, lineWidth: 1))
+            }
+
+            if let uploadcareLink, !uploadcareLink.isEmpty {
+                Text(uploadcareLink)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            HStack {
+                Spacer()
+                Button("Save Metadata") {
+                    onSaveMetadata(
+                        draftTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+                        draftTagList,
+                        draftNotes,
+                        draftCollection.trimmingCharacters(in: .whitespacesAndNewlines)
+                    )
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+
+            Divider()
+
+            LazyVGrid(columns: actionColumns, spacing: 8) {
+                detailActionButton(item.type == .screenshot ? "Edit" : "Trim", systemImage: item.type == .screenshot ? "slider.horizontal.3" : "scissors", action: onEditMedia)
+                detailActionButton("Show", systemImage: "folder.badge.questionmark", action: onReveal)
+                if uploadcareLink?.isEmpty == false {
+                    detailActionButton("Copy Link", systemImage: "link", action: onCopyUploadcareLink)
+                }
+            }
+        }
+        .padding(16)
+        .frame(width: 520, alignment: .topLeading)
+        .fixedSize(horizontal: false, vertical: true)
+        .onAppear {
+            draftTitle = title
+            draftTagList = tags
+            draftNotes = notes
+            draftCollection = collection
+        }
+    }
+
+    private func detailActionButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.callout.weight(.semibold))
+                Text(title)
+                    .font(.caption2)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+
+    private func addDraftTag(_ rawTag: String) {
+        let normalized = rawTag.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty else { return }
+        if !draftTagList.contains(normalized) {
+            draftTagList.append(normalized)
+        }
+    }
+
+    private func toggleDraftTag(_ tag: String) {
+        if draftTagList.contains(tag) {
+            draftTagList.removeAll { $0 == tag }
+        } else {
+            draftTagList.append(tag)
+        }
+    }
+
+    private var normalizedTagSuggestions: [String] {
+        tagSuggestions
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty }
+            .reduce(into: [String]()) { acc, tag in
+                if !acc.contains(tag) { acc.append(tag) }
+            }
+            .sorted()
+    }
+
+    private var normalizedCollectionSuggestions: [String] {
+        collectionSuggestions
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .reduce(into: [String]()) { acc, value in
+                if !acc.contains(value) { acc.append(value) }
+            }
+            .sorted()
+    }
+}
+
+private struct ClipCollectionPopover: View {
+    let initialCollection: String
+    let suggestions: [String]
+    let onSave: (String) -> Void
+    let onCancel: () -> Void
+
+    @State private var draft = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Set Collection")
+                .font(.headline)
+            TextField("Collection name", text: $draft)
+                .textFieldStyle(.roundedBorder)
+
+            if !suggestions.isEmpty {
+                Text("Existing")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(suggestions, id: \.self) { suggestion in
+                            Button(suggestion) {
+                                draft = suggestion
+                            }
+                            .buttonStyle(.plain)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .frame(height: 80)
+            }
+
+            HStack {
+                Spacer()
+                Button("Clear") { onSave("") }
+                Button("Cancel") { onCancel() }
+                Button("Save") { onSave(draft) }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(14)
+        .frame(width: 320)
+        .onAppear {
+            draft = initialCollection
+        }
+    }
+}
+
+private struct ClipManagerUploadcareSettingsView: View {
+    @ObservedObject private var settings = CaptureSettings.shared
+    @Environment(\.dismiss) private var dismiss
+    let onRunArchiveNow: () -> Void
+
+    @State private var showSecretKey = false
+    @State private var publicKey = ""
+    @State private var secretKey = ""
+
+    private let refreshIntervals = [0, 15, 30, 60, 120, 300]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Clips Manager Settings")
+                    .font(.title3.weight(.semibold))
+                Text("Configure uploads and Clips Manager behavior.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 6)
+
+            Form {
+                Section("Uploads") {
+                    Toggle("Enable Uploadcare uploads", isOn: $settings.uploadcareEnabled)
+
+                    if settings.uploadcareEnabled {
+                        TextField("Uploadcare public API key", text: $publicKey)
+                        HStack(spacing: 8) {
+                            Group {
+                                if showSecretKey {
+                                    TextField("Uploadcare secret API key", text: $secretKey)
+                                } else {
+                                    SecureField("Uploadcare secret API key", text: $secretKey)
+                                }
+                            }
+
+                            Button(showSecretKey ? "Hide" : "Show") {
+                                showSecretKey.toggle()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                        Link("Create Uploadcare account / find API keys", destination: URL(string: "https://app.uploadcare.com/projects/-/api-keys/")!)
+                            .font(.caption)
+                        Text("TinyClips does not ship with Uploadcare credentials or manage your account.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("Your secret key is used for signed uploads and REST API URL resolution.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("Uploadcare API keys are stored in your macOS Keychain.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Toggle("Auto-upload new captures to Uploadcare", isOn: $settings.clipsManagerAutoUploadAfterSave)
+                        .disabled(!settings.uploadcareEnabled)
+                    Toggle("Automatically copy uploaded link to clipboard", isOn: $settings.clipsManagerAutoCopyUploadLink)
+                        .disabled(!settings.clipsManagerAutoUploadAfterSave || !settings.uploadcareEnabled)
+                }
+
+                Section("Display") {
+                    Toggle("Show auto-tags in clips", isOn: $settings.clipsManagerShowAutoTags)
+                    Toggle("Show notes preview in clips", isOn: $settings.clipsManagerShowNotesPreview)
+                    Toggle("Show quick action buttons in list view", isOn: $settings.clipsManagerShowQuickActions)
+                    Toggle("Show upload status in clips", isOn: $settings.clipsManagerShowUploadStatus)
+                    Toggle("Use compact list density", isOn: $settings.clipsManagerCompactListDensity)
+                }
+
+                Section("Behavior") {
+                    Toggle("Always confirm delete", isOn: $settings.clipsManagerConfirmDelete)
+                    Toggle("Row tap selects in selection mode", isOn: $settings.clipsManagerSelectionRowTapSelects)
+                    Toggle("Remember last sidebar/search state", isOn: $settings.clipsManagerRememberLastState)
+                    Toggle("Ignore non-TinyClips files", isOn: $settings.clipsManagerIgnoreNonTinyClipsFiles)
+                }
+
+                Section("Defaults") {
+                    Picker("Default view", selection: $settings.clipsManagerDefaultViewMode) {
+                        Text("Grid").tag("grid")
+                        Text("List").tag("list")
+                    }
+
+                    Picker("Default sort", selection: $settings.clipsManagerDefaultSortOption) {
+                        ForEach(ClipsViewModel.SortOption.allCases, id: \.self) { option in
+                            Text(option.rawValue).tag(option.rawValue)
+                        }
+                    }
+
+                    Picker("Default type filter", selection: $settings.clipsManagerDefaultFilterType) {
+                        ForEach(ClipsViewModel.FilterType.allCases, id: \.self) { option in
+                            Text(option.rawValue).tag(option.rawValue)
+                        }
+                    }
+
+                    Picker("Default date filter", selection: $settings.clipsManagerDefaultDateFilter) {
+                        ForEach(ClipsViewModel.DateFilter.allCases, id: \.self) { option in
+                            Text(option.rawValue).tag(option.rawValue)
+                        }
+                    }
+                }
+
+                Section("Automation") {
+                    Picker("Auto-refresh interval", selection: $settings.clipsManagerAutoRefreshSeconds) {
+                        ForEach(refreshIntervals, id: \.self) { seconds in
+                            Text(refreshIntervalLabel(seconds)).tag(seconds)
+                        }
+                    }
+
+                    Toggle("Archive old clips automatically", isOn: $settings.clipsManagerArchiveOldClips)
+                    if settings.clipsManagerArchiveOldClips {
+                        Stepper(value: $settings.clipsManagerArchiveAfterDays, in: 1...365) {
+                            Text("Archive clips older than \(settings.clipsManagerArchiveAfterDays) day(s)")
+                        }
+                        Button("Archive now") {
+                            onRunArchiveNow()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
+
+            HStack {
+                Spacer()
+                Button("Done") {
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.bar)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            if settings.uploadcareEnabled {
+                let credentials = UploadcareCredentialsStore.shared.credentials()
+                publicKey = credentials.publicKey
+                secretKey = credentials.secretKey
+            }
+        }
+        .onChange(of: settings.uploadcareEnabled) { _, enabled in
+            guard enabled else { return }
+            let credentials = UploadcareCredentialsStore.shared.credentials()
+            publicKey = credentials.publicKey
+            secretKey = credentials.secretKey
+        }
+        .onChange(of: settings.clipsManagerRememberLastState) { _, enabled in
+            if !enabled {
+                clearRememberedState()
+            }
+        }
+        .onChange(of: publicKey) { _, updated in
+            UploadcareCredentialsStore.shared.setPublicKey(updated)
+        }
+        .onChange(of: secretKey) { _, updated in
+            UploadcareCredentialsStore.shared.setSecretKey(updated)
+        }
+    }
+
+    private func refreshIntervalLabel(_ seconds: Int) -> String {
+        if seconds == 0 { return "Off" }
+        return "\(seconds) seconds"
+    }
+
+    private func clearRememberedState() {
+        let keys = [
+            "clipsManagerLastViewMode",
+            "clipsManagerLastSortOption",
+            "clipsManagerLastFilterType",
+            "clipsManagerLastDateFilter",
+            "clipsManagerLastSmartCollection",
+            "clipsManagerLastSearchText",
+            "clipsManagerLastSelectedTag",
+            "clipsManagerLastSelectedCollection"
+        ]
+        for key in keys {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+    }
+}
+
+// MARK: - Pro Upsell View
+
+#if APPSTORE
+private struct ProUpsellView: View {
+    var body: some View {
+        ProSubscriptionView()
+    }
+}
+#endif

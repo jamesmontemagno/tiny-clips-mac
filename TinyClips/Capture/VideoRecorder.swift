@@ -37,8 +37,8 @@ class VideoRecorder: NSObject, @unchecked Sendable {
 
         self.outputURL = outputURL
 
-        let pixelWidth = Int(region.sourceRect.width * region.scaleFactor)
-        let pixelHeight = Int(region.sourceRect.height * region.scaleFactor)
+        let pixelWidth = region.pixelWidth
+        let pixelHeight = region.pixelHeight
 
         let writer = try AVAssetWriter(url: outputURL, fileType: .mp4)
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: [

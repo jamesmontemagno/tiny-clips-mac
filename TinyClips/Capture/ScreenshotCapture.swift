@@ -11,7 +11,11 @@ struct ScreenshotCapture {
 
     static func capture(region: CaptureRegion, outputURL: URL) async throws -> URL {
         let filter = try await region.makeFilter()
-        let config = region.makeStreamConfig()
+        let config = SCStreamConfiguration()
+        config.sourceRect = region.sourceRect
+        config.width = region.pixelWidth
+        config.height = region.pixelHeight
+        config.scalesToFit = false
         config.showsCursor = false
 
         let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
@@ -42,11 +46,9 @@ struct ScreenshotCapture {
     private static func saveImage(_ image: CGImage, to outputURL: URL) throws -> URL {
         let settings = CaptureSettings.shared
         let imageType = settings.imageFormat.utType
-        let destinationProperties: [CFString: Any]
+        var destinationProperties: [CFString: Any] = [:]
         if settings.imageFormat == .jpeg {
-            destinationProperties = [kCGImageDestinationLossyCompressionQuality: settings.jpegQuality]
-        } else {
-            destinationProperties = [:]
+            destinationProperties[kCGImageDestinationLossyCompressionQuality] = settings.jpegQuality
         }
 
         guard let destination = CGImageDestinationCreateWithURL(

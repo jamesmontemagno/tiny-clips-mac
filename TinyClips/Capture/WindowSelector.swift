@@ -11,9 +11,11 @@ class WindowSelector {
         let windows: [SCWindow]
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            let includeTinyClips = CaptureSettings.shared.includeTinyClipsInCapture
             windows = content.windows.filter { w in
-                w.frame.width >= 50 && w.frame.height >= 50
-                    && w.owningApplication?.bundleIdentifier != Bundle.main.bundleIdentifier
+                let isTinyClipsWindow = w.owningApplication?.bundleIdentifier == Bundle.main.bundleIdentifier
+                return w.frame.width >= 50 && w.frame.height >= 50
+                    && (includeTinyClips || !isTinyClipsWindow)
                     && w.isOnScreen
             }
         } catch {
