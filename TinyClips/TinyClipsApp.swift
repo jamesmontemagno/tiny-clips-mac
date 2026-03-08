@@ -213,7 +213,10 @@ class CaptureManager: ObservableObject {
     }
 
     private func showScreenshotPicker() {
-        guard screenshotPickerPanel == nil else { return }
+        if screenshotPickerPanel != nil {
+            return
+        }
+        dismissRecordingPicker()
         let settings = CaptureSettings.shared
         let panel = CapturePickerPanel(
             countdownEnabled: settings.screenshotCountdownEnabled,
@@ -704,7 +707,8 @@ class CaptureManager: ObservableObject {
     }
 
     private func showRecordingPicker(for type: CaptureType) {
-        guard recordingPickerPanel == nil else { return }
+        dismissScreenshotPicker()
+        dismissRecordingPicker()
 
         let settings = CaptureSettings.shared
         let countdownEnabled: Bool

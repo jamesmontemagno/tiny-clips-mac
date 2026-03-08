@@ -161,26 +161,22 @@ private struct GifTrimmerView: View {
                     Text("End: \(viewModel.trimEndFrame + 1)")
                         .monospacedDigit()
                 }
-            }
-            .font(.caption)
-            .padding(.horizontal, 20)
-            .padding(.top, 6)
 
-            HStack {
                 Text("Speed")
-                    .font(.caption)
                     .foregroundStyle(.secondary)
-                Picker("Speed", selection: $viewModel.speed) {
+                Picker("", selection: $viewModel.speed) {
                     ForEach(GifTrimmerViewModel.speedOptions, id: \.self) { speed in
                         Text(GifTrimmerViewModel.speedLabel(for: speed)).tag(speed)
                     }
                 }
+                .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(width: 120)
                 Spacer()
             }
+            .font(.caption)
             .padding(.horizontal, 20)
-            .padding(.top, 8)
+            .padding(.top, 6)
 
             Divider()
                 .padding(.top, 10)

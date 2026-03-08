@@ -142,20 +142,15 @@ private struct VideoTrimmerView: View {
                     Text("End: \(formatTime(viewModel.trimEnd))")
                         .monospacedDigit()
                 }
-            }
-            .font(.caption)
-            .padding(.horizontal, 20)
-            .padding(.top, 6)
 
-            HStack {
                 Text("Speed")
-                    .font(.caption)
                     .foregroundStyle(.secondary)
-                Picker("Speed", selection: $viewModel.speed) {
+                Picker("", selection: $viewModel.speed) {
                     ForEach(TrimmerViewModel.speedOptions, id: \.self) { speed in
                         Text(TrimmerViewModel.speedLabel(for: speed)).tag(speed)
                     }
                 }
+                .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(width: 120)
                 .help("Changing speed affects export playback rate. Audio is only kept at 1x.")
@@ -168,8 +163,9 @@ private struct VideoTrimmerView: View {
 
                 Spacer()
             }
+            .font(.caption)
             .padding(.horizontal, 20)
-            .padding(.top, 8)
+            .padding(.top, 6)
 
             Divider()
                 .padding(.top, 10)

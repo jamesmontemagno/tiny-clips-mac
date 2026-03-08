@@ -11,7 +11,11 @@ struct ScreenshotCapture {
 
     static func capture(region: CaptureRegion, outputURL: URL) async throws -> URL {
         let filter = try await region.makeFilter()
-        let config = region.makeStreamConfig()
+        let config = SCStreamConfiguration()
+        config.sourceRect = region.sourceRect
+        config.width = max(1, Int((region.sourceRect.width * region.scaleFactor).rounded()))
+        config.height = max(1, Int((region.sourceRect.height * region.scaleFactor).rounded()))
+        config.scalesToFit = false
         config.showsCursor = false
 
         let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
