@@ -15,7 +15,7 @@ struct ScreenshotCapture {
         config.showsCursor = false
 
         let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
-        return try saveImage(image, to: outputURL)
+        return try saveImage(image, to: outputURL, scaleFactor: region.scaleFactor)
     }
 
     static func captureWindow(_ window: SCWindow) async throws -> URL {
@@ -34,19 +34,20 @@ struct ScreenshotCapture {
         config.showsCursor = false
 
         let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
-        return try saveImage(image, to: outputURL)
+        return try saveImage(image, to: outputURL, scaleFactor: scaleFactor)
     }
 
     // MARK: - Helpers
 
-    private static func saveImage(_ image: CGImage, to outputURL: URL) throws -> URL {
+    private static func saveImage(_ image: CGImage, to outputURL: URL, scaleFactor: CGFloat) throws -> URL {
         let settings = CaptureSettings.shared
         let imageType = settings.imageFormat.utType
-        let destinationProperties: [CFString: Any]
+        var destinationProperties: [CFString: Any] = [
+            kCGImagePropertyDPIWidth: 72.0 * scaleFactor,
+            kCGImagePropertyDPIHeight: 72.0 * scaleFactor
+        ]
         if settings.imageFormat == .jpeg {
-            destinationProperties = [kCGImageDestinationLossyCompressionQuality: settings.jpegQuality]
-        } else {
-            destinationProperties = [:]
+            destinationProperties[kCGImageDestinationLossyCompressionQuality] = settings.jpegQuality
         }
 
         guard let destination = CGImageDestinationCreateWithURL(
