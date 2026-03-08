@@ -13,10 +13,15 @@ struct ProSubscriptionView: View {
         ScrollView {
             VStack(spacing: 24) {
                 heroSection
-                featureList
-                planCards
-                purchaseButton
-                restoreLink
+                if storeService.isPro {
+                    ProActiveView()
+                    accountActions
+                } else {
+                    featureList
+                    planCards
+                    purchaseButton
+                    restoreLink
+                }
                 errorMessage
             }
             .padding(32)
@@ -147,6 +152,22 @@ struct ProSubscriptionView: View {
         }
         .buttonStyle(.plain)
         .disabled(storeService.isPurchasing)
+    }
+
+    private var accountActions: some View {
+        VStack(spacing: 10) {
+            Button {
+                storeService.manageSubscriptions()
+            } label: {
+                Text("Manage Subscription")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+            }
+            .buttonStyle(.bordered)
+
+            restoreLink
+        }
     }
 
     // MARK: - Error

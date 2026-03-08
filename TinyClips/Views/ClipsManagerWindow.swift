@@ -1161,6 +1161,11 @@ private struct ClipsManagerContentView: View {
             viewModel.applyStatePreferences()
             viewModel.load()
         }
+        .onChange(of: isPro) { _, upgraded in
+            if upgraded {
+                showProUpsell = false
+            }
+        }
         .task(id: settings.clipsManagerAutoRefreshSeconds) {
             let interval = settings.clipsManagerAutoRefreshSeconds
             guard interval > 0 else { return }

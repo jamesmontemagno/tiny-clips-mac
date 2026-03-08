@@ -556,6 +556,19 @@ private struct ProSettingsSection: View {
                         .foregroundStyle(.green)
                         .font(.callout)
                 }
+
+                HStack(spacing: 10) {
+                    Button("Manage Subscription") {
+                        storeService.manageSubscriptions()
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Restore Purchases") {
+                        Task { await storeService.restore() }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(storeService.isPurchasing)
+                }
             }
 
         } else {

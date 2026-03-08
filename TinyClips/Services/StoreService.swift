@@ -1,6 +1,7 @@
 import Foundation
 
 #if APPSTORE
+import AppKit
 import StoreKit
 
 // MARK: - Pro Plan
@@ -125,6 +126,15 @@ class StoreService: ObservableObject {
             await updatePurchaseStatus()
         } catch {
             purchaseError = error.localizedDescription
+        }
+    }
+
+    func manageSubscriptions() {
+        purchaseError = nil
+        guard let url = URL(string: "https://apps.apple.com/account/subscriptions"),
+              NSWorkspace.shared.open(url) else {
+            purchaseError = "Could not open subscription management."
+            return
         }
     }
 
