@@ -211,24 +211,194 @@ jobs:
 
       - name: Generate Changelog
         run: |
-          # Fetch all tags to find the previous one
           git fetch --tags --force
-          PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]' | sed -n '2p')
+          PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]' | grep -vx "${{ env.RELEASE_TAG }}" | head -n 1)
+          export PREVIOUS_TAG
+          echo "PREVIOUS_TAG=$PREVIOUS_TAG" >> $GITHUB_ENV
 
-          if [ -n "$PREVIOUS_TAG" ]; then
-            echo "Generating changelog from $PREVIOUS_TAG to ${{ env.RELEASE_TAG }}"
-            CHANGELOG=$(git log "$PREVIOUS_TAG".."${{ env.RELEASE_TAG }}" --pretty=format:"- %s" --no-merges)
-          else
-            echo "No previous tag found, using all commits"
-            CHANGELOG=$(git log --pretty=format:"- %s" --no-merges)
-          fi
+          python3 - <<'PY'
+          import html
+          import os
+          import pathlib
+          import re
+          import subprocess
 
-          # Write to file to preserve multiline content
-          echo "## What's Changed" > $RUNNER_TEMP/changelog.md
-          echo "" >> $RUNNER_TEMP/changelog.md
-          echo "$CHANGELOG" >> $RUNNER_TEMP/changelog.md
-          echo "" >> $RUNNER_TEMP/changelog.md
-          echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${{ env.RELEASE_TAG }}" >> $RUNNER_TEMP/changelog.md
+          release_tag = os.environ["RELEASE_TAG"]
+          previous_tag = os.environ.get("PREVIOUS_TAG", "").strip()
+          repo = os.environ["GITHUB_REPOSITORY"]
+          run_temp = pathlib.Path(os.environ["RUNNER_TEMP"])
+          changelog_path = pathlib.Path("CHANGELOG.md")
+
+          markdown_lines: list[str]
+          html_chunks: list[str]
+
+          if changelog_path.exists():
+            changelog_lines = changelog_path.read_text(encoding="utf-8").splitlines()
+          else:
+            changelog_lines = []
+
+          start_index = next(
+            (index for index, line in enumerate(changelog_lines) if re.match(rf"^##\\s+{re.escape(release_tag)}(?:\\s+-.*)?$", line)),
+            None,
+          )
+
+          if start_index is not None:
+            end_index = next(
+              (index for index in range(start_index + 1, len(changelog_lines)) if changelog_lines[index].startswith("## ")),
+              len(changelog_lines),
+            )
+            section_lines = [line.rstrip() for line in changelog_lines[start_index + 1:end_index]]
+            while section_lines and not section_lines[0].strip():
+              section_lines.pop(0)
+            while section_lines and not section_lines[-1].strip():
+              section_lines.pop()
+
+            markdown_lines = section_lines or ["- Maintenance release."]
+            html_chunks = []
+            index = 0
+            while index < len(section_lines):
+              current_line = section_lines[index].strip()
+              if not current_line:
+                index += 1
+                continue
+
+              if current_line.startswith("### "):
+                html_chunks.append(f"<h3>{html.escape(current_line[4:].strip())}</h3>")
+                index += 1
+                items: list[str] = []
+                while index < len(section_lines):
+                  candidate = section_lines[index].strip()
+                  if not candidate:
+                    index += 1
+                    if items:
+                      break
+                    continue
+                  if candidate.startswith("### "):
+                    break
+                  if candidate.startswith("- "):
+                    items.append(f"<li>{html.escape(candidate[2:].strip())}</li>")
+                  else:
+                    html_chunks.append(f"<p>{html.escape(candidate)}</p>")
+                  index += 1
+                if items:
+                  html_chunks.append("<ul>")
+                  html_chunks.extend(items)
+                  html_chunks.append("</ul>")
+                continue
+
+              if current_line.startswith("- "):
+                items = []
+                while index < len(section_lines):
+                  candidate = section_lines[index].strip()
+                  if not candidate:
+                    index += 1
+                    break
+                  if not candidate.startswith("- "):
+                    break
+                  items.append(f"<li>{html.escape(candidate[2:].strip())}</li>")
+                  index += 1
+                if items:
+                  html_chunks.append("<ul>")
+                  html_chunks.extend(items)
+                  html_chunks.append("</ul>")
+                continue
+
+              html_chunks.append(f"<p>{html.escape(current_line)}</p>")
+              index += 1
+          else:
+            command = ["git", "log"]
+            if previous_tag:
+              command.append(f"{previous_tag}..{release_tag}")
+            command.extend(["--pretty=format:- %s", "--no-merges"])
+            result = subprocess.run(command, check=True, capture_output=True, text=True)
+            markdown_lines = [line for line in result.stdout.splitlines() if line.strip()]
+            if not markdown_lines:
+              markdown_lines = ["- Maintenance release."]
+            html_chunks = ["<h3>What's Changed</h3>", "<ul>"]
+            html_chunks.extend(
+              f"<li>{html.escape(line[2:].strip() if line.startswith('- ') else line.strip())}</li>"
+              for line in markdown_lines
+            )
+            html_chunks.append("</ul>")
+
+          compare_url = (
+            f"https://github.com/{repo}/compare/{previous_tag}...{release_tag}"
+            if previous_tag
+            else f"https://github.com/{repo}/releases/tag/{release_tag}"
+          )
+          compare_label = "Full Changelog" if previous_tag else "Release Details"
+
+          markdown_output = markdown_lines + ["", f"**{compare_label}**: {compare_url}"]
+          (run_temp / "changelog.md").write_text("\n".join(markdown_output).strip() + "\n", encoding="utf-8")
+
+          html_chunks.append(f'<p><a href="{html.escape(compare_url, quote=True)}">{compare_label}</a></p>')
+          (run_temp / "release_notes.html").write_text("".join(html_chunks), encoding="utf-8")
+          PY
+
+      - name: Add Release Notes to Appcast
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          from xml.dom import minidom
+
+          sparkle_namespace = "http://www.andymatuschak.org/xml-namespaces/sparkle"
+          run_temp = pathlib.Path(os.environ["RUNNER_TEMP"])
+          appcast_path = run_temp / "appcast.xml"
+          release_notes_html = (run_temp / "release_notes.html").read_text(encoding="utf-8").strip()
+          release_notes_url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/tag/{os.environ['RELEASE_TAG']}"
+          target_version = os.environ["MARKETING_VERSION"]
+
+          document = minidom.parse(str(appcast_path))
+
+          def direct_child(parent, predicate):
+            for node in parent.childNodes:
+              if node.nodeType == node.ELEMENT_NODE and predicate(node):
+                return node
+            return None
+
+          target_item = None
+          for item in document.getElementsByTagName("item"):
+            version_node = direct_child(
+              item,
+              lambda node: node.namespaceURI == sparkle_namespace and node.localName == "shortVersionString",
+            )
+            if version_node is not None and version_node.firstChild is not None and version_node.firstChild.nodeValue == target_version:
+              target_item = item
+              break
+
+          if target_item is None:
+            raise SystemExit(f"Could not find appcast item for version {target_version}")
+
+          description_node = direct_child(target_item, lambda node: node.tagName == "description")
+          if description_node is None:
+            description_node = document.createElement("description")
+            enclosure_node = direct_child(target_item, lambda node: node.tagName == "enclosure")
+            if enclosure_node is not None:
+              target_item.insertBefore(description_node, enclosure_node)
+            else:
+              target_item.appendChild(description_node)
+          while description_node.firstChild is not None:
+            description_node.removeChild(description_node.firstChild)
+          description_node.appendChild(document.createCDATASection(release_notes_html))
+
+          release_notes_link_node = direct_child(
+            target_item,
+            lambda node: node.namespaceURI == sparkle_namespace and node.localName == "releaseNotesLink",
+          )
+          if release_notes_link_node is None:
+            release_notes_link_node = document.createElementNS(sparkle_namespace, "sparkle:releaseNotesLink")
+            enclosure_node = direct_child(target_item, lambda node: node.tagName == "enclosure")
+            if enclosure_node is not None:
+              target_item.insertBefore(release_notes_link_node, enclosure_node)
+            else:
+              target_item.appendChild(release_notes_link_node)
+          while release_notes_link_node.firstChild is not None:
+            release_notes_link_node.removeChild(release_notes_link_node.firstChild)
+          release_notes_link_node.appendChild(document.createTextNode(release_notes_url))
+
+          appcast_path.write_bytes(document.toprettyxml(indent="    ", encoding="utf-8"))
+          PY
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

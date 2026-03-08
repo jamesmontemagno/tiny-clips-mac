@@ -413,9 +413,16 @@ struct SettingsView: View {
 
 #if !APPSTORE
         Section {
+            Toggle("Automatically check for updates", isOn: Binding(
+                get: { sparkleController.automaticallyChecksForUpdates },
+                set: { sparkleController.automaticallyChecksForUpdates = $0 }
+            ))
+            .help("When enabled, TinyClips periodically checks for updates and Sparkle presents the standard update alert when one is available.")
+
             Button("Check for Updates\u{2026}") {
                 sparkleController.checkForUpdates()
             }
+            .help("Manually check for updates now.")
         }
 #endif
     }
@@ -465,6 +472,7 @@ struct SettingsView: View {
 
             guard alert.runModal() == .alertFirstButtonReturn else { return }
             settings.resetToDefaults()
+            sparkleController.resetPreferencesToDefaults()
             applyDockVisibility(settings.showInDock)
         }
     }

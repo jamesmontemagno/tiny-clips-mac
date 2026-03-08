@@ -52,6 +52,9 @@ private enum OnboardingStep: Int, CaseIterable {
     case screen
     case optional
     case settings
+#if !APPSTORE
+    case updates
+#endif
 
     var title: String {
         switch self {
@@ -63,12 +66,19 @@ private enum OnboardingStep: Int, CaseIterable {
             return "Optional Permissions"
         case .settings:
             return "Common Capture Settings"
+#if !APPSTORE
+        case .updates:
+            return "Automatic Updates"
+#endif
         }
     }
 }
 
 private struct OnboardingWizardView: View {
     @ObservedObject private var settings = CaptureSettings.shared
+#if !APPSTORE
+    @ObservedObject private var sparkleController = SparkleController.shared
+#endif
     @State private var step: OnboardingStep = .welcome
     @State private var screenGranted = false
     @State private var microphoneGranted = false
@@ -94,6 +104,10 @@ private struct OnboardingWizardView: View {
                     optionalPermissionsContent
                 case .settings:
                     commonSettingsContent
+#if !APPSTORE
+                case .updates:
+                    updatesContent
+#endif
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -285,29 +299,51 @@ private struct OnboardingWizardView: View {
         }
     }
 
+#if !APPSTORE
+    private var updatesContent: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("TinyClips can automatically check for new versions so you always have the latest features and fixes.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Toggle("Automatically check for updates", isOn: Binding(
+                get: { sparkleController.automaticallyChecksForUpdates },
+                set: { sparkleController.automaticallyChecksForUpdates = $0 }
+            ))
+            .help("When enabled, TinyClips periodically checks for updates and shows a notification when one is available.")
+
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(.secondary)
+
+                Text("When an update is found, you'll see what's new and choose when to install. You can change this later in Settings → About.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(10)
+            .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+#endif
+
+    private var isLastStep: Bool {
+        step == OnboardingStep.allCases.last
+    }
+
     private var primaryButtonTitle: String {
         switch step {
         case .welcome:
             return "Get Started"
-        case .screen:
-            return "Next"
-        case .optional:
-            return "Next"
-        case .settings:
-            return "Finish"
+        default:
+            return isLastStep ? "Finish" : "Next"
         }
     }
 
     private func handlePrimaryAction() {
-        switch step {
-        case .welcome:
-            step = .screen
-        case .screen:
-            step = .optional
-        case .optional:
-            step = .settings
-        case .settings:
+        if isLastStep {
             onFinish()
+        } else if let next = OnboardingStep(rawValue: step.rawValue + 1) {
+            step = next
         }
     }
 

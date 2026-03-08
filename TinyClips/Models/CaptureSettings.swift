@@ -204,6 +204,7 @@ class CaptureSettings: ObservableObject {
         let keys: [String] = [
             "saveDirectory", "copyToClipboard", "copyScreenshotToClipboard", "copyVideoToClipboard", "copyGifToClipboard",
             "showInFinder", "showSaveNotifications", "showInDock",
+            "autoUpdateEnabled",
             "fileNameTemplate",
             "uploadcareEnabled", "clipsManagerShowAutoTags", "clipsManagerShowNotesPreview", "clipsManagerShowQuickActions",
             "clipsManagerShowUploadStatus", "clipsManagerConfirmDelete", "clipsManagerCompactListDensity",

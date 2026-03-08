@@ -44,6 +44,7 @@ final class SparkleController: NSObject, ObservableObject {
 
     private var updater: UpdaterProviding
     private let defaultsKey = "autoUpdateEnabled"
+    private let defaultAutomaticallyChecksForUpdates = false
 
     @Published private(set) var isUpdateReady: Bool = false
 
@@ -57,7 +58,11 @@ final class SparkleController: NSObject, ObservableObject {
     var automaticallyChecksForUpdates: Bool {
         get { updater.automaticallyChecksForUpdates }
         set {
+            // Manual send required: this is a computed property (not @Published),
+            // so SwiftUI bindings won't re-evaluate without an explicit notification.
+            objectWillChange.send()
             updater.automaticallyChecksForUpdates = newValue
+            updater.automaticallyDownloadsUpdates = newValue
             UserDefaults.standard.set(newValue, forKey: defaultsKey)
         }
     }
@@ -82,7 +87,7 @@ final class SparkleController: NSObject, ObservableObject {
             return
         }
 
-        let savedAutoCheck = (UserDefaults.standard.object(forKey: defaultsKey) as? Bool) ?? false
+        let savedAutoCheck = (UserDefaults.standard.object(forKey: defaultsKey) as? Bool) ?? defaultAutomaticallyChecksForUpdates
         let controller = SPUStandardUpdaterController(
             startingUpdater: false,
             updaterDelegate: self,
@@ -102,6 +107,10 @@ final class SparkleController: NSObject, ObservableObject {
             return
         }
         updater.checkForUpdates(nil)
+    }
+
+    func resetPreferencesToDefaults() {
+        automaticallyChecksForUpdates = defaultAutomaticallyChecksForUpdates
     }
 
     private static func isDevelopmentBuild(bundleURL: URL) -> Bool {

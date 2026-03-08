@@ -135,3 +135,29 @@ The GitHub Action will:
 - `CFBundleVersion` (Build Number): Auto-incremented by CI via `github.run_number`
 
 Sparkle compares versions semantically. Use standard semver format.
+
+## Automatic Update Checks (Direct Distribution Only)
+
+Automatic update checking is **off by default**. Users are prompted to enable it during the first-run onboarding wizard (step 5, "Automatic Updates"). The setting can also be toggled at any time in **Settings → About → Automatically check for updates**.
+
+### How It Works
+
+- The preference is stored in UserDefaults under `autoUpdateEnabled`.
+- When enabled, Sparkle checks the appcast feed periodically and presents its standard update alert when a newer version is found.
+- The update alert displays inline release notes (from the appcast's `<description>` element) and a link to the GitHub release.
+- Users can choose to Install, Skip This Version, or Remind Me Later.
+- When disabled, Sparkle does not check automatically. Users can still trigger a manual check via the "Check for Updates…" button.
+
+### Release Notes in the Appcast
+
+The release workflow automatically injects release notes into each appcast item:
+
+1. **Source**: The `CHANGELOG.md` entry matching the release tag (e.g., `## v1.2.3 - ...`). Falls back to `git log` commit messages if no entry is found.
+2. **Format**: Converted to HTML with `<h3>` section headings (Added, Improved, Fixed, etc.) and `<ul>/<li>` bullet lists.
+3. **Appcast elements**:
+   - `<description><![CDATA[...]]></description>` — inline HTML shown in Sparkle's update dialog.
+   - `<sparkle:releaseNotesLink>` — links to the GitHub release page as a fallback.
+
+### MAS Target
+
+None of this applies to the Mac App Store target. All Sparkle code paths are behind `#if !APPSTORE` / `#if canImport(Sparkle)` guards. The onboarding wizard skips the updates step on the MAS build.
