@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.0.19 - 2026-03-08
+
+### Added
+- Subscription management and restore purchase functionality.
+- Clips Manager with Uploadcare integration for user uploads.
+- Smart default file naming templates with live preview.
+- Option to include TinyClips windows in captures.
+- Collapsible sidebar toggle in Clips Manager.
+- Sidebar filters and tag management in Clips Manager.
+- Accessibility enhancements across various views, including keyboard shortcuts and hints.
+- Help text and improved issue reporting template in settings.
+- Enhanced clipboard options in CaptureSettings.
+
+### Improved
+- Dimension display in RegionSelectionView to include both point and pixel values for clarity.
+- Capture region handling with pixelWidth and pixelHeight properties for accuracy.
+- DPI settings with scaleFactor parameter in saveImage function.
+- Pixel dimension calculations for capture region settings in trimmer views.
+- Clips Manager UI with collapsible sidebar and improved grid layout stability.
+- Settings sections organization and layout improvements.
+- Image capture and display logic in ScreenshotCapture and RegionIndicatorPanel.
+
+### Fixed
+- Save notifications are now always presented with Finder open on click.
+- Grid cell overlap issues in Clips Manager.
+- Sidebar toggle no longer shifts with split view state.
+- Grid thumbnail overlap issues in Clips Manager.
+
 ## v0.0.14 - 2026-02-17
 
 ### Added
