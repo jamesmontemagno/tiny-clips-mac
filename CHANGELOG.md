@@ -2,51 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## v0.0.18 - 2026-03-01
-
-### Added
-- Keyboard shortcuts for capture picker mode selection: R (Region), S (Screen), W (Window).
-- Escape key support to cancel capture picker.
-- Keyboard shortcut hints in button tooltips for discoverability.
-
-### Improved
-- Capture picker now supports both keyboard and mouse input.
-- Updated Guide window and README with new picker keyboard shortcuts.
-
-## v0.0.17 - 2026-02-28
-
-### Changed
-- Unified `ScreenshotPickerPanel` and `RecordingPickerPanel` into a single `CapturePickerPanel` class to reduce code duplication.
-- Renamed `RecordingCaptureMode` and `ScreenshotMode` to unified `CapturePickerMode` enum.
-- Theme-adaptive background colors for picker panels (light/dark mode support via `colorScheme` environment).
-
-## v0.0.16 - 2026-02-28
-
-### Fixed
-- Timer display in recording picker panel now uses consistent white foreground color in light mode.
-
-### Changed
-- Updated product name to "Tiny Clips" in project configuration.
-
-## v0.0.15 - 2026-02-28
-
-### Added
-- Screenshot picker panel with Region/Screen/Window capture modes.
-- Countdown timer option for screenshot, video, and GIF recording.
-- Red region indicator displayed before countdown begins (when enabled).
-- Recording picker panel for selecting recording options before capture.
-
-### Improved
-- Button labels for video and GIF recording now include ellipsis for consistency.
-- Recording functionality with dedicated picker UI for better user experience.
-- Region selection overlay rendering accuracy and stability.
-
-### Fixed
-- Region selection overlay alignment and cross-screen drag artifacts on multi-display setups.
-- Region indicator display timing and Y-coordinate positioning.
-- Screenshot timer dropdown now uses per-session override instead of persisting to settings.
-- Mouse start point in region selection now clamped to overlay bounds for improved accuracy.
-
 ## v0.0.14 - 2026-02-17
 
 ### Added

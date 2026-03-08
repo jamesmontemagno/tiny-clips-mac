@@ -55,25 +55,22 @@ class ScreenPickerWindow: NSPanel {
         NSApp.activate()
 
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 {
-                self?.finish(with: nil)
+            guard let self else { return event }
+            if self.handleKeyDown(event) {
                 return nil
             }
             return event
         }
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 {
-                self?.finish(with: nil)
-            }
+            _ = self?.handleKeyDown(event)
         }
     }
 
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 {
-            finish(with: nil)
-        } else {
-            super.keyDown(with: event)
+        if handleKeyDown(event) {
+            return
         }
+        super.keyDown(with: event)
     }
 
     private func finish(with screen: NSScreen?) {
@@ -90,6 +87,23 @@ class ScreenPickerWindow: NSPanel {
         orderOut(nil)
         onComplete?(screen)
         onComplete = nil
+    }
+
+    private func handleKeyDown(_ event: NSEvent) -> Bool {
+        if event.keyCode == 53 {
+            finish(with: nil)
+            return true
+        }
+
+        guard let key = event.charactersIgnoringModifiers?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let number = Int(key),
+              number >= 1,
+              number <= capturedScreens.count else {
+            return false
+        }
+
+        finish(with: capturedScreens[number - 1])
+        return true
     }
 
     // MARK: - Build Screen Layout
@@ -174,21 +188,26 @@ private struct ScreenPickerView: View {
                     .frame(width: arrangementSize.width, height: arrangementSize.height)
 
                 ForEach(screens) { screen in
-                    ScreenCard(info: screen, isHovered: hoveredIndex == screen.index)
-                        .frame(width: screen.scaledFrame.width, height: screen.scaledFrame.height)
-                        .offset(x: screen.scaledFrame.minX, y: screen.scaledFrame.minY)
-                        .onHover { hovering in
-                            hoveredIndex = hovering ? screen.index : nil
-                        }
-                        .onTapGesture {
-                            onSelect(screen.index)
-                        }
+                    Button {
+                        onSelect(screen.index)
+                    } label: {
+                        ScreenCard(info: screen, isHovered: hoveredIndex == screen.index)
+                            .frame(width: screen.scaledFrame.width, height: screen.scaledFrame.height)
+                    }
+                    .buttonStyle(.plain)
+                    .offset(x: screen.scaledFrame.minX, y: screen.scaledFrame.minY)
+                    .onHover { hovering in
+                        hoveredIndex = hovering ? screen.index : nil
+                    }
+                    .accessibilityLabel("Display \(screen.displayNumber)")
+                    .accessibilityValue(screen.isMain ? "\(screen.resolution), main display" : screen.resolution)
+                    .accessibilityHint("Selects this display for capture.")
                 }
             }
 
-            Text("Click a display · Esc to cancel")
+            Text("Click a display or press 1-9 · Esc to cancel")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(.white.opacity(0.7))
         }
         .padding(24)
         .fixedSize()

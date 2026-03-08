@@ -107,6 +107,8 @@ private struct GifTrimmerView: View {
             .frame(height: 44)
             .padding(.horizontal, 16)
             .padding(.top, 4)
+            .accessibilityLabel("Trim frame range")
+            .accessibilityHint("Adjust the start and end handles to choose which frames to keep.")
 
             // Trim info
             HStack {
@@ -125,21 +127,56 @@ private struct GifTrimmerView: View {
             .padding(.horizontal, 20)
             .padding(.top, 2)
 
-            HStack {
+            HStack(spacing: 12) {
+                let maxStart = max(0, viewModel.trimEndFrame - 1)
+                let minEnd = min(max(0, viewModel.totalFrames - 1), viewModel.trimStartFrame + 1)
+                let maxEnd = max(minEnd, viewModel.totalFrames - 1)
+
+                Stepper(
+                    value: Binding(
+                        get: { viewModel.trimStartFrame },
+                        set: { newValue in
+                            let clamped = min(max(0, newValue), maxStart)
+                            viewModel.trimStartFrame = clamped
+                            viewModel.seekTo(frame: clamped)
+                        }
+                    ),
+                    in: 0...maxStart
+                ) {
+                    Text("Start: \(viewModel.trimStartFrame + 1)")
+                        .monospacedDigit()
+                }
+
+                Stepper(
+                    value: Binding(
+                        get: { viewModel.trimEndFrame },
+                        set: { newValue in
+                            let clamped = min(max(minEnd, newValue), maxEnd)
+                            viewModel.trimEndFrame = clamped
+                            viewModel.seekTo(frame: min(viewModel.currentFrameIndex, clamped))
+                        }
+                    ),
+                    in: minEnd...maxEnd
+                ) {
+                    Text("End: \(viewModel.trimEndFrame + 1)")
+                        .monospacedDigit()
+                }
+
                 Text("Speed")
-                    .font(.caption)
                     .foregroundStyle(.secondary)
-                Picker("Speed", selection: $viewModel.speed) {
+                Picker("", selection: $viewModel.speed) {
                     ForEach(GifTrimmerViewModel.speedOptions, id: \.self) { speed in
                         Text(GifTrimmerViewModel.speedLabel(for: speed)).tag(speed)
                     }
                 }
+                .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(width: 120)
                 Spacer()
             }
+            .font(.caption)
             .padding(.horizontal, 20)
-            .padding(.top, 8)
+            .padding(.top, 6)
 
             Divider()
                 .padding(.top, 10)

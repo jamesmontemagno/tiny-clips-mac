@@ -81,6 +81,8 @@ private struct CountdownView: View {
                 .font(.system(size: 48, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .contentTransition(.numericText())
+                .accessibilityLabel("Countdown")
+                .accessibilityValue("\(remaining) seconds")
         }
         .frame(width: 120, height: 120)
     }

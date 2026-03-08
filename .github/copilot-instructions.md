@@ -82,6 +82,13 @@ Output: `TinyClips yyyy-MM-dd 'at' HH.mm.ss.{ext}`. Trimmed video gets ` (trimme
 ### Keyboard Shortcuts
 Screenshot `⌘⇧5`, Video `⌘⇧6`, GIF `⌘⇧7`, Stop `⌘.`, Settings `⌘,`, Quit `⌘Q`. Dialogs use `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)`.
 
+### Accessibility (VoiceOver + Keyboard)
+- Treat accessibility as a release gate for capture flows, settings, onboarding, editors/trimmers, and Clips Manager.
+- Add explicit `.accessibilityLabel`, `.accessibilityHint`, and `.accessibilityValue` for icon-only buttons, custom controls, toggles, timers, and stateful UI.
+- Keep pointer-heavy custom controls keyboard-accessible (for example: default/cancel shortcuts, `Esc` cancel paths, numeric display selection, and Stepper-based trim adjustments).
+- Prefer semantic structure in SwiftUI (`.accessibilityAddTraits(.isHeader)`, grouped elements, clear control names) over relying only on `.help(...)` tooltips.
+- Validate accessibility changes on both schemes (`TinyClips` and `TinyClipsMAS`) and manually verify VoiceOver + keyboard-only navigation on critical paths.
+
 ### Notifications & Clipboard
 - Post-save notifications via `UserNotifications` framework (`UNMutableNotificationContent`), not `NSUserNotification`.
 - All inter-component communication uses **closures/callbacks**, no `NotificationCenter` posting.

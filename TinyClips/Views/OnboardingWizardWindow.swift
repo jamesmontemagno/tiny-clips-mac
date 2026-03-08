@@ -8,7 +8,7 @@ class OnboardingWizardWindow: NSWindow, NSWindowDelegate {
 
     convenience init(onComplete: @escaping (Bool) -> Void) {
         self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 340),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 390),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -51,6 +51,7 @@ private enum OnboardingStep: Int, CaseIterable {
     case welcome
     case screen
     case optional
+    case settings
 
     var title: String {
         switch self {
@@ -60,26 +61,28 @@ private enum OnboardingStep: Int, CaseIterable {
             return "Allow Screen Recording"
         case .optional:
             return "Optional Permissions"
+        case .settings:
+            return "Common Capture Settings"
         }
     }
 }
 
 private struct OnboardingWizardView: View {
+    @ObservedObject private var settings = CaptureSettings.shared
     @State private var step: OnboardingStep = .welcome
     @State private var screenGranted = false
     @State private var microphoneGranted = false
     @State private var notificationsGranted = false
+    @State private var showSkipConfirmation = false
 
     let onFinish: () -> Void
     let onSkip: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Welcome to TinyClips")
-                .font(.title2.weight(.semibold))
-
             Text(step.title)
                 .font(.headline)
+                .accessibilityAddTraits(.isHeader)
 
             Group {
                 switch step {
@@ -89,6 +92,8 @@ private struct OnboardingWizardView: View {
                     screenPermissionContent
                 case .optional:
                     optionalPermissionsContent
+                case .settings:
+                    commonSettingsContent
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -109,7 +114,7 @@ private struct OnboardingWizardView: View {
                 }
 
                 Button("Skip") {
-                    onSkip()
+                    showSkipConfirmation = true
                 }
                 .keyboardShortcut(.cancelAction)
 
@@ -122,6 +127,14 @@ private struct OnboardingWizardView: View {
         .padding(20)
         .onAppear {
             refreshStatus()
+        }
+        .alert("Skip setup?", isPresented: $showSkipConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Skip Setup", role: .destructive) {
+                onSkip()
+            }
+        } message: {
+            Text("You can run setup later from Settings.")
         }
     }
 
@@ -231,6 +244,47 @@ private struct OnboardingWizardView: View {
         }
     }
 
+    private var commonSettingsContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Choose your default capture behavior. You can change this any time in Settings.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            editorDefaultsRow(
+                title: "Screenshots",
+                openLabel: "Open editor after capture",
+                openBinding: $settings.showScreenshotEditor,
+                saveBinding: $settings.saveImmediatelyScreenshot,
+                copyBinding: $settings.copyScreenshotToClipboard,
+                openHelp: "Open the screenshot editor after capture so you can annotate or crop before finishing.",
+                saveHelp: "When enabled, screenshots save right away instead of waiting for editor actions.",
+                copyHelp: "Copy saved screenshots to the clipboard as an image."
+            )
+
+            editorDefaultsRow(
+                title: "Videos",
+                openLabel: "Open trimmer after recording",
+                openBinding: $settings.showTrimmer,
+                saveBinding: $settings.saveImmediatelyVideo,
+                copyBinding: $settings.copyVideoToClipboard,
+                openHelp: "Open the video trimmer after recording so you can trim before finishing.",
+                saveHelp: "When enabled, videos save right away instead of waiting for trimmer actions.",
+                copyHelp: "Copy saved videos to the clipboard as a file URL."
+            )
+
+            editorDefaultsRow(
+                title: "GIFs",
+                openLabel: "Open trimmer after recording",
+                openBinding: $settings.showGifTrimmer,
+                saveBinding: $settings.saveImmediatelyGif,
+                copyBinding: $settings.copyGifToClipboard,
+                openHelp: "Open the GIF trimmer after recording so you can trim before finishing.",
+                saveHelp: "When enabled, GIFs save right away instead of waiting for trimmer actions.",
+                copyHelp: "Copy saved GIFs to the clipboard as a file URL."
+            )
+        }
+    }
+
     private var primaryButtonTitle: String {
         switch step {
         case .welcome:
@@ -238,6 +292,8 @@ private struct OnboardingWizardView: View {
         case .screen:
             return "Next"
         case .optional:
+            return "Next"
+        case .settings:
             return "Finish"
         }
     }
@@ -249,6 +305,8 @@ private struct OnboardingWizardView: View {
         case .screen:
             step = .optional
         case .optional:
+            step = .settings
+        case .settings:
             onFinish()
         }
     }
@@ -302,6 +360,53 @@ private struct OnboardingWizardView: View {
 
             Text(isGranted ? grantedText : deniedText)
                 .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(isGranted ? grantedText : deniedText)
+    }
+
+    private func editorDefaultsRow(
+        title: String,
+        openLabel: String,
+        openBinding: Binding<Bool>,
+        saveBinding: Binding<Bool>,
+        copyBinding: Binding<Bool>,
+        openHelp: String,
+        saveHelp: String,
+        copyHelp: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            toggleRow(openLabel, binding: openBinding, helpText: openHelp)
+                .onChange(of: openBinding.wrappedValue) { _, isEnabled in
+                    if !isEnabled {
+                        saveBinding.wrappedValue = true
+                    }
+                }
+
+            toggleRow("Save immediately", binding: saveBinding, isIndented: true, helpText: saveHelp)
+                .disabled(!openBinding.wrappedValue)
+            toggleRow("Copy to clipboard", binding: copyBinding, helpText: copyHelp)
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private func toggleRow(_ title: String, binding: Binding<Bool>, isIndented: Bool = false, helpText: String? = nil) -> some View {
+        let row = Toggle(title, isOn: binding)
+            .toggleStyle(.checkbox)
+            .font(.callout)
+            .padding(.leading, isIndented ? 18 : 0)
+
+        if let helpText {
+            row.help(helpText)
+        } else {
+            row
         }
     }
 }

@@ -212,6 +212,8 @@ private struct CapturePickerView: View {
             }
             .buttonStyle(.plain)
             .help("Select a region (R)")
+            .keyboardShortcut("r", modifiers: [])
+            .accessibilityHint("Starts region capture.")
 
             Button { onCapture(.screen, countdownEnabled, countdownDuration) } label: {
                 HStack(spacing: 5) {
@@ -228,6 +230,8 @@ private struct CapturePickerView: View {
             }
             .buttonStyle(.plain)
             .help("Full screen (S)")
+            .keyboardShortcut("s", modifiers: [])
+            .accessibilityHint("Starts full screen capture.")
 
             Button { onCapture(.window, countdownEnabled, countdownDuration) } label: {
                 HStack(spacing: 5) {
@@ -244,6 +248,8 @@ private struct CapturePickerView: View {
             }
             .buttonStyle(.plain)
             .help("Select a window (W)")
+            .keyboardShortcut("w", modifiers: [])
+            .accessibilityHint("Starts window capture.")
 
             Divider()
                 .frame(height: 20)
@@ -278,6 +284,9 @@ private struct CapturePickerView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
             .help("Countdown timer")
+            .accessibilityLabel("Countdown timer")
+            .accessibilityValue(countdownEnabled ? "\(countdownDuration) seconds" : "Off")
+            .accessibilityHint("Choose a delay before capture starts.")
 
             Button { onCancel() } label: {
                 Image(systemName: "xmark")
@@ -289,6 +298,9 @@ private struct CapturePickerView: View {
             }
             .buttonStyle(.plain)
             .help("Cancel (Esc)")
+            .keyboardShortcut(.cancelAction)
+            .accessibilityLabel("Cancel capture")
+            .accessibilityHint("Closes the capture picker.")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

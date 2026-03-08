@@ -1,5 +1,8 @@
 import SwiftUI
 import ScreenCaptureKit
+#if APPSTORE
+import StoreKit
+#endif
 
 @main
 struct TinyClipsApp: App {
@@ -8,6 +11,7 @@ struct TinyClipsApp: App {
 
     init() {
         _ = SparkleController.shared
+        NSApplication.shared.setActivationPolicy(CaptureSettings.shared.showInDock ? .regular : .accessory)
     }
 
     var body: some Scene {
@@ -15,9 +19,15 @@ struct TinyClipsApp: App {
             MenuBarContentView(captureManager: captureManager, sparkleController: sparkleController)
         }
 
-        Settings {
+        Window("Clips Manager", id: "clips-manager") {
+            clipsManagerRootView()
+        }
+        .defaultSize(width: 980, height: 540)
+
+        Window("Tiny Clips Settings", id: "settings-window") {
             SettingsView()
         }
+        .defaultSize(width: 720, height: 460)
     }
 }
 
@@ -26,7 +36,11 @@ struct TinyClipsApp: App {
 private struct MenuBarContentView: View {
     @ObservedObject var captureManager: CaptureManager
     @ObservedObject var sparkleController: SparkleController
-    @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
+#if APPSTORE
+    @AppStorage("appStoreClipCountForReview") private var appStoreClipCountForReview = 0
+    @AppStorage("appStoreReviewRequested") private var appStoreReviewRequested = false
+#endif
 
     var body: some View {
         if !captureManager.isRecording {
@@ -34,16 +48,19 @@ private struct MenuBarContentView: View {
                 captureManager.takeScreenshot()
             }
             .keyboardShortcut("5", modifiers: [.control, .option, .command])
+            .accessibilityHint("Starts screenshot capture.")
 
             Button("Record Video...") {
                 captureManager.startVideoRecording()
             }
             .keyboardShortcut("6", modifiers: [.control, .option, .command])
+            .accessibilityHint("Starts video recording.")
 
             Button("Record GIF...") {
                 captureManager.startGifRecording()
             }
             .keyboardShortcut("7", modifiers: [.control, .option, .command])
+            .accessibilityHint("Starts GIF recording.")
 
             Divider()
         } else {
@@ -51,6 +68,7 @@ private struct MenuBarContentView: View {
                 captureManager.stopRecording()
             }
             .keyboardShortcut(".", modifiers: .command)
+            .accessibilityHint("Stops the current recording.")
 
             Divider()
         }
@@ -59,37 +77,34 @@ private struct MenuBarContentView: View {
             sparkleController.checkForUpdates()
         }
 #endif
+        Button("Clips Manager…") {
+            openWindow(id: "clips-manager")
+            DispatchQueue.main.async {
+                NSRunningApplication.current.activate(options: [.activateAllWindows])
+            }
+        }
+
+#if APPSTORE
+        if appStoreClipCountForReview >= 25 && !appStoreReviewRequested {
+            Button("Rate TinyClips…") {
+                appStoreReviewRequested = true
+                requestAppStoreReview()
+            }
+        }
+#endif
+
         Button("Guide…") {
             captureManager.showGuide()
         }
 
         Button("Settings…") {
-            openSettings()
+            openWindow(id: "settings-window")
             DispatchQueue.main.async {
-                NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
-
-                if let settingsWindow = NSApp.windows.first(where: {
-                    $0.isVisible && $0.title.localizedCaseInsensitiveContains("settings")
-                }) {
-                    settingsWindow.collectionBehavior.insert(.moveToActiveSpace)
-                    settingsWindow.makeKeyAndOrderFront(nil)
-                    settingsWindow.orderFrontRegardless()
-                }
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
-
-                if let settingsWindow = NSApp.windows.first(where: {
-                    $0.isVisible && $0.title.localizedCaseInsensitiveContains("settings")
-                }) {
-                    settingsWindow.collectionBehavior.insert(.moveToActiveSpace)
-                    settingsWindow.makeKeyAndOrderFront(nil)
-                    settingsWindow.orderFrontRegardless()
-                }
+                NSRunningApplication.current.activate(options: [.activateAllWindows])
             }
         }
         .keyboardShortcut(",", modifiers: .command)
+        .accessibilityHint("Opens TinyClips settings.")
 
         Divider()
 
@@ -98,6 +113,12 @@ private struct MenuBarContentView: View {
         }
         .keyboardShortcut("q", modifiers: .command)
     }
+
+#if APPSTORE
+    private func requestAppStoreReview() {
+        SKStoreReviewController.requestReview()
+    }
+#endif
 }
 
 @MainActor
@@ -143,12 +164,12 @@ class CaptureManager: ObservableObject {
     private func bringWindowToFront(_ window: NSWindow) {
         window.collectionBehavior.insert(.moveToActiveSpace)
 
-        NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
         window.makeKeyAndOrderFront(nil)
         window.orderFrontRegardless()
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps, .activateAllWindows])
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
             window.makeKeyAndOrderFront(nil)
             window.orderFrontRegardless()
         }
@@ -192,7 +213,10 @@ class CaptureManager: ObservableObject {
     }
 
     private func showScreenshotPicker() {
-        guard screenshotPickerPanel == nil else { return }
+        if screenshotPickerPanel != nil {
+            return
+        }
+        dismissRecordingPicker()
         let settings = CaptureSettings.shared
         let panel = CapturePickerPanel(
             countdownEnabled: settings.screenshotCountdownEnabled,
@@ -683,7 +707,8 @@ class CaptureManager: ObservableObject {
     }
 
     private func showRecordingPicker(for type: CaptureType) {
-        guard recordingPickerPanel == nil else { return }
+        dismissScreenshotPicker()
+        dismissRecordingPicker()
 
         let settings = CaptureSettings.shared
         let countdownEnabled: Bool
