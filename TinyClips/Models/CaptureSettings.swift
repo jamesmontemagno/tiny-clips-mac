@@ -24,20 +24,20 @@ struct CaptureRegion: Sendable {
         )
     }
 
+    var pixelWidth: Int {
+        max(1, Int((sourceRect.width * scaleFactor).rounded()))
+    }
+
+    var pixelHeight: Int {
+        max(1, Int((sourceRect.height * scaleFactor).rounded()))
+    }
+
     func makeStreamConfig() -> SCStreamConfiguration {
         let config = SCStreamConfiguration()
-        let pixelWidth = max(1, Int((sourceRect.width * scaleFactor).rounded()))
-        let pixelHeight = max(1, Int((sourceRect.height * scaleFactor).rounded()))
-        let pixelSourceRect = CGRect(
-            x: (sourceRect.minX * scaleFactor).rounded(.down),
-            y: (sourceRect.minY * scaleFactor).rounded(.down),
-            width: CGFloat(pixelWidth),
-            height: CGFloat(pixelHeight)
-        )
-        config.sourceRect = pixelSourceRect
+        config.sourceRect = sourceRect
         config.width = pixelWidth
         config.height = pixelHeight
-        config.scalesToFit = false
+        config.scalesToFit = true
         config.showsCursor = true
         return config
     }
