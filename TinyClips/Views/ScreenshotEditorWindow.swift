@@ -639,7 +639,7 @@ private class EditorViewModel: ObservableObject {
         )
     }
 
-    // Calculate display size maintaining aspect ratio
+    // Calculate display size maintaining aspect ratio, capped at native pixel size
     func displaySize(in containerSize: CGSize) -> CGSize {
         guard let image = originalImage, image.size.width > 0, image.size.height > 0 else {
             return .zero
@@ -647,12 +647,15 @@ private class EditorViewModel: ObservableObject {
         let imageAspect = image.size.width / image.size.height
         let containerAspect = containerSize.width / containerSize.height
 
-        if imageAspect > containerAspect {
-            let width = containerSize.width * 0.95
-            return CGSize(width: width, height: width / imageAspect)
+        // Cap at native pixel dimensions to prevent upscaling blur on Retina
+        let screenScale = NSScreen.main?.backingScaleFactor ?? 2.0
+        let maxWidth = min(containerSize.width * 0.95, imagePixelSize.width / screenScale)
+        let maxHeight = min(containerSize.height * 0.95, imagePixelSize.height / screenScale)
+
+        if maxWidth / maxHeight < imageAspect {
+            return CGSize(width: maxWidth, height: maxWidth / imageAspect)
         } else {
-            let height = containerSize.height * 0.95
-            return CGSize(width: height * imageAspect, height: height)
+            return CGSize(width: maxHeight * imageAspect, height: maxHeight)
         }
     }
 

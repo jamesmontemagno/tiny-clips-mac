@@ -20,7 +20,7 @@ class RegionIndicatorPanel: NSPanel {
         // Position the panel to match the capture region
         positionForRegion(region)
         
-        let hostingView = NSHostingView(rootView: RegionIndicatorView(region: region))
+        let hostingView = NSHostingView(rootView: RegionIndicatorView())
         self.contentView = hostingView
     }
     
@@ -51,34 +51,12 @@ class RegionIndicatorPanel: NSPanel {
 }
 
 private struct RegionIndicatorView: View {
-    let region: CaptureRegion
-
-    private var pointSizeText: String {
-        "\(Int(region.sourceRect.width.rounded())) × \(Int(region.sourceRect.height.rounded())) pt"
-    }
-
-    private var pixelSizeText: String {
-        let pixelWidth = Int((region.sourceRect.width * region.scaleFactor).rounded())
-        let pixelHeight = Int((region.sourceRect.height * region.scaleFactor).rounded())
-        return "\(pixelWidth) × \(pixelHeight) px"
-    }
-
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Rectangle()
-                .strokeBorder(.red, lineWidth: 2)
-                .background {
-                    Rectangle()
-                        .fill(.red.opacity(0.05))
-                }
-
-            Text("\(pointSizeText) • \(pixelSizeText)")
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.black.opacity(0.75), in: Capsule())
-                .padding(8)
-        }
+        Rectangle()
+            .strokeBorder(.red, lineWidth: 2)
+            .background {
+                Rectangle()
+                    .fill(.red.opacity(0.05))
+            }
     }
 }

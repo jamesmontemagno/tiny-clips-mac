@@ -156,7 +156,7 @@ private class RegionSelectionView: NSView {
         let scale = window?.screen?.backingScaleFactor ?? 1
         let pixelWidth = Int((CGFloat(width) * scale).rounded())
         let pixelHeight = Int((CGFloat(height) * scale).rounded())
-        let text = "\(width) × \(height) pt • \(pixelWidth) × \(pixelHeight) px"
+        let text = "\(pixelWidth) × \(pixelHeight)"
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .medium),
             .foregroundColor: NSColor.white,

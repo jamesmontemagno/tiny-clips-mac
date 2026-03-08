@@ -219,6 +219,7 @@ class CaptureManager: ObservableObject {
         dismissRecordingPicker()
         let settings = CaptureSettings.shared
         let panel = CapturePickerPanel(
+            captureType: .screenshot,
             countdownEnabled: settings.screenshotCountdownEnabled,
             countdownDuration: settings.screenshotCountdownDuration,
             onCapture: { [weak self] mode, countdownEnabled, countdownDuration in
@@ -727,6 +728,7 @@ class CaptureManager: ObservableObject {
         }
 
         let panel = CapturePickerPanel(
+            captureType: type,
             countdownEnabled: countdownEnabled,
             countdownDuration: countdownDuration,
             onCapture: { [weak self] mode, enabled, duration in
