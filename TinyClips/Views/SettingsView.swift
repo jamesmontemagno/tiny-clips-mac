@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Combine
+import CoreAudio
 
 // MARK: - Binding Helpers
 
@@ -49,6 +50,7 @@ struct SettingsView: View {
     @State private var selectedTab: SettingsTab? = .general
     @State private var splitVisibility: NavigationSplitViewVisibility = .all
     @State private var showDisableDockWarning = false
+    @StateObject private var outputDeviceObserver = OutputAudioDeviceObserver()
     @State private var availableOutputDevices: [OutputAudioDeviceOption] = []
     @State private var availableMicrophones: [MicrophoneDeviceOption] = []
 
@@ -92,8 +94,14 @@ struct SettingsView: View {
             Text("TinyClips may briefly close the Settings window when switching out of Dock mode.")
         }
         .onAppear {
+            outputDeviceObserver.start {
+                refreshOutputDevices()
+            }
             refreshOutputDevices()
             refreshMicrophones()
+        }
+        .onDisappear {
+            outputDeviceObserver.stop()
         }
         .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in
             refreshOutputDevices()
@@ -584,6 +592,54 @@ struct SettingsView: View {
             return
         }
         settings.selectedOutputAudioDeviceUID = ""
+    }
+}
+
+private final class OutputAudioDeviceObserver: ObservableObject {
+    private var listener: AudioObjectPropertyListenerBlock?
+    private let queue = DispatchQueue(label: "com.tinyclips.output-device-observer")
+
+    func start(onChange: @escaping () -> Void) {
+        guard listener == nil else { return }
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let block: AudioObjectPropertyListenerBlock = { _, _ in
+            DispatchQueue.main.async {
+                onChange()
+            }
+        }
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            queue,
+            block
+        )
+        guard status == noErr else { return }
+        listener = block
+    }
+
+    func stop() {
+        guard let listener else { return }
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        AudioObjectRemovePropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            queue,
+            listener
+        )
+        self.listener = nil
+    }
+
+    deinit {
+        stop()
     }
 }
 
