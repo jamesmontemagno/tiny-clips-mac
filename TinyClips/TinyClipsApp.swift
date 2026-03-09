@@ -15,8 +15,10 @@ struct TinyClipsApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra("TinyClips", systemImage: captureManager.isRecording ? "record.circle.fill" : "camera.viewfinder") {
+        MenuBarExtra {
             MenuBarContentView(captureManager: captureManager, sparkleController: sparkleController)
+        } label: {
+            MenuBarLabelView(captureManager: captureManager)
         }
 
         Window("Clips Manager", id: "clips-manager") {
@@ -43,6 +45,21 @@ private struct MenuBarContentView: View {
 #endif
 
     var body: some View {
+        if captureManager.recordingMicrophoneEnabled {
+            if let micName = captureManager.activeMicrophoneName {
+                Label("Microphone: \(micName)", systemImage: "mic.fill")
+            } else {
+                Label("Microphone: waiting for input device…", systemImage: "mic.fill")
+            }
+
+            if let warning = captureManager.microphoneWarningMessage {
+                Label(warning, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.yellow)
+            }
+
+            Divider()
+        }
+
         if !captureManager.isRecording {
             Button("Screenshot…") {
                 captureManager.takeScreenshot()
@@ -121,6 +138,57 @@ private struct MenuBarContentView: View {
 #endif
 }
 
+private struct MenuBarLabelView: View {
+    @ObservedObject var captureManager: CaptureManager
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: captureManager.isRecording ? "record.circle.fill" : "camera.viewfinder")
+                .foregroundStyle(captureManager.isRecording ? .red : .primary)
+
+            if captureManager.recordingMicrophoneEnabled {
+                Image(systemName: "mic.fill")
+                    .foregroundStyle(.primary)
+
+                AudioLevelBars(level: captureManager.microphoneLevel, hasWarning: captureManager.microphoneWarningMessage != nil)
+            }
+        }
+    }
+}
+
+private struct AudioLevelBars: View {
+    let level: Double
+    let hasWarning: Bool
+
+    var body: some View {
+        HStack(spacing: 1.5) {
+            ForEach(0..<3, id: \.self) { index in
+                Capsule()
+                    .fill(barColor(for: index))
+                    .frame(width: 2.5, height: barHeight(for: index))
+            }
+        }
+        .frame(height: 10)
+        .accessibilityLabel("Microphone level")
+        .accessibilityValue(hasWarning ? "No input detected" : "\(Int(level * 100)) percent")
+    }
+
+    private func barHeight(for index: Int) -> CGFloat {
+        let thresholds = [0.1, 0.35, 0.65]
+        return level >= thresholds[index] ? CGFloat(5 + index * 2) : 3
+    }
+
+    private func barColor(for index: Int) -> Color {
+        if hasWarning {
+            return .yellow
+        }
+        if level > 0.75 && index == 2 {
+            return .red
+        }
+        return .green
+    }
+}
+
 @MainActor
 class CaptureManager: ObservableObject {
     @Published var isRecording = false {
@@ -128,6 +196,10 @@ class CaptureManager: ObservableObject {
             updateStopHotKeyRegistration()
         }
     }
+    @Published var recordingMicrophoneEnabled = false
+    @Published var activeMicrophoneName: String?
+    @Published var microphoneLevel: Double = 0
+    @Published var microphoneWarningMessage: String?
 
     private var videoRecorder: VideoRecorder?
     private var gifWriter: GifWriter?
@@ -341,12 +413,14 @@ class CaptureManager: ObservableObject {
         region: CaptureRegion,
         systemAudio: Bool,
         microphone: Bool,
+        selectedMicrophoneID: String,
         countdownEnabled: Bool,
         countdownDuration: Int
     ) {
         let settings = CaptureSettings.shared
         settings.recordAudio = systemAudio
         settings.recordMicrophone = microphone
+        settings.selectedMicrophoneID = selectedMicrophoneID
 
         let doRecord = { [weak self] in
             guard let self else { return }
@@ -358,13 +432,39 @@ class CaptureManager: ObservableObject {
 
                 do {
                     let recorder = VideoRecorder()
+                    recorder.onMicrophoneLevel = { [weak self] level in
+                        DispatchQueue.main.async {
+                            self?.microphoneLevel = level
+                        }
+                    }
+                    recorder.onMicrophoneWarning = { [weak self] warning in
+                        DispatchQueue.main.async {
+                            self?.microphoneWarningMessage = warning
+                        }
+                    }
+                    recorder.onMicrophoneDeviceName = { [weak self] name in
+                        DispatchQueue.main.async {
+                            self?.activeMicrophoneName = name
+                        }
+                    }
+                    recorder.onMicrophoneError = { [weak self] message in
+                        DispatchQueue.main.async {
+                            self?.microphoneWarningMessage = message
+                            SaveService.shared.showError("Microphone error: \(message)")
+                        }
+                    }
                     self.videoRecorder = recorder
                     self.activeRecordingRegion = region
                     self.isRecording = true
+                    self.recordingMicrophoneEnabled = microphone
+                    self.microphoneWarningMessage = microphone ? "Waiting for microphone input..." : nil
+                    self.microphoneLevel = 0
+                    self.activeMicrophoneName = nil
 
                     try await recorder.start(region: region, outputURL: url)
                     self.showStopPanel()
                 } catch {
+                    self.resetMicrophoneStatus()
                     self.isRecording = false
                     self.activeRecordingRegion = nil
                     self.dismissRegionIndicator()
@@ -389,6 +489,7 @@ class CaptureManager: ObservableObject {
     }
 
     private func beginGifRecording(region: CaptureRegion, countdownEnabled: Bool, countdownDuration: Int) {
+        resetMicrophoneStatus()
         let doRecord = { [weak self] in
             guard let self else { return }
             Task {
@@ -465,6 +566,7 @@ class CaptureManager: ObservableObject {
             activeRecordingRegion = nil
             dismissStopPanel()
             dismissRegionIndicator()
+            resetMicrophoneStatus()
 
             // Show editor windows AFTER all recording resources are released
             // and UI state is cleaned up, so AVPlayer doesn't contend with
@@ -560,7 +662,7 @@ class CaptureManager: ObservableObject {
 
     private func showStartPanel() {
         let panel = StartRecordingPanel(
-            onStart: { [weak self] systemAudio, mic in
+            onStart: { [weak self] systemAudio, mic, selectedMicrophoneID in
                 guard
                     let self,
                     let region = self.pendingRecordingRegion,
@@ -580,6 +682,7 @@ class CaptureManager: ObservableObject {
                         region: region,
                         systemAudio: systemAudio,
                         microphone: mic,
+                        selectedMicrophoneID: selectedMicrophoneID,
                         countdownEnabled: countdownEnabled,
                         countdownDuration: countdownDuration
                     )
@@ -630,6 +733,13 @@ class CaptureManager: ObservableObject {
     private func dismissRegionIndicator() {
         regionIndicatorPanel?.close()
         regionIndicatorPanel = nil
+    }
+
+    private func resetMicrophoneStatus() {
+        recordingMicrophoneEnabled = false
+        activeMicrophoneName = nil
+        microphoneLevel = 0
+        microphoneWarningMessage = nil
     }
 
     private func showCountdownThen(

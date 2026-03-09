@@ -1,4 +1,6 @@
 import SwiftUI
+import AVFoundation
+import Combine
 
 // MARK: - Binding Helpers
 
@@ -47,6 +49,7 @@ struct SettingsView: View {
     @State private var selectedTab: SettingsTab? = .general
     @State private var splitVisibility: NavigationSplitViewVisibility = .all
     @State private var showDisableDockWarning = false
+    @State private var availableMicrophones: [MicrophoneDeviceOption] = []
 
     var body: some View {
         NavigationSplitView(columnVisibility: $splitVisibility) {
@@ -86,6 +89,13 @@ struct SettingsView: View {
             }
         } message: {
             Text("TinyClips may briefly close the Settings window when switching out of Dock mode.")
+        }
+        .onAppear(perform: refreshMicrophones)
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in
+            refreshMicrophones()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in
+            refreshMicrophones()
         }
     }
 
@@ -267,6 +277,13 @@ struct SettingsView: View {
                 .help("Include system audio in the recording.")
             Toggle("Record microphone", isOn: $settings.recordMicrophone)
                 .help("Include microphone input in the recording.")
+            Picker("Microphone input:", selection: $settings.selectedMicrophoneID) {
+                Text("System Default").tag("")
+                ForEach(availableMicrophones) { device in
+                    Text(device.name).tag(device.id)
+                }
+            }
+            .help("Choose which microphone to use for recordings.")
             Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
                 .help("Show a visible border around the selected capture area while recording.")
         }
@@ -533,6 +550,15 @@ struct SettingsView: View {
             URLQueryItem(name: "macos", value: ProcessInfo.processInfo.operatingSystemVersionString)
         ]
         return components.url!
+    }
+
+    private func refreshMicrophones() {
+        availableMicrophones = MicrophoneDeviceCatalog.availableOptions()
+        guard !settings.selectedMicrophoneID.isEmpty else { return }
+        if availableMicrophones.contains(where: { $0.id == settings.selectedMicrophoneID }) {
+            return
+        }
+        settings.selectedMicrophoneID = ""
     }
 }
 
