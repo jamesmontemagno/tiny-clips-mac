@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.0.20 - 2026-03-09
+
+### Added
+- Microphone selection and status indicator in audio recording settings.
+- Automatic update checks with enhanced release notes in appcast.
+
+### Improved
+- Refactored settings window activation logic for improved reliability and behavior when opening from menu bar.
+- Refactored CaptureManager methods to streamline recording flow and prepare for new capture requests.
+- Audio capture handling with improved microphone functionality and adjustable capture thresholds.
+- UI styling enhancements in StartRecordingPanel and StopRecordingPanel for improved appearance.
+
+### Fixed
+- Microphone capture robustness improvements addressing interruption handling.
+
 ## v0.0.19 - 2026-03-08
 
 ### Added
