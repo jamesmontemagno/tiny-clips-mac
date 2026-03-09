@@ -603,7 +603,7 @@ class CaptureManager: ObservableObject {
 
     private func showStartPanel() {
         let panel = StartRecordingPanel(
-            onStart: { [weak self] systemAudio, mic, selectedMicrophoneID, selectedOutputAudioDeviceUID in
+            onStart: { [weak self] systemAudio, selectedOutputAudioDeviceUID, mic, selectedMicrophoneID in
                 guard
                     let self,
                     let region = self.pendingRecordingRegion,

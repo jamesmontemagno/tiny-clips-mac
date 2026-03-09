@@ -2,10 +2,10 @@ import AppKit
 import SwiftUI
 
 class StartRecordingPanel: NSPanel {
-    private var onStart: ((Bool, Bool, String, String) -> Void)?
+    private var onStart: ((Bool, String, Bool, String) -> Void)?
     private var onCancel: (() -> Void)?
 
-    convenience init(onStart: @escaping (Bool, Bool, String, String) -> Void, onCancel: @escaping () -> Void) {
+    convenience init(onStart: @escaping (Bool, String, Bool, String) -> Void, onCancel: @escaping () -> Void) {
         self.init(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -26,10 +26,10 @@ class StartRecordingPanel: NSPanel {
         let hostingView = NSHostingView(rootView: StartRecordingView(
             systemAudio: settings.recordAudio,
             microphone: settings.recordMicrophone,
-            selectedOutputAudioDeviceUID: OutputAudioDeviceCatalog.resolvedUID(from: settings.selectedOutputAudioDeviceUID),
+            selectedOutputAudioDeviceUID: settings.selectedOutputAudioDeviceUID,
             selectedMicrophoneID: settings.selectedMicrophoneID,
             onStart: { [weak self] systemAudio, outputDeviceUID, mic in
-                self?.onStart?(systemAudio, mic.enabled, mic.deviceID, outputDeviceUID)
+                self?.onStart?(systemAudio, outputDeviceUID, mic.enabled, mic.deviceID)
                 self?.onStart = nil
                 self?.onCancel = nil
             },
@@ -70,7 +70,7 @@ private struct StartRecordingView: View {
     @State var microphone: Bool
     @State var selectedOutputAudioDeviceUID: String
     @State var selectedMicrophoneID: String
-    private let outputDevices = OutputAudioDeviceCatalog.availableOptions()
+    @State private var outputDevices: [OutputAudioDeviceOption] = []
     private let microphones = MicrophoneDeviceCatalog.availableOptions()
     let onStart: (Bool, String, MicrophoneState) -> Void
     let onCancel: () -> Void
@@ -104,6 +104,8 @@ private struct StartRecordingView: View {
                 .labelsHidden()
                 .frame(width: 170)
                 .help("Choose output audio device for recording.")
+                .accessibilityLabel("Output audio device")
+                .accessibilityHint("Selects which output device to record from.")
             }
 
             // Microphone toggle
@@ -180,6 +182,13 @@ private struct StartRecordingView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .fixedSize()
+        .onAppear {
+            outputDevices = OutputAudioDeviceCatalog.availableOptions()
+            guard !selectedOutputAudioDeviceUID.isEmpty else { return }
+            if !outputDevices.contains(where: { $0.id == selectedOutputAudioDeviceUID }) {
+                selectedOutputAudioDeviceUID = ""
+            }
+        }
         .background {
             RoundedRectangle(cornerRadius: 10)
                 .fill(.black.opacity(0.8))

@@ -104,11 +104,9 @@ struct SettingsView: View {
             outputDeviceObserver.stop()
         }
         .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in
-            refreshOutputDevices()
             refreshMicrophones()
         }
         .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in
-            refreshOutputDevices()
             refreshMicrophones()
         }
     }
@@ -296,6 +294,7 @@ struct SettingsView: View {
                 }
             }
             .help("Choose which output device TinyClips should capture.")
+            .accessibilityHint("Selects which output device to capture audio from during recordings.")
             Text("Output audio capture uses the selected output device. Microphone input is configured separately below.")
                 .font(.caption)
                 .foregroundStyle(.secondary)

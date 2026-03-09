@@ -46,7 +46,7 @@ enum OutputAudioDeviceCatalog {
         let count = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
         var devices = Array(repeating: AudioDeviceID(0), count: count)
         let status = devices.withUnsafeMutableBufferPointer { buffer -> OSStatus in
-            guard let baseAddress = buffer.baseAddress else { return -1 }
+            guard let baseAddress = buffer.baseAddress else { return kAudioHardwareBadObjectError }
             return AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &dataSize, baseAddress)
         }
         guard status == noErr else { return [] }
@@ -114,27 +114,6 @@ enum OutputAudioDeviceCatalog {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    static func defaultOutputDeviceUID() -> String? {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var deviceID = AudioDeviceID(0)
-        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID) == noErr else {
-            return nil
-        }
-        return deviceUID(for: deviceID)
-    }
-
-    static func resolvedUID(from selectedUID: String) -> String {
-        let options = availableOptions()
-        if !selectedUID.isEmpty, options.contains(where: { $0.id == selectedUID }) {
-            return selectedUID
-        }
-        return defaultOutputDeviceUID() ?? ""
-    }
 }
 
 class VideoRecorder: NSObject, @unchecked Sendable {
