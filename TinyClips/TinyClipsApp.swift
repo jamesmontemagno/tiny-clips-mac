@@ -350,6 +350,7 @@ class CaptureManager: ObservableObject {
     private func beginVideoRecording(
         region: CaptureRegion,
         systemAudio: Bool,
+        selectedOutputAudioDeviceUID: String,
         microphone: Bool,
         selectedMicrophoneID: String,
         countdownEnabled: Bool,
@@ -357,6 +358,7 @@ class CaptureManager: ObservableObject {
     ) {
         let settings = CaptureSettings.shared
         settings.recordAudio = systemAudio
+        settings.selectedOutputAudioDeviceUID = selectedOutputAudioDeviceUID
         settings.recordMicrophone = microphone
         settings.selectedMicrophoneID = selectedMicrophoneID
 
@@ -601,7 +603,7 @@ class CaptureManager: ObservableObject {
 
     private func showStartPanel() {
         let panel = StartRecordingPanel(
-            onStart: { [weak self] systemAudio, mic, selectedMicrophoneID in
+            onStart: { [weak self] systemAudio, mic, selectedMicrophoneID, selectedOutputAudioDeviceUID in
                 guard
                     let self,
                     let region = self.pendingRecordingRegion,
@@ -620,6 +622,7 @@ class CaptureManager: ObservableObject {
                     self.beginVideoRecording(
                         region: region,
                         systemAudio: systemAudio,
+                        selectedOutputAudioDeviceUID: selectedOutputAudioDeviceUID,
                         microphone: mic,
                         selectedMicrophoneID: selectedMicrophoneID,
                         countdownEnabled: countdownEnabled,

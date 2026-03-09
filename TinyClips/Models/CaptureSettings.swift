@@ -163,6 +163,7 @@ class CaptureSettings: ObservableObject {
     @AppStorage("videoFrameRate") var videoFrameRate: Int = 30
     @AppStorage("showTrimmer") var showTrimmer: Bool = true
     @AppStorage("recordAudio") var recordAudio: Bool = false
+    @AppStorage("selectedOutputAudioDeviceUID") var selectedOutputAudioDeviceUID: String = ""
     @AppStorage("recordMicrophone") var recordMicrophone: Bool = false
     @AppStorage("selectedMicrophoneID") var selectedMicrophoneID: String = ""
     @AppStorage("showScreenshotEditor") var showScreenshotEditor: Bool = true
@@ -222,7 +223,7 @@ class CaptureSettings: ObservableObject {
             "clipsManagerLastViewMode", "clipsManagerLastSortOption", "clipsManagerLastFilterType", "clipsManagerLastDateFilter",
             "clipsManagerLastSmartCollection", "clipsManagerLastSearchText", "clipsManagerLastSelectedTag", "clipsManagerLastSelectedCollection",
             "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showTrimmer",
-            "recordAudio", "recordMicrophone", "selectedMicrophoneID", "showScreenshotEditor", "showGifTrimmer",
+            "recordAudio", "selectedOutputAudioDeviceUID", "recordMicrophone", "selectedMicrophoneID", "showScreenshotEditor", "showGifTrimmer",
             "saveImmediatelyScreenshot", "saveImmediatelyVideo", "saveImmediatelyGif",
             "screenshotFormat", "screenshotScale", "jpegQuality",
             "videoCountdownEnabled", "videoCountdownDuration",

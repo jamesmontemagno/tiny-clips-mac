@@ -49,6 +49,7 @@ struct SettingsView: View {
     @State private var selectedTab: SettingsTab? = .general
     @State private var splitVisibility: NavigationSplitViewVisibility = .all
     @State private var showDisableDockWarning = false
+    @State private var availableOutputDevices: [OutputAudioDeviceOption] = []
     @State private var availableMicrophones: [MicrophoneDeviceOption] = []
 
     var body: some View {
@@ -90,11 +91,16 @@ struct SettingsView: View {
         } message: {
             Text("TinyClips may briefly close the Settings window when switching out of Dock mode.")
         }
-        .onAppear(perform: refreshMicrophones)
+        .onAppear {
+            refreshOutputDevices()
+            refreshMicrophones()
+        }
         .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in
+            refreshOutputDevices()
             refreshMicrophones()
         }
         .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in
+            refreshOutputDevices()
             refreshMicrophones()
         }
     }
@@ -274,8 +280,15 @@ struct SettingsView: View {
             .help("Choose the target frame rate for video recordings.")
 
             Toggle("Record output audio", isOn: $settings.recordAudio)
-                .help("Include the current system output mix in the recording.")
-            Text("Output audio records the current system mix. macOS does not provide a separate output-device picker here.")
+                .help("Include output audio in the recording.")
+            Picker("Output audio device:", selection: $settings.selectedOutputAudioDeviceUID) {
+                Text("System Default").tag("")
+                ForEach(availableOutputDevices) { device in
+                    Text(device.name).tag(device.id)
+                }
+            }
+            .help("Choose which output device TinyClips should capture.")
+            Text("Output audio capture uses the selected output device. Microphone input is configured separately below.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Toggle("Record microphone", isOn: $settings.recordMicrophone)
@@ -562,6 +575,15 @@ struct SettingsView: View {
             return
         }
         settings.selectedMicrophoneID = ""
+    }
+
+    private func refreshOutputDevices() {
+        availableOutputDevices = OutputAudioDeviceCatalog.availableOptions()
+        guard !settings.selectedOutputAudioDeviceUID.isEmpty else { return }
+        if availableOutputDevices.contains(where: { $0.id == settings.selectedOutputAudioDeviceUID }) {
+            return
+        }
+        settings.selectedOutputAudioDeviceUID = ""
     }
 }
 
