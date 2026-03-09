@@ -146,6 +146,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     private var outputDeviceCapture: OutputDeviceCapture?
     private var lastMicSignalAt = CACurrentMediaTime()
     private var lastOutputAudioSignalAt = CACurrentMediaTime()
+    private var lastWrittenAudioEndTime = CMTime.invalid
     private var hasStartedWriting = false
     private var recordSystemAudio = false
     private var recordMicrophone = false
@@ -197,6 +198,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
 
             if !useOutputDeviceTap {
                 config.capturesAudio = true
+                config.excludesCurrentProcessAudio = true
                 config.sampleRate = 48000
                 config.channelCount = 2
             }
@@ -353,7 +355,11 @@ class VideoRecorder: NSObject, @unchecked Sendable {
 
         writingQueue.async { [weak self] in
             guard let self, self.hasStartedWriting, let systemAudioInput = self.systemAudioInput, systemAudioInput.isReadyForMoreMediaData else { return }
+            let pts = sampleBuffer.presentationTimeStamp
+            if self.lastWrittenAudioEndTime.isValid, pts < self.lastWrittenAudioEndTime { return }
             systemAudioInput.append(sampleBuffer)
+            let dur = sampleBuffer.duration
+            self.lastWrittenAudioEndTime = dur.isValid ? CMTimeAdd(pts, dur) : pts
         }
     }
 
@@ -512,6 +518,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         recordSystemAudio = false
         recordMicrophone = false
         useOutputDeviceTap = false
+        lastWrittenAudioEndTime = .invalid
         onMicrophoneWarning?(nil)
         onMicrophoneLevel?(0)
         onMicrophoneDeviceName?("")
@@ -581,7 +588,11 @@ extension VideoRecorder: SCStreamOutput {
             }
 
             guard hasStartedWriting, let systemAudioInput, systemAudioInput.isReadyForMoreMediaData else { return }
+            let pts = sampleBuffer.presentationTimeStamp
+            if lastWrittenAudioEndTime.isValid, pts < lastWrittenAudioEndTime { return }
             systemAudioInput.append(sampleBuffer)
+            let dur = sampleBuffer.duration
+            lastWrittenAudioEndTime = dur.isValid ? CMTimeAdd(pts, dur) : pts
 
         case .microphone:
             break
