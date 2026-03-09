@@ -2,12 +2,12 @@ import AppKit
 import SwiftUI
 
 class StartRecordingPanel: NSPanel {
-    private var onStart: ((Bool, Bool) -> Void)?
+    private var onStart: ((Bool, Bool, String) -> Void)?
     private var onCancel: (() -> Void)?
 
-    convenience init(onStart: @escaping (Bool, Bool) -> Void, onCancel: @escaping () -> Void) {
+    convenience init(onStart: @escaping (Bool, Bool, String) -> Void, onCancel: @escaping () -> Void) {
         self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 44),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -26,8 +26,9 @@ class StartRecordingPanel: NSPanel {
         let hostingView = NSHostingView(rootView: StartRecordingView(
             systemAudio: settings.recordAudio,
             microphone: settings.recordMicrophone,
+            selectedMicrophoneID: settings.selectedMicrophoneID,
             onStart: { [weak self] systemAudio, mic in
-                self?.onStart?(systemAudio, mic)
+                self?.onStart?(systemAudio, mic.enabled, mic.deviceID)
                 self?.onStart = nil
                 self?.onCancel = nil
             },
@@ -59,9 +60,16 @@ class StartRecordingPanel: NSPanel {
 }
 
 private struct StartRecordingView: View {
+    struct MicrophoneState {
+        let enabled: Bool
+        let deviceID: String
+    }
+
     @State var systemAudio: Bool
     @State var microphone: Bool
-    let onStart: (Bool, Bool) -> Void
+    @State var selectedMicrophoneID: String
+    private let microphones = MicrophoneDeviceCatalog.availableOptions()
+    let onStart: (Bool, MicrophoneState) -> Void
     let onCancel: () -> Void
 
     var body: some View {
@@ -78,10 +86,10 @@ private struct StartRecordingView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .help(systemAudio ? "System audio: ON" : "System audio: OFF")
-            .accessibilityLabel("System audio")
+            .help(systemAudio ? "Output audio: ON" : "Output audio: OFF")
+            .accessibilityLabel("Output audio")
             .accessibilityValue(systemAudio ? "On" : "Off")
-            .accessibilityHint("Toggles recording system audio.")
+            .accessibilityHint("Toggles recording output audio.")
 
             // Microphone toggle
             Button {
@@ -100,13 +108,25 @@ private struct StartRecordingView: View {
             .accessibilityValue(microphone ? "On" : "Off")
             .accessibilityHint("Toggles microphone recording.")
 
+            if microphone {
+                Picker("Mic", selection: $selectedMicrophoneID) {
+                    Text("System Default").tag("")
+                    ForEach(microphones) { device in
+                        Text(device.name).tag(device.id)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 170)
+                .help("Choose microphone input device.")
+            }
+
             Divider()
                 .frame(height: 20)
                 .overlay(.white.opacity(0.2))
 
             // Start button
             Button {
-                onStart(systemAudio, microphone)
+                onStart(systemAudio, .init(enabled: microphone, deviceID: selectedMicrophoneID))
             } label: {
                 HStack(spacing: 5) {
                     Circle()

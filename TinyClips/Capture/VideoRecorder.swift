@@ -2,19 +2,56 @@ import ScreenCaptureKit
 import AVFoundation
 import CoreMedia
 import CoreVideo
+import AudioToolbox
+
+struct MicrophoneDeviceOption: Identifiable, Hashable {
+    let id: String
+    let name: String
+}
+
+enum MicrophoneDeviceCatalog {
+    private static func audioDevices() -> [AVCaptureDevice] {
+        AVCaptureDevice.DiscoverySession(deviceTypes: [.microphone, .external], mediaType: .audio, position: .unspecified).devices
+    }
+
+    static func availableOptions() -> [MicrophoneDeviceOption] {
+        audioDevices()
+            .map { MicrophoneDeviceOption(id: $0.uniqueID, name: $0.localizedName) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    static func device(for uniqueID: String) -> AVCaptureDevice? {
+        guard !uniqueID.isEmpty else { return nil }
+        return audioDevices().first(where: { $0.uniqueID == uniqueID })
+    }
+}
 
 class VideoRecorder: NSObject, @unchecked Sendable {
+    private let microphoneSignalThreshold = 0.01
+    private let microphoneSignalTimeoutSeconds: TimeInterval = 2
     private var stream: SCStream?
     private var writer: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
     private var systemAudioInput: AVAssetWriterInput?
     private var micAudioInput: AVAssetWriterInput?
-    private var audioEngine: AVAudioEngine?
+    private var microphoneSession: AVCaptureSession?
+    private var microphoneOutputDelegate: MicrophoneOutputDelegate?
+    private var microphoneObservers: [NSObjectProtocol] = []
+    private var lastMicSignalAt = CACurrentMediaTime()
     private var hasStartedWriting = false
     private var recordSystemAudio = false
     private var recordMicrophone = false
     private var outputURL: URL?
     private let writingQueue = DispatchQueue(label: "com.tinyclips.video-writing")
+    private let microphoneQueue = DispatchQueue(label: "com.tinyclips.microphone-capture")
+    var onMicrophoneLevel: ((Double) -> Void)?
+    var onMicrophoneWarning: ((String?) -> Void)?
+    var onMicrophoneDeviceName: ((String) -> Void)?
+    var onMicrophoneError: ((String) -> Void)?
+
+    var isMicrophoneCaptureActive: Bool {
+        microphoneSession != nil && recordMicrophone
+    }
 
     func start(region: CaptureRegion, outputURL: URL) async throws {
         let filter = try await region.makeFilter()
@@ -77,146 +114,175 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         self.videoInput = videoInput
         self.hasStartedWriting = false
 
-        let stream = SCStream(filter: filter, configuration: config, delegate: nil)
-        try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: writingQueue)
-        if recordSystemAudio {
-            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: writingQueue)
-        }
-        try await stream.startCapture()
-        self.stream = stream
-
-        if recordMicrophone {
-            let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
-            if micGranted {
-                try startMicCapture()
-            } else {
-                self.recordMicrophone = false
-                self.micAudioInput = nil
+        do {
+            let stream = SCStream(filter: filter, configuration: config, delegate: nil)
+            try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: writingQueue)
+            if recordSystemAudio {
+                try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: writingQueue)
             }
-        }
-    }
+            try await stream.startCapture()
+            self.stream = stream
 
-    private func startMicCapture() throws {
-        let engine = AVAudioEngine()
-        let inputNode = engine.inputNode
-        let inputFormat = inputNode.outputFormat(forBus: 0)
-
-        // Convert mic to 48kHz mono for AAC encoding
-        guard let targetFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: 48000,
-            channels: 1,
-            interleaved: false
-        ) else { return }
-
-        let converter = AVAudioConverter(from: inputFormat, to: targetFormat)
-
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, time in
-            guard let self, let micInput = self.micAudioInput, self.hasStartedWriting else { return }
-
-            // Convert to target format
-            let frameCount = AVAudioFrameCount(Double(buffer.frameLength) * 48000.0 / inputFormat.sampleRate)
-            guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) else { return }
-
-            var error: NSError?
-            converter?.convert(to: convertedBuffer, error: &error) { _, outStatus in
-                outStatus.pointee = .haveData
-                return buffer
-            }
-            guard error == nil else { return }
-
-            // Create CMSampleBuffer from the converted PCM buffer
-            guard let sampleBuffer = self.createSampleBuffer(from: convertedBuffer, presentationTime: time) else { return }
-
-            self.writingQueue.async {
-                if micInput.isReadyForMoreMediaData {
-                    micInput.append(sampleBuffer)
+            if recordMicrophone {
+                let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
+                if micGranted {
+                    try startMicCapture(selectedMicrophoneID: settings.selectedMicrophoneID)
+                } else {
+                    self.recordMicrophone = false
+                    self.micAudioInput = nil
+                    onMicrophoneError?("Microphone permission was denied.")
                 }
             }
+        } catch {
+            await resetAfterFailedStart(removeOutputFile: true)
+            throw error
         }
-
-        engine.prepare()
-        try engine.start()
-        self.audioEngine = engine
     }
 
-    private func createSampleBuffer(from buffer: AVAudioPCMBuffer, presentationTime: AVAudioTime) -> CMSampleBuffer? {
-        guard let formatDesc = buffer.format.formatDescription as CMFormatDescription? else { return nil }
-
-        let frameCount = CMItemCount(buffer.frameLength)
-        let sampleRate = buffer.format.sampleRate
-
-        // Use host time to align with SCStream's clock (both based on mach_absolute_time)
-        let hostSeconds: Double
-        if presentationTime.isHostTimeValid {
-            hostSeconds = AVAudioTime.seconds(forHostTime: presentationTime.hostTime)
+    private func startMicCapture(selectedMicrophoneID: String) throws {
+        let device: AVCaptureDevice
+        if let selected = MicrophoneDeviceCatalog.device(for: selectedMicrophoneID) {
+            device = selected
+        } else if selectedMicrophoneID.isEmpty, let `default` = AVCaptureDevice.default(for: .audio) {
+            device = `default`
         } else {
-            hostSeconds = CACurrentMediaTime()
+            throw CaptureError.microphoneUnavailable
         }
 
-        var timing = CMSampleTimingInfo(
-            duration: CMTime(value: CMTimeValue(frameCount), timescale: CMTimeScale(sampleRate)),
-            presentationTimeStamp: CMTime(seconds: hostSeconds, preferredTimescale: CMTimeScale(sampleRate)),
-            decodeTimeStamp: .invalid
+        onMicrophoneDeviceName?(device.localizedName)
+        lastMicSignalAt = CACurrentMediaTime()
+
+        let session = AVCaptureSession()
+        let input = try AVCaptureDeviceInput(device: device)
+        guard session.canAddInput(input) else {
+            throw CaptureError.microphoneConnectionFailed
+        }
+        session.addInput(input)
+
+        let output = AVCaptureAudioDataOutput()
+        let delegate = MicrophoneOutputDelegate { [weak self] sampleBuffer in
+            self?.handleMicrophoneSampleBuffer(sampleBuffer)
+        }
+        output.setSampleBufferDelegate(delegate, queue: microphoneQueue)
+        guard session.canAddOutput(output) else {
+            throw CaptureError.microphoneReadFailed
+        }
+        session.addOutput(output)
+
+        microphoneOutputDelegate = delegate
+        microphoneSession = session
+        observeMicrophoneSession(session)
+        microphoneQueue.async {
+            session.startRunning()
+        }
+    }
+
+    private func handleMicrophoneSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+        guard sampleBuffer.isValid else { return }
+
+        let level = rmsLevel(from: sampleBuffer)
+        onMicrophoneLevel?(level)
+
+        let now = CACurrentMediaTime()
+        if level > microphoneSignalThreshold {
+            lastMicSignalAt = now
+            onMicrophoneWarning?(nil)
+        } else if now - lastMicSignalAt > microphoneSignalTimeoutSeconds {
+            onMicrophoneWarning?("No microphone input detected or microphone may be muted.")
+        }
+
+        writingQueue.async { [weak self] in
+            guard let self, self.hasStartedWriting, let micAudioInput = self.micAudioInput, micAudioInput.isReadyForMoreMediaData else { return }
+            micAudioInput.append(sampleBuffer)
+        }
+    }
+
+    private func rmsLevel(from sampleBuffer: CMSampleBuffer) -> Double {
+        guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbdPointer = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) else {
+            return 0
+        }
+
+        let asbd = asbdPointer.pointee
+        var audioBufferList = AudioBufferList(
+            mNumberBuffers: 1,
+            mBuffers: AudioBuffer(mNumberChannels: 1, mDataByteSize: 0, mData: nil)
         )
+        var blockBuffer: CMBlockBuffer?
+        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: nil,
+            bufferListOut: &audioBufferList,
+            bufferListSize: MemoryLayout<AudioBufferList>.size,
+            blockBufferAllocator: nil,
+            blockBufferMemoryAllocator: nil,
+            flags: UInt32(kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment),
+            blockBufferOut: &blockBuffer
+        )
+        guard status == noErr else { return 0 }
 
-        var sampleBuffer: CMSampleBuffer?
-        guard let audioBufferList = buffer.audioBufferList.pointee.mBuffers.mData else { return nil }
+        let buffer = audioBufferList.mBuffers
+        guard let data = buffer.mData, buffer.mDataByteSize > 0 else { return 0 }
 
-        let dataSize = Int(buffer.audioBufferList.pointee.mBuffers.mDataByteSize)
-        let data = Data(bytes: audioBufferList, count: dataSize)
+        let isFloat = (asbd.mFormatFlags & kAudioFormatFlagIsFloat) != 0
+        let bytesPerSample = Int(asbd.mBitsPerChannel / 8)
+        let channels = max(1, Int(asbd.mChannelsPerFrame))
+        guard bytesPerSample > 0 else { return 0 }
+        let sampleCount = Int(buffer.mDataByteSize) / (bytesPerSample * channels)
+        guard sampleCount > 0 else { return 0 }
 
-        let blockBuffer: CMBlockBuffer?
-        var block: CMBlockBuffer?
-        data.withUnsafeBytes { rawPtr in
-            guard let baseAddress = rawPtr.baseAddress else { return }
-            CMBlockBufferCreateWithMemoryBlock(
-                allocator: kCFAllocatorDefault,
-                memoryBlock: nil,
-                blockLength: dataSize,
-                blockAllocator: kCFAllocatorDefault,
-                customBlockSource: nil,
-                offsetToData: 0,
-                dataLength: dataSize,
-                flags: 0,
-                blockBufferOut: &block
-            )
-            if let block {
-                CMBlockBufferReplaceDataBytes(
-                    with: baseAddress,
-                    blockBuffer: block,
-                    offsetIntoDestination: 0,
-                    dataLength: dataSize
-                )
+        var sumSquares = 0.0
+        if isFloat {
+            let floatSamples = data.bindMemory(to: Float.self, capacity: sampleCount)
+            for index in 0..<sampleCount {
+                let value = Double(floatSamples[index])
+                sumSquares += value * value
+            }
+        } else {
+            let intSamples = data.bindMemory(to: Int16.self, capacity: sampleCount)
+            for index in 0..<sampleCount {
+                let value = Double(intSamples[index]) / Double(Int16.max)
+                sumSquares += value * value
             }
         }
-        blockBuffer = block
 
-        guard let blockBuffer else { return nil }
+        return min(1, sqrt(sumSquares / Double(sampleCount)))
+    }
 
-        CMSampleBufferCreate(
-            allocator: kCFAllocatorDefault,
-            dataBuffer: blockBuffer,
-            dataReady: true,
-            makeDataReadyCallback: nil,
-            refcon: nil,
-            formatDescription: formatDesc,
-            sampleCount: frameCount,
-            sampleTimingEntryCount: 1,
-            sampleTimingArray: &timing,
-            sampleSizeEntryCount: 0,
-            sampleSizeArray: nil,
-            sampleBufferOut: &sampleBuffer
-        )
+    private func observeMicrophoneSession(_ session: AVCaptureSession) {
+        let runtimeObserver = NotificationCenter.default.addObserver(
+            forName: AVCaptureSession.runtimeErrorNotification,
+            object: session,
+            queue: .main
+        ) { [weak self] notification in
+            let error = (notification.userInfo?[AVCaptureSessionErrorKey] as? NSError)?.localizedDescription
+                ?? "Microphone became unavailable."
+            self?.onMicrophoneError?(error)
+        }
+        microphoneObservers.append(runtimeObserver)
 
-        return sampleBuffer
+        let interruptedObserver = NotificationCenter.default.addObserver(
+            forName: AVCaptureSession.wasInterruptedNotification,
+            object: session,
+            queue: .main
+        ) { [weak self] _ in
+            self?.onMicrophoneError?("Microphone input was interrupted.")
+        }
+        microphoneObservers.append(interruptedObserver)
+
+        let interruptionEndedObserver = NotificationCenter.default.addObserver(
+            forName: AVCaptureSession.interruptionEndedNotification,
+            object: session,
+            queue: .main
+        ) { [weak self] _ in
+            self?.onMicrophoneWarning?(nil)
+        }
+        microphoneObservers.append(interruptionEndedObserver)
     }
 
     func stop() async throws -> URL {
         // Stop mic capture first
-        audioEngine?.inputNode.removeTap(onBus: 0)
-        audioEngine?.stop()
-        audioEngine = nil
+        stopMicrophoneCapture()
 
         try await stream?.stopCapture()
         stream = nil
@@ -248,6 +314,59 @@ class VideoRecorder: NSObject, @unchecked Sendable {
                 }
             }
         }
+    }
+
+    private func stopMicrophoneCapture() {
+        if let session = microphoneSession {
+            if session.isRunning {
+                session.stopRunning()
+            }
+        }
+        for observer in microphoneObservers {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        microphoneObservers.removeAll()
+        microphoneOutputDelegate = nil
+        microphoneSession = nil
+    }
+
+    private func resetAfterFailedStart(removeOutputFile: Bool) async {
+        stopMicrophoneCapture()
+        if let stream {
+            try? await stream.stopCapture()
+        }
+        stream = nil
+        writer?.cancelWriting()
+        writer = nil
+        videoInput = nil
+        systemAudioInput = nil
+        micAudioInput = nil
+        hasStartedWriting = false
+        recordSystemAudio = false
+        recordMicrophone = false
+        onMicrophoneWarning?(nil)
+        onMicrophoneLevel?(0)
+        onMicrophoneDeviceName?("")
+        if removeOutputFile, let outputURL {
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+        outputURL = nil
+    }
+}
+
+private final class MicrophoneOutputDelegate: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
+    private let onSampleBuffer: (CMSampleBuffer) -> Void
+
+    init(onSampleBuffer: @escaping (CMSampleBuffer) -> Void) {
+        self.onSampleBuffer = onSampleBuffer
+    }
+
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
+        onSampleBuffer(sampleBuffer)
     }
 }
 
