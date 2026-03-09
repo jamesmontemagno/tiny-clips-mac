@@ -115,7 +115,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         if recordMicrophone {
             let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
             if micGranted {
-                try startMicCapture(selectedDeviceID: settings.selectedMicrophoneID)
+                try startMicCapture(selectedMicrophoneID: settings.selectedMicrophoneID)
             } else {
                 self.recordMicrophone = false
                 self.micAudioInput = nil
@@ -124,16 +124,14 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         }
     }
 
-    private func startMicCapture(selectedDeviceID: String) throws {
+    private func startMicCapture(selectedMicrophoneID: String) throws {
         let device: AVCaptureDevice
-        if let selected = MicrophoneDeviceCatalog.device(for: selectedDeviceID) {
+        if let selected = MicrophoneDeviceCatalog.device(for: selectedMicrophoneID) {
             device = selected
-        } else if selectedDeviceID.isEmpty, let `default` = AVCaptureDevice.default(for: .audio) {
+        } else if selectedMicrophoneID.isEmpty, let `default` = AVCaptureDevice.default(for: .audio) {
             device = `default`
         } else {
-            throw NSError(domain: "VideoRecorder", code: 901, userInfo: [
-                NSLocalizedDescriptionKey: "The selected microphone is unavailable. Choose another input device in Settings."
-            ])
+            throw CaptureError.microphoneUnavailable
         }
 
         onMicrophoneDeviceName?(device.localizedName)
@@ -142,9 +140,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         let session = AVCaptureSession()
         let input = try AVCaptureDeviceInput(device: device)
         guard session.canAddInput(input) else {
-            throw NSError(domain: "VideoRecorder", code: 902, userInfo: [
-                NSLocalizedDescriptionKey: "Could not connect to the selected microphone."
-            ])
+            throw CaptureError.microphoneConnectionFailed
         }
         session.addInput(input)
 
@@ -152,11 +148,9 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         let delegate = MicrophoneOutputDelegate { [weak self] sampleBuffer in
             self?.handleMicrophoneSampleBuffer(sampleBuffer)
         }
-        output.setSampleBufferDelegate(delegate, queue: writingQueue)
+        output.setSampleBufferDelegate(delegate, queue: microphoneQueue)
         guard session.canAddOutput(output) else {
-            throw NSError(domain: "VideoRecorder", code: 903, userInfo: [
-                NSLocalizedDescriptionKey: "Could not read audio from the selected microphone."
-            ])
+            throw CaptureError.microphoneReadFailed
         }
         session.addOutput(output)
 
@@ -182,8 +176,10 @@ class VideoRecorder: NSObject, @unchecked Sendable {
             onMicrophoneWarning?("No microphone input detected or microphone may be muted.")
         }
 
-        guard hasStartedWriting, let micAudioInput, micAudioInput.isReadyForMoreMediaData else { return }
-        micAudioInput.append(sampleBuffer)
+        writingQueue.async { [weak self] in
+            guard let self, self.hasStartedWriting, let micAudioInput = self.micAudioInput, micAudioInput.isReadyForMoreMediaData else { return }
+            micAudioInput.append(sampleBuffer)
+        }
     }
 
     private func rmsLevel(from sampleBuffer: CMSampleBuffer) -> Double {
@@ -288,10 +284,8 @@ class VideoRecorder: NSObject, @unchecked Sendable {
 
     private func stopMicrophoneCapture() {
         if let session = microphoneSession {
-            microphoneQueue.sync {
-                if session.isRunning {
-                    session.stopRunning()
-                }
+            if session.isRunning {
+                session.stopRunning()
             }
         }
         for observer in microphoneObservers {

@@ -84,6 +84,9 @@ enum CaptureError: LocalizedError {
     case saveFailed
     case noFrames
     case permissionDenied
+    case microphoneUnavailable
+    case microphoneConnectionFailed
+    case microphoneReadFailed
 
     var errorDescription: String? {
         switch self {
@@ -91,6 +94,9 @@ enum CaptureError: LocalizedError {
         case .saveFailed: return "Failed to save the capture."
         case .noFrames: return "No frames were captured."
         case .permissionDenied: return "Screen recording permission is required."
+        case .microphoneUnavailable: return "The selected microphone is unavailable. Choose another input device in Settings."
+        case .microphoneConnectionFailed: return "Could not connect to the selected microphone."
+        case .microphoneReadFailed: return "Could not read audio from the selected microphone."
         }
     }
 }
