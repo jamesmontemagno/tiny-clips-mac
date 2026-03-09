@@ -217,6 +217,7 @@ class CaptureManager: ObservableObject {
 
     func takeScreenshot() {
         Task {
+            await prepareForNewCaptureRequest()
             guard await PermissionManager.shared.checkPermission() else { return }
             showScreenshotPicker()
         }
@@ -342,6 +343,7 @@ class CaptureManager: ObservableObject {
 
     func startVideoRecording() {
         Task {
+            await prepareForNewCaptureRequest()
             guard await PermissionManager.shared.checkPermission() else { return }
             showRecordingPicker(for: .video)
         }
@@ -422,6 +424,7 @@ class CaptureManager: ObservableObject {
 
     func startGifRecording() {
         Task {
+            await prepareForNewCaptureRequest()
             guard await PermissionManager.shared.checkPermission() else { return }
             showRecordingPicker(for: .gif)
         }
@@ -459,74 +462,95 @@ class CaptureManager: ObservableObject {
 
     func stopRecording() {
         Task {
+            await stopRecordingFlow()
+        }
+    }
 
-            var savedVideoURL: URL?
+    private func stopRecordingFlow() async {
+        var savedVideoURL: URL?
 
-            if let recorder = videoRecorder {
-                do {
-                    savedVideoURL = try await recorder.stop()
-                } catch {
-                    SaveService.shared.showError("Video save failed: \(error.localizedDescription)")
-                }
-                videoRecorder = nil
+        if let recorder = videoRecorder {
+            do {
+                savedVideoURL = try await recorder.stop()
+            } catch {
+                SaveService.shared.showError("Video save failed: \(error.localizedDescription)")
             }
+            videoRecorder = nil
+        }
 
-            if let writer = gifWriter {
-                let url = SaveService.shared.generateURL(for: .gif)
-                do {
-                    let settings = CaptureSettings.shared
-                    let shouldSaveImmediately = !settings.showGifTrimmer || settings.saveImmediatelyGif
+        if let writer = gifWriter {
+            let url = SaveService.shared.generateURL(for: .gif)
+            do {
+                let settings = CaptureSettings.shared
+                let shouldSaveImmediately = !settings.showGifTrimmer || settings.saveImmediatelyGif
 
-                    if settings.showGifTrimmer {
-                        let gifData = try await writer.stopAndReturnData()
+                if settings.showGifTrimmer {
+                    let gifData = try await writer.stopAndReturnData()
 
-                        if shouldSaveImmediately {
-                            try GifWriter.writeGIF(
-                                frames: gifData.frames,
-                                frameDelay: gifData.frameDelay,
-                                maxWidth: gifData.maxWidth,
-                                to: url
-                            )
-                            SaveService.shared.handleSavedFile(url: url, type: .gif)
-                        }
-
-                        showGifTrimmer(gifData: gifData, outputURL: url)
-                    } else {
-                        try await writer.stop(outputURL: url)
+                    if shouldSaveImmediately {
+                        try GifWriter.writeGIF(
+                            frames: gifData.frames,
+                            frameDelay: gifData.frameDelay,
+                            maxWidth: gifData.maxWidth,
+                            to: url
+                        )
                         SaveService.shared.handleSavedFile(url: url, type: .gif)
                     }
-                } catch {
-                    SaveService.shared.showError("GIF save failed: \(error.localizedDescription)")
-                }
-                gifWriter = nil
-            }
 
-            isRecording = false
-            activeRecordingRegion = nil
-            dismissStopPanel()
-            dismissRegionIndicator()
-            resetRecordingAudioStatus()
-
-            // Show editor windows AFTER all recording resources are released
-            // and UI state is cleaned up, so AVPlayer doesn't contend with
-            // AVAssetWriter for the same file.
-            if let savedVideoURL {
-                let settings = CaptureSettings.shared
-                let shouldSaveImmediately = !settings.showTrimmer || settings.saveImmediatelyVideo
-
-                if settings.showTrimmer {
-                    if shouldSaveImmediately {
-                        SaveService.shared.handleSavedFile(url: savedVideoURL, type: .video)
-                    }
-
-                    showTrimmer(
-                        for: savedVideoURL,
-                        saveImmediately: shouldSaveImmediately
-                    )
+                    showGifTrimmer(gifData: gifData, outputURL: url)
                 } else {
+                    try await writer.stop(outputURL: url)
+                    SaveService.shared.handleSavedFile(url: url, type: .gif)
+                }
+            } catch {
+                SaveService.shared.showError("GIF save failed: \(error.localizedDescription)")
+            }
+            gifWriter = nil
+        }
+
+        isRecording = false
+        activeRecordingRegion = nil
+        dismissStopPanel()
+        dismissRegionIndicator()
+        resetRecordingAudioStatus()
+
+        // Show editor windows AFTER all recording resources are released
+        // and UI state is cleaned up, so AVPlayer doesn't contend with
+        // AVAssetWriter for the same file.
+        if let savedVideoURL {
+            let settings = CaptureSettings.shared
+            let shouldSaveImmediately = !settings.showTrimmer || settings.saveImmediatelyVideo
+
+            if settings.showTrimmer {
+                if shouldSaveImmediately {
                     SaveService.shared.handleSavedFile(url: savedVideoURL, type: .video)
                 }
+
+                showTrimmer(
+                    for: savedVideoURL,
+                    saveImmediately: shouldSaveImmediately
+                )
+            } else {
+                SaveService.shared.handleSavedFile(url: savedVideoURL, type: .video)
             }
+        }
+    }
+
+    private func prepareForNewCaptureRequest() async {
+        dismissScreenshotPicker()
+        dismissRecordingPicker()
+        dismissStartPanel()
+        countdownWindow?.cancel()
+        countdownWindow = nil
+        dismissRegionIndicator()
+
+        pendingRecordingRegion = nil
+        pendingRecordingType = nil
+
+        if videoRecorder != nil || gifWriter != nil || isRecording {
+            await stopRecordingFlow()
+        } else {
+            dismissStopPanel()
         }
     }
 

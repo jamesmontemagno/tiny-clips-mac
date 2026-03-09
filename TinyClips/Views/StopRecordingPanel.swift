@@ -34,6 +34,8 @@ class StopRecordingPanel: NSPanel {
 }
 
 private struct StopRecordingView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     @ObservedObject var captureManager: CaptureManager
     let onStop: () -> Void
     @State private var elapsed: TimeInterval = 0
@@ -49,7 +51,7 @@ private struct StopRecordingView: View {
 
             Text(formattedTime)
                 .monospacedDigit()
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .font(.system(size: 13, weight: .medium))
                 .accessibilityLabel("Elapsed recording time")
                 .accessibilityValue(formattedTime)
@@ -81,10 +83,11 @@ private struct StopRecordingView: View {
         .padding(.vertical, 8)
         .background {
             RoundedRectangle(cornerRadius: 10)
-                .fill(.black.opacity(0.8))
+                .fill(colorScheme == .dark ? Color.black.opacity(0.8) : Color.white.opacity(0.9))
+                .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 2)
                 .overlay {
                     RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                        .strokeBorder(.primary.opacity(0.15), lineWidth: 0.5)
                 }
         }
         .onReceive(timer) { _ in
@@ -110,7 +113,7 @@ private struct RecordingStatusIcon: View {
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(tint)
             .frame(width: 24, height: 24)
-            .background(.white.opacity(0.08))
+            .background(.primary.opacity(0.08))
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .accessibilityLabel(accessibilityLabel)
             .accessibilityValue(accessibilityValue)

@@ -60,6 +60,8 @@ class StartRecordingPanel: NSPanel {
 }
 
 private struct StartRecordingView: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     struct MicrophoneState {
         let enabled: Bool
         let deviceID: String
@@ -80,9 +82,9 @@ private struct StartRecordingView: View {
             } label: {
                 Image(systemName: systemAudio ? "speaker.wave.2.fill" : "speaker.slash.fill")
                     .font(.system(size: 13))
-                    .foregroundStyle(systemAudio ? .white : .white.opacity(0.4))
+                    .foregroundStyle(systemAudio ? .white : .primary.opacity(0.5))
                     .frame(width: 28, height: 28)
-                    .background(systemAudio ? .blue : .white.opacity(0.15))
+                    .background(systemAudio ? .blue : .primary.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
@@ -97,9 +99,9 @@ private struct StartRecordingView: View {
             } label: {
                 Image(systemName: microphone ? "mic.fill" : "mic.slash.fill")
                     .font(.system(size: 13))
-                    .foregroundStyle(microphone ? .white : .white.opacity(0.4))
+                    .foregroundStyle(microphone ? .white : .primary.opacity(0.5))
                     .frame(width: 28, height: 28)
-                    .background(microphone ? .blue : .white.opacity(0.15))
+                    .background(microphone ? .blue : .primary.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
@@ -122,7 +124,7 @@ private struct StartRecordingView: View {
 
             Divider()
                 .frame(height: 20)
-                .overlay(.white.opacity(0.2))
+                .overlay(.primary.opacity(0.2))
 
             // Start button
             Button {
@@ -151,9 +153,9 @@ private struct StartRecordingView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.primary.opacity(0.6))
                     .frame(width: 24, height: 24)
-                    .background(.white.opacity(0.1))
+                    .background(.primary.opacity(0.1))
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
@@ -167,10 +169,11 @@ private struct StartRecordingView: View {
         .fixedSize()
         .background {
             RoundedRectangle(cornerRadius: 10)
-                .fill(.black.opacity(0.8))
+                .fill(colorScheme == .dark ? Color.black.opacity(0.8) : Color.white.opacity(0.9))
+                .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 2)
                 .overlay {
                     RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+                        .strokeBorder(.primary.opacity(0.15), lineWidth: 0.5)
                 }
         }
     }
