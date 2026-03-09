@@ -82,9 +82,7 @@ private struct MenuBarContentView: View {
 #endif
         Button("Clips Manager…") {
             openWindow(id: "clips-manager")
-            DispatchQueue.main.async {
-                NSRunningApplication.current.activate(options: [.activateAllWindows])
-            }
+            bringClipsManagerWindowToFront()
         }
 
 #if APPSTORE
@@ -102,9 +100,7 @@ private struct MenuBarContentView: View {
 
         Button("Settings…") {
             openWindow(id: "settings-window")
-            DispatchQueue.main.async {
-                NSRunningApplication.current.activate(options: [.activateAllWindows])
-            }
+            bringSettingsWindowToFront()
         }
         .keyboardShortcut(",", modifiers: .command)
         .accessibilityHint("Opens TinyClips settings.")
@@ -115,6 +111,42 @@ private struct MenuBarContentView: View {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)
+    }
+
+    private func bringSettingsWindowToFront() {
+        DispatchQueue.main.async {
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
+            if let settingsWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == "settings-window" || $0.title == "Tiny Clips Settings" }) {
+                settingsWindow.makeKeyAndOrderFront(nil)
+                settingsWindow.orderFrontRegardless()
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
+            if let settingsWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == "settings-window" || $0.title == "Tiny Clips Settings" }) {
+                settingsWindow.makeKeyAndOrderFront(nil)
+                settingsWindow.orderFrontRegardless()
+            }
+        }
+    }
+
+    private func bringClipsManagerWindowToFront() {
+        DispatchQueue.main.async {
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
+            if let clipsWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == "clips-manager" || $0.title == "Clips Manager" }) {
+                clipsWindow.makeKeyAndOrderFront(nil)
+                clipsWindow.orderFrontRegardless()
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            NSRunningApplication.current.activate(options: [.activateAllWindows])
+            if let clipsWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == "clips-manager" || $0.title == "Clips Manager" }) {
+                clipsWindow.makeKeyAndOrderFront(nil)
+                clipsWindow.orderFrontRegardless()
+            }
+        }
     }
 }
 
