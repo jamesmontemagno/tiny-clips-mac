@@ -1,16 +1,40 @@
-<?xml version="1.0" standalone="yes"?>
+<?xml version="1.0" encoding="utf-8"?>
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    
+    
     <channel>
+        
+        
         <title>TinyClips</title>
+        
+        
         <item>
-            <title>0.0.19</title>
-            <pubDate>Sun, 08 Mar 2026 15:30:32 +0000</pubDate>
-            <sparkle:version>23</sparkle:version>
-            <sparkle:shortVersionString>0.0.19</sparkle:shortVersionString>
+            
+            
+            <title>0.0.20</title>
+            
+            
+            <pubDate>Mon, 09 Mar 2026 19:06:56 +0000</pubDate>
+            
+            
+            <sparkle:version>24</sparkle:version>
+            
+            
+            <sparkle:shortVersionString>0.0.20</sparkle:shortVersionString>
+            
+            
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h3>Added</h3><ul><li>Subscription management and restore purchase functionality.</li><li>Clips Manager with Uploadcare integration for user uploads.</li><li>Smart default file naming templates with live preview.</li><li>Option to include TinyClips windows in captures.</li><li>Collapsible sidebar toggle in Clips Manager.</li><li>Sidebar filters and tag management in Clips Manager.</li><li>Accessibility enhancements across various views, including keyboard shortcuts and hints.</li><li>Help text and improved issue reporting template in settings.</li><li>Enhanced clipboard options in CaptureSettings.</li></ul><h3>Improved</h3><ul><li>Dimension display in RegionSelectionView to include both point and pixel values for clarity.</li><li>Capture region handling with pixelWidth and pixelHeight properties for accuracy.</li><li>DPI settings with scaleFactor parameter in saveImage function.</li><li>Pixel dimension calculations for capture region settings in trimmer views.</li><li>Clips Manager UI with collapsible sidebar and improved grid layout stability.</li><li>Settings sections organization and layout improvements.</li><li>Image capture and display logic in ScreenshotCapture and RegionIndicatorPanel.</li></ul><h3>Fixed</h3><ul><li>Save notifications are now always presented with Finder open on click.</li><li>Grid cell overlap issues in Clips Manager.</li><li>Sidebar toggle no longer shifts with split view state.</li><li>Grid thumbnail overlap issues in Clips Manager.</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v0.0.18...v0.0.19">Full Changelog</a></p>]]></description>
-            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v0.0.19</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v0.0.19/TinyClips-v0.0.19.zip" length="2795791" type="application/octet-stream" sparkle:edSignature="XagBGNP4eo94HCHoTOTQHI7WOeN7LJ7s+LzY3q/FlaaOeCA0RgSL1GVat7BnP2JR8fqt7Sufvj/16YDDWu3jBg=="/>
+            
+            
+            <description><![CDATA[<h3>What's Changed</h3><ul><li>Update CHANGELOG.md for v0.0.20 release</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v0.0.19...v0.0.20">Full Changelog</a></p>]]></description>
+            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v0.0.20</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v0.0.20/TinyClips-v0.0.20.zip" length="2846987" type="application/octet-stream" sparkle:edSignature="Dvf5Nudm2i0z48jR4c2bAJD9/gOIySE+DEaa5PYZhRjLtMGZuYjXvoNj8JsEuqVeDt1RujThEyNDP4/aPIGtBA=="/>
+            
+        
         </item>
+        
+    
     </channel>
+    
+
 </rss>
