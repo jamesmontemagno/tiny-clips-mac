@@ -23,6 +23,8 @@ enum MicrophoneDeviceCatalog {
 }
 
 class VideoRecorder: NSObject, @unchecked Sendable {
+    private let microphoneSignalThreshold = 0.01
+    private let microphoneSignalTimeoutSeconds: TimeInterval = 2
     private var stream: SCStream?
     private var writer: AVAssetWriter?
     private var videoInput: AVAssetWriterInput?
@@ -169,10 +171,10 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         onMicrophoneLevel?(level)
 
         let now = CACurrentMediaTime()
-        if level > 0.01 {
+        if level > microphoneSignalThreshold {
             lastMicSignalAt = now
             onMicrophoneWarning?(nil)
-        } else if now - lastMicSignalAt > 2 {
+        } else if now - lastMicSignalAt > microphoneSignalTimeoutSeconds {
             onMicrophoneWarning?("No microphone input detected or microphone may be muted.")
         }
 
@@ -211,8 +213,9 @@ class VideoRecorder: NSObject, @unchecked Sendable {
 
         let isFloat = (asbd.mFormatFlags & kAudioFormatFlagIsFloat) != 0
         let bytesPerSample = Int(asbd.mBitsPerChannel / 8)
+        let channels = max(1, Int(asbd.mChannelsPerFrame))
         guard bytesPerSample > 0 else { return 0 }
-        let sampleCount = Int(buffer.mDataByteSize) / bytesPerSample
+        let sampleCount = Int(buffer.mDataByteSize) / (bytesPerSample * channels)
         guard sampleCount > 0 else { return 0 }
 
         var sumSquares = 0.0
@@ -244,6 +247,24 @@ class VideoRecorder: NSObject, @unchecked Sendable {
             self?.onMicrophoneError?(error)
         }
         microphoneObservers.append(runtimeObserver)
+
+        let interruptedObserver = NotificationCenter.default.addObserver(
+            forName: AVCaptureSession.wasInterruptedNotification,
+            object: session,
+            queue: .main
+        ) { [weak self] _ in
+            self?.onMicrophoneError?("Microphone input was interrupted.")
+        }
+        microphoneObservers.append(interruptedObserver)
+
+        let interruptionEndedObserver = NotificationCenter.default.addObserver(
+            forName: AVCaptureSession.interruptionEndedNotification,
+            object: session,
+            queue: .main
+        ) { [weak self] _ in
+            self?.onMicrophoneWarning?(nil)
+        }
+        microphoneObservers.append(interruptionEndedObserver)
     }
 
     func stop() async throws -> URL {

@@ -157,6 +157,9 @@ private struct MenuBarLabelView: View {
 }
 
 private struct AudioLevelBars: View {
+    // Low/medium/high thresholds for the 3-bar microphone level indicator.
+    private let levelThresholds = [0.1, 0.35, 0.65]
+    private let minimumBarHeight: CGFloat = 3
     let level: Double
     let hasWarning: Bool
 
@@ -174,8 +177,7 @@ private struct AudioLevelBars: View {
     }
 
     private func barHeight(for index: Int) -> CGFloat {
-        let thresholds = [0.1, 0.35, 0.65]
-        return level >= thresholds[index] ? CGFloat(5 + index * 2) : 3
+        return level >= levelThresholds[index] ? CGFloat(5 + index * 2) : minimumBarHeight
     }
 
     private func barColor(for index: Int) -> Color {
@@ -457,7 +459,7 @@ class CaptureManager: ObservableObject {
                     self.activeRecordingRegion = region
                     self.isRecording = true
                     self.recordingMicrophoneEnabled = microphone
-                    self.microphoneWarningMessage = microphone ? "Waiting for microphone input..." : nil
+                    self.microphoneWarningMessage = nil
                     self.microphoneLevel = 0
                     self.activeMicrophoneName = nil
 
