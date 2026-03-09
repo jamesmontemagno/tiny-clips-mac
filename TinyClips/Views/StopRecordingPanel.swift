@@ -54,6 +54,16 @@ private struct StopRecordingView: View {
                 .accessibilityLabel("Elapsed recording time")
                 .accessibilityValue(formattedTime)
 
+            if captureManager.recordingOutputAudioEnabled {
+                RecordingStatusIcon(
+                    systemName: "speaker.wave.2.fill",
+                    tint: captureManager.outputAudioWarningMessage == nil ? .green : .yellow,
+                    accessibilityLabel: "Output audio recording",
+                    accessibilityValue: captureManager.outputAudioWarningMessage ?? (captureManager.activeOutputAudioDeviceName ?? "Active")
+                )
+                .help(captureManager.outputAudioWarningMessage ?? captureManager.activeOutputAudioDeviceName ?? "Output audio is being recorded.")
+            }
+
             if captureManager.recordingMicrophoneEnabled {
                 RecordingStatusIcon(
                     systemName: "mic.fill",

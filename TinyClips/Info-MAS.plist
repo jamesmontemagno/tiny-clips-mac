@@ -24,6 +24,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>TinyClips needs microphone access to record your voice alongside screen recordings.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>TinyClips needs audio capture access to record output audio from your selected device.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

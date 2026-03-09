@@ -53,32 +53,26 @@ enum OutputAudioDeviceCatalog {
         return devices
     }
 
-    private static func deviceUID(for deviceID: AudioDeviceID) -> String? {
+    private static func copyStringProperty(_ selector: AudioObjectPropertySelector, of deviceID: AudioDeviceID) -> String? {
         var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyDeviceUID,
+            mSelector: selector,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        var uid: CFString = "" as CFString
-        var size = UInt32(MemoryLayout<CFString>.size)
-        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &uid) == noErr else {
+        var cfStr = Unmanaged<CFString>.passUnretained("" as CFString)
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>>.size)
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &cfStr) == noErr else {
             return nil
         }
-        return uid as String
+        return cfStr.takeUnretainedValue() as String
+    }
+
+    private static func deviceUID(for deviceID: AudioDeviceID) -> String? {
+        copyStringProperty(kAudioDevicePropertyDeviceUID, of: deviceID)
     }
 
     private static func deviceName(for deviceID: AudioDeviceID) -> String? {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioObjectPropertyName,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var name: CFString = "" as CFString
-        var size = UInt32(MemoryLayout<CFString>.size)
-        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &name) == noErr else {
-            return nil
-        }
-        return name as String
+        copyStringProperty(kAudioObjectPropertyName, of: deviceID)
     }
 
     private static func hasOutputStreams(deviceID: AudioDeviceID) -> Bool {
@@ -114,6 +108,28 @@ enum OutputAudioDeviceCatalog {
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
+    static func defaultOutputDeviceUID() -> String? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var deviceID: AudioDeviceID = kAudioObjectUnknown
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &deviceID) == noErr,
+              deviceID != kAudioObjectUnknown else {
+            return nil
+        }
+        return deviceUID(for: deviceID)
+    }
+
+    static func resolvedUID(from selectedUID: String) -> String {
+        let options = availableOptions()
+        if !selectedUID.isEmpty, options.contains(where: { $0.id == selectedUID }) {
+            return selectedUID
+        }
+        return defaultOutputDeviceUID() ?? ""
+    }
 }
 
 class VideoRecorder: NSObject, @unchecked Sendable {
@@ -127,10 +143,13 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     private var microphoneSession: AVCaptureSession?
     private var microphoneOutputDelegate: MicrophoneOutputDelegate?
     private var microphoneObservers: [NSObjectProtocol] = []
+    private var outputDeviceCapture: OutputDeviceCapture?
     private var lastMicSignalAt = CACurrentMediaTime()
+    private var lastOutputAudioSignalAt = CACurrentMediaTime()
     private var hasStartedWriting = false
     private var recordSystemAudio = false
     private var recordMicrophone = false
+    private var useOutputDeviceTap = false
     private var outputURL: URL?
     private let writingQueue = DispatchQueue(label: "com.tinyclips.video-writing")
     private let microphoneQueue = DispatchQueue(label: "com.tinyclips.microphone-capture")
@@ -138,6 +157,13 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     var onMicrophoneWarning: ((String?) -> Void)?
     var onMicrophoneDeviceName: ((String) -> Void)?
     var onMicrophoneError: ((String) -> Void)?
+    var onOutputAudioDeviceName: ((String) -> Void)?
+    var onOutputAudioLevel: ((Double) -> Void)?
+    var onOutputAudioWarning: ((String?) -> Void)?
+
+    var isOutputAudioActive: Bool {
+        recordSystemAudio
+    }
 
     var isMicrophoneCaptureActive: Bool {
         microphoneSession != nil && recordMicrophone
@@ -156,10 +182,24 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         self.recordSystemAudio = settings.recordAudio
         self.recordMicrophone = settings.recordMicrophone
 
+        let selectedOutputUID = settings.selectedOutputAudioDeviceUID
+        self.useOutputDeviceTap = recordSystemAudio && !selectedOutputUID.isEmpty
+
         if recordSystemAudio {
-            config.capturesAudio = true
-            config.sampleRate = 48000
-            config.channelCount = 2
+            let devices = OutputAudioDeviceCatalog.availableOptions()
+            let resolvedUID: String
+            if !selectedOutputUID.isEmpty, devices.contains(where: { $0.id == selectedOutputUID }) {
+                resolvedUID = selectedOutputUID
+            } else {
+                resolvedUID = OutputAudioDeviceCatalog.defaultOutputDeviceUID() ?? ""
+            }
+            onOutputAudioDeviceName?(devices.first(where: { $0.id == resolvedUID })?.name ?? "System Default")
+
+            if !useOutputDeviceTap {
+                config.capturesAudio = true
+                config.sampleRate = 48000
+                config.channelCount = 2
+            }
         }
 
         self.outputURL = outputURL
@@ -207,11 +247,21 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         do {
             let stream = SCStream(filter: filter, configuration: config, delegate: nil)
             try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: writingQueue)
-            if recordSystemAudio {
+            if recordSystemAudio && !useOutputDeviceTap {
                 try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: writingQueue)
             }
             try await stream.startCapture()
             self.stream = stream
+
+            if useOutputDeviceTap {
+                let resolvedUID = OutputAudioDeviceCatalog.resolvedUID(from: selectedOutputUID)
+                let capture = OutputDeviceCapture()
+                capture.onSampleBuffer = { [weak self] sampleBuffer in
+                    self?.handleOutputAudioSampleBuffer(sampleBuffer)
+                }
+                try capture.start(deviceUID: resolvedUID)
+                self.outputDeviceCapture = capture
+            }
 
             if recordMicrophone {
                 let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
@@ -284,6 +334,26 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         writingQueue.async { [weak self] in
             guard let self, self.hasStartedWriting, let micAudioInput = self.micAudioInput, micAudioInput.isReadyForMoreMediaData else { return }
             micAudioInput.append(sampleBuffer)
+        }
+    }
+
+    private func handleOutputAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+        guard sampleBuffer.isValid else { return }
+
+        let level = rmsLevel(from: sampleBuffer)
+        onOutputAudioLevel?(level)
+
+        let now = CACurrentMediaTime()
+        if level > microphoneSignalThreshold {
+            lastOutputAudioSignalAt = now
+            onOutputAudioWarning?(nil)
+        } else if now - lastOutputAudioSignalAt > microphoneSignalTimeoutSeconds {
+            onOutputAudioWarning?("No output audio signal detected.")
+        }
+
+        writingQueue.async { [weak self] in
+            guard let self, self.hasStartedWriting, let systemAudioInput = self.systemAudioInput, systemAudioInput.isReadyForMoreMediaData else { return }
+            systemAudioInput.append(sampleBuffer)
         }
     }
 
@@ -371,7 +441,8 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     }
 
     func stop() async throws -> URL {
-        // Stop mic capture first
+        // Stop auxiliary capture first
+        stopOutputDeviceCapture()
         stopMicrophoneCapture()
 
         try await stream?.stopCapture()
@@ -420,7 +491,13 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         microphoneSession = nil
     }
 
+    private func stopOutputDeviceCapture() {
+        outputDeviceCapture?.stop()
+        outputDeviceCapture = nil
+    }
+
     private func resetAfterFailedStart(removeOutputFile: Bool) async {
+        stopOutputDeviceCapture()
         stopMicrophoneCapture()
         if let stream {
             try? await stream.stopCapture()
@@ -434,9 +511,13 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         hasStartedWriting = false
         recordSystemAudio = false
         recordMicrophone = false
+        useOutputDeviceTap = false
         onMicrophoneWarning?(nil)
         onMicrophoneLevel?(0)
         onMicrophoneDeviceName?("")
+        onOutputAudioDeviceName?("")
+        onOutputAudioLevel?(0)
+        onOutputAudioWarning?(nil)
         if removeOutputFile, let outputURL {
             try? FileManager.default.removeItem(at: outputURL)
         }
@@ -488,6 +569,17 @@ extension VideoRecorder: SCStreamOutput {
             }
 
         case .audio:
+            // Meter output audio level for the stop panel indicator
+            let level = rmsLevel(from: sampleBuffer)
+            onOutputAudioLevel?(level)
+            let now = CACurrentMediaTime()
+            if level > microphoneSignalThreshold {
+                lastOutputAudioSignalAt = now
+                onOutputAudioWarning?(nil)
+            } else if now - lastOutputAudioSignalAt > microphoneSignalTimeoutSeconds {
+                onOutputAudioWarning?("No output audio signal detected.")
+            }
+
             guard hasStartedWriting, let systemAudioInput, systemAudioInput.isReadyForMoreMediaData else { return }
             systemAudioInput.append(sampleBuffer)
 
@@ -497,5 +589,247 @@ extension VideoRecorder: SCStreamOutput {
         @unknown default:
             break
         }
+    }
+}
+
+// MARK: - Output Device Capture via Core Audio Tap
+
+private func outputDeviceInputCallback(
+    _ inRefCon: UnsafeMutableRawPointer,
+    _ ioActionFlags: UnsafeMutablePointer<AudioUnitRenderActionFlags>,
+    _ inTimeStamp: UnsafePointer<AudioTimeStamp>,
+    _ inBusNumber: UInt32,
+    _ inNumberFrames: UInt32,
+    _ ioData: UnsafeMutablePointer<AudioBufferList>?
+) -> OSStatus {
+    let capture = Unmanaged<OutputDeviceCapture>.fromOpaque(inRefCon).takeUnretainedValue()
+    capture.renderAndDeliver(
+        actionFlags: ioActionFlags,
+        timeStamp: inTimeStamp,
+        busNumber: inBusNumber,
+        numFrames: inNumberFrames
+    )
+    return noErr
+}
+
+private final class OutputDeviceCapture: @unchecked Sendable {
+    private var tapID: AudioObjectID = kAudioObjectUnknown
+    private var aggregateDeviceID: AudioDeviceID = kAudioObjectUnknown
+    fileprivate var audioUnit: AudioComponentInstance?
+    private var formatDescription: CMAudioFormatDescription?
+
+    var onSampleBuffer: ((CMSampleBuffer) -> Void)?
+
+    func start(deviceUID: String) throws {
+        // 1. Create a process tap that captures all output audio on the device
+        let tapDesc = CATapDescription(stereoGlobalTapButExcludeProcesses: [])
+        tapDesc.deviceUID = deviceUID
+        tapDesc.isPrivate = true
+        tapDesc.muteBehavior = .unmuted
+        tapDesc.name = "TinyClips Output Tap"
+
+        var tapObjectID: AudioObjectID = kAudioObjectUnknown
+        let tapStatus = AudioHardwareCreateProcessTap(tapDesc, &tapObjectID)
+        guard tapStatus == noErr else { throw CaptureError.outputAudioStartFailed }
+        self.tapID = tapObjectID
+
+        // 2. Create an aggregate device that reads from the tap
+        let tapUUID = tapDesc.uuid.uuidString
+        let aggDesc: NSDictionary = [
+            kAudioAggregateDeviceUIDKey: "com.tinyclips.tap-\(UUID().uuidString)",
+            kAudioAggregateDeviceNameKey: "TinyClips Output Capture",
+            kAudioAggregateDeviceIsPrivateKey: true,
+            kAudioAggregateDeviceTapListKey: [
+                [kAudioSubTapUIDKey: tapUUID]
+            ],
+            kAudioAggregateDeviceTapAutoStartKey: true,
+        ]
+
+        var aggDeviceID: AudioDeviceID = kAudioObjectUnknown
+        let aggStatus = AudioHardwareCreateAggregateDevice(aggDesc, &aggDeviceID)
+        guard aggStatus == noErr else {
+            AudioHardwareDestroyProcessTap(tapObjectID)
+            tapID = kAudioObjectUnknown
+            throw CaptureError.outputAudioStartFailed
+        }
+        self.aggregateDeviceID = aggDeviceID
+
+        // 3. Create AUHAL audio unit for input capture from the aggregate device
+        var componentDesc = AudioComponentDescription(
+            componentType: kAudioUnitType_Output,
+            componentSubType: kAudioUnitSubType_HALOutput,
+            componentManufacturer: kAudioUnitManufacturer_Apple,
+            componentFlags: 0,
+            componentFlagsMask: 0
+        )
+        guard let component = AudioComponentFindNext(nil, &componentDesc) else {
+            throw CaptureError.outputAudioStartFailed
+        }
+
+        var unit: AudioComponentInstance?
+        guard AudioComponentInstanceNew(component, &unit) == noErr, let unit else {
+            throw CaptureError.outputAudioStartFailed
+        }
+
+        // Enable input on bus 1, disable output on bus 0
+        var enableIO: UInt32 = 1
+        AudioUnitSetProperty(unit, kAudioOutputUnitProperty_EnableIO,
+                             kAudioUnitScope_Input, 1,
+                             &enableIO, UInt32(MemoryLayout<UInt32>.size))
+
+        var disableIO: UInt32 = 0
+        AudioUnitSetProperty(unit, kAudioOutputUnitProperty_EnableIO,
+                             kAudioUnitScope_Output, 0,
+                             &disableIO, UInt32(MemoryLayout<UInt32>.size))
+
+        // Point the AUHAL at the aggregate device
+        var devID = aggDeviceID
+        AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
+                             kAudioUnitScope_Global, 0,
+                             &devID, UInt32(MemoryLayout<AudioDeviceID>.size))
+
+        // Set desired client format: interleaved Float32, 48 kHz, stereo
+        var clientFormat = AudioStreamBasicDescription(
+            mSampleRate: 48000,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+            mBytesPerPacket: 8,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: 8,
+            mChannelsPerFrame: 2,
+            mBitsPerChannel: 32,
+            mReserved: 0
+        )
+        AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat,
+                             kAudioUnitScope_Output, 1,
+                             &clientFormat,
+                             UInt32(MemoryLayout<AudioStreamBasicDescription>.size))
+
+        // Build CMAudioFormatDescription for CMSampleBuffer creation
+        var fmtDesc: CMAudioFormatDescription?
+        CMAudioFormatDescriptionCreate(
+            allocator: kCFAllocatorDefault,
+            asbd: &clientFormat,
+            layoutSize: 0, layout: nil,
+            magicCookieSize: 0, magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &fmtDesc
+        )
+        self.formatDescription = fmtDesc
+
+        // Install input callback
+        var callbackStruct = AURenderCallbackStruct(
+            inputProc: outputDeviceInputCallback,
+            inputProcRefCon: Unmanaged.passUnretained(self).toOpaque()
+        )
+        AudioUnitSetProperty(unit, kAudioOutputUnitProperty_SetInputCallback,
+                             kAudioUnitScope_Global, 0,
+                             &callbackStruct,
+                             UInt32(MemoryLayout<AURenderCallbackStruct>.size))
+
+        // Initialize and start
+        guard AudioUnitInitialize(unit) == noErr else {
+            AudioComponentInstanceDispose(unit)
+            throw CaptureError.outputAudioStartFailed
+        }
+
+        self.audioUnit = unit
+
+        guard AudioOutputUnitStart(unit) == noErr else {
+            AudioUnitUninitialize(unit)
+            AudioComponentInstanceDispose(unit)
+            self.audioUnit = nil
+            throw CaptureError.outputAudioStartFailed
+        }
+    }
+
+    func stop() {
+        if let unit = audioUnit {
+            AudioOutputUnitStop(unit)
+            AudioUnitUninitialize(unit)
+            AudioComponentInstanceDispose(unit)
+            audioUnit = nil
+        }
+        if aggregateDeviceID != kAudioObjectUnknown {
+            AudioHardwareDestroyAggregateDevice(aggregateDeviceID)
+            aggregateDeviceID = kAudioObjectUnknown
+        }
+        if tapID != kAudioObjectUnknown {
+            AudioHardwareDestroyProcessTap(tapID)
+            tapID = kAudioObjectUnknown
+        }
+        formatDescription = nil
+    }
+
+    // Called from the Core Audio I/O thread via the C callback
+    fileprivate func renderAndDeliver(
+        actionFlags: UnsafeMutablePointer<AudioUnitRenderActionFlags>,
+        timeStamp: UnsafePointer<AudioTimeStamp>,
+        busNumber: UInt32,
+        numFrames: UInt32
+    ) {
+        guard let unit = audioUnit, let formatDescription else { return }
+
+        let bytesPerFrame: UInt32 = 8 // 2 channels × 4 bytes (Float32)
+        let bufferByteSize = numFrames * bytesPerFrame
+        let data = UnsafeMutableRawPointer.allocate(byteCount: Int(bufferByteSize), alignment: 4)
+
+        var bufferList = AudioBufferList(
+            mNumberBuffers: 1,
+            mBuffers: AudioBuffer(
+                mNumberChannels: 2,
+                mDataByteSize: bufferByteSize,
+                mData: data
+            )
+        )
+
+        let renderStatus = AudioUnitRender(unit, actionFlags, timeStamp, busNumber, numFrames, &bufferList)
+        guard renderStatus == noErr else {
+            data.deallocate()
+            return
+        }
+
+        // Build a CMSampleBuffer from the rendered audio
+        let pts = CMClockMakeHostTimeFromSystemUnits(timeStamp.pointee.mHostTime)
+        var timing = CMSampleTimingInfo(
+            duration: CMTime(value: 1, timescale: 48000),
+            presentationTimeStamp: pts,
+            decodeTimeStamp: .invalid
+        )
+
+        var sampleBuffer: CMSampleBuffer?
+        let createStatus = CMSampleBufferCreate(
+            allocator: kCFAllocatorDefault,
+            dataBuffer: nil,
+            dataReady: false,
+            makeDataReadyCallback: nil,
+            refcon: nil,
+            formatDescription: formatDescription,
+            sampleCount: CMItemCount(numFrames),
+            sampleTimingEntryCount: 1,
+            sampleTimingArray: &timing,
+            sampleSizeEntryCount: 0,
+            sampleSizeArray: nil,
+            sampleBufferOut: &sampleBuffer
+        )
+
+        guard createStatus == noErr, let sampleBuffer else {
+            data.deallocate()
+            return
+        }
+
+        // Copy audio data into the sample buffer's block buffer
+        let setDataStatus = CMSampleBufferSetDataBufferFromAudioBufferList(
+            sampleBuffer,
+            blockBufferAllocator: kCFAllocatorDefault,
+            blockBufferMemoryAllocator: kCFAllocatorDefault,
+            flags: 0,
+            bufferList: &bufferList
+        )
+
+        data.deallocate()
+
+        guard setDataStatus == noErr else { return }
+        onSampleBuffer?(sampleBuffer)
     }
 }

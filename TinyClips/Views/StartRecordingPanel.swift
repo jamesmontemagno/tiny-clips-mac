@@ -1,11 +1,18 @@
 import AppKit
 import SwiftUI
 
+struct RecordingOptions {
+    let systemAudio: Bool
+    let selectedOutputAudioDeviceUID: String
+    let microphone: Bool
+    let selectedMicrophoneID: String
+}
+
 class StartRecordingPanel: NSPanel {
-    private var onStart: ((Bool, String, Bool, String) -> Void)?
+    private var onStart: ((RecordingOptions) -> Void)?
     private var onCancel: (() -> Void)?
 
-    convenience init(onStart: @escaping (Bool, String, Bool, String) -> Void, onCancel: @escaping () -> Void) {
+    convenience init(onStart: @escaping (RecordingOptions) -> Void, onCancel: @escaping () -> Void) {
         self.init(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -28,8 +35,8 @@ class StartRecordingPanel: NSPanel {
             microphone: settings.recordMicrophone,
             selectedOutputAudioDeviceUID: settings.selectedOutputAudioDeviceUID,
             selectedMicrophoneID: settings.selectedMicrophoneID,
-            onStart: { [weak self] systemAudio, outputDeviceUID, mic in
-                self?.onStart?(systemAudio, outputDeviceUID, mic.enabled, mic.deviceID)
+            onStart: { [weak self] options in
+                self?.onStart?(options)
                 self?.onStart = nil
                 self?.onCancel = nil
             },
@@ -61,18 +68,13 @@ class StartRecordingPanel: NSPanel {
 }
 
 private struct StartRecordingView: View {
-    struct MicrophoneState {
-        let enabled: Bool
-        let deviceID: String
-    }
-
     @State var systemAudio: Bool
     @State var microphone: Bool
     @State var selectedOutputAudioDeviceUID: String
     @State var selectedMicrophoneID: String
     @State private var outputDevices: [OutputAudioDeviceOption] = []
     private let microphones = MicrophoneDeviceCatalog.availableOptions()
-    let onStart: (Bool, String, MicrophoneState) -> Void
+    let onStart: (RecordingOptions) -> Void
     let onCancel: () -> Void
 
     var body: some View {
@@ -143,7 +145,12 @@ private struct StartRecordingView: View {
 
             // Start button
             Button {
-                onStart(systemAudio, selectedOutputAudioDeviceUID, .init(enabled: microphone, deviceID: selectedMicrophoneID))
+                onStart(RecordingOptions(
+                    systemAudio: systemAudio,
+                    selectedOutputAudioDeviceUID: selectedOutputAudioDeviceUID,
+                    microphone: microphone,
+                    selectedMicrophoneID: selectedMicrophoneID
+                ))
             } label: {
                 HStack(spacing: 5) {
                     Circle()

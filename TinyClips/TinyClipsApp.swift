@@ -138,6 +138,10 @@ class CaptureManager: ObservableObject {
     @Published var activeMicrophoneName: String?
     @Published var microphoneLevel: Double = 0
     @Published var microphoneWarningMessage: String?
+    @Published var recordingOutputAudioEnabled = false
+    @Published var activeOutputAudioDeviceName: String?
+    @Published var outputAudioLevel: Double = 0
+    @Published var outputAudioWarningMessage: String?
 
     private var videoRecorder: VideoRecorder?
     private var gifWriter: GifWriter?
@@ -349,18 +353,15 @@ class CaptureManager: ObservableObject {
 
     private func beginVideoRecording(
         region: CaptureRegion,
-        systemAudio: Bool,
-        selectedOutputAudioDeviceUID: String,
-        microphone: Bool,
-        selectedMicrophoneID: String,
+        options: RecordingOptions,
         countdownEnabled: Bool,
         countdownDuration: Int
     ) {
         let settings = CaptureSettings.shared
-        settings.recordAudio = systemAudio
-        settings.selectedOutputAudioDeviceUID = selectedOutputAudioDeviceUID
-        settings.recordMicrophone = microphone
-        settings.selectedMicrophoneID = selectedMicrophoneID
+        settings.recordAudio = options.systemAudio
+        settings.selectedOutputAudioDeviceUID = options.selectedOutputAudioDeviceUID
+        settings.recordMicrophone = options.microphone
+        settings.selectedMicrophoneID = options.selectedMicrophoneID
 
         let doRecord = { [weak self] in
             guard let self else { return }
@@ -393,6 +394,21 @@ class CaptureManager: ObservableObject {
                             SaveService.shared.showError("Microphone error: \(message)")
                         }
                     }
+                    recorder.onOutputAudioDeviceName = { [weak self] name in
+                        DispatchQueue.main.async {
+                            self?.activeOutputAudioDeviceName = name.isEmpty ? nil : name
+                        }
+                    }
+                    recorder.onOutputAudioLevel = { [weak self] level in
+                        DispatchQueue.main.async {
+                            self?.outputAudioLevel = level
+                        }
+                    }
+                    recorder.onOutputAudioWarning = { [weak self] warning in
+                        DispatchQueue.main.async {
+                            self?.outputAudioWarningMessage = warning
+                        }
+                    }
                     self.videoRecorder = recorder
                     self.activeRecordingRegion = region
                     self.isRecording = true
@@ -400,9 +416,12 @@ class CaptureManager: ObservableObject {
                     self.microphoneWarningMessage = nil
                     self.microphoneLevel = 0
                     self.activeMicrophoneName = nil
+                    self.recordingOutputAudioEnabled = false
+                    self.activeOutputAudioDeviceName = nil
 
                     try await recorder.start(region: region, outputURL: url)
                     self.recordingMicrophoneEnabled = recorder.isMicrophoneCaptureActive
+                    self.recordingOutputAudioEnabled = recorder.isOutputAudioActive
                     self.showStopPanel()
                 } catch {
                     self.resetRecordingAudioStatus()
@@ -603,7 +622,7 @@ class CaptureManager: ObservableObject {
 
     private func showStartPanel() {
         let panel = StartRecordingPanel(
-            onStart: { [weak self] systemAudio, selectedOutputAudioDeviceUID, mic, selectedMicrophoneID in
+            onStart: { [weak self] options in
                 guard
                     let self,
                     let region = self.pendingRecordingRegion,
@@ -621,10 +640,7 @@ class CaptureManager: ObservableObject {
                 case .video:
                     self.beginVideoRecording(
                         region: region,
-                        systemAudio: systemAudio,
-                        selectedOutputAudioDeviceUID: selectedOutputAudioDeviceUID,
-                        microphone: mic,
-                        selectedMicrophoneID: selectedMicrophoneID,
+                        options: options,
                         countdownEnabled: countdownEnabled,
                         countdownDuration: countdownDuration
                     )
@@ -682,6 +698,10 @@ class CaptureManager: ObservableObject {
         activeMicrophoneName = nil
         microphoneLevel = 0
         microphoneWarningMessage = nil
+        recordingOutputAudioEnabled = false
+        activeOutputAudioDeviceName = nil
+        outputAudioLevel = 0
+        outputAudioWarningMessage = nil
     }
 
     private func showCountdownThen(

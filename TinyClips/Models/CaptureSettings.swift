@@ -87,6 +87,8 @@ enum CaptureError: LocalizedError {
     case microphoneUnavailable
     case microphoneConnectionFailed
     case microphoneReadFailed
+    case outputAudioDeviceUnavailable
+    case outputAudioStartFailed
 
     var errorDescription: String? {
         switch self {
@@ -97,6 +99,8 @@ enum CaptureError: LocalizedError {
         case .microphoneUnavailable: return "The selected microphone is unavailable. Choose another input device in Settings."
         case .microphoneConnectionFailed: return "Could not connect to the selected microphone."
         case .microphoneReadFailed: return "Could not read audio from the selected microphone."
+        case .outputAudioDeviceUnavailable: return "The selected output audio device is unavailable. Choose another device in Settings."
+        case .outputAudioStartFailed: return "Could not start output audio capture. Try selecting a different output device."
         }
     }
 }
