@@ -134,9 +134,6 @@ class CaptureManager: ObservableObject {
             updateStopHotKeyRegistration()
         }
     }
-    @Published var recordingSystemAudioEnabled = false
-    @Published var systemAudioLevel: Double = 0
-    @Published var systemAudioWarningMessage: String?
     @Published var recordingMicrophoneEnabled = false
     @Published var activeMicrophoneName: String?
     @Published var microphoneLevel: Double = 0
@@ -373,16 +370,6 @@ class CaptureManager: ObservableObject {
 
                 do {
                     let recorder = VideoRecorder()
-                    recorder.onSystemAudioLevel = { [weak self] level in
-                        DispatchQueue.main.async {
-                            self?.systemAudioLevel = level
-                        }
-                    }
-                    recorder.onSystemAudioWarning = { [weak self] warning in
-                        DispatchQueue.main.async {
-                            self?.systemAudioWarningMessage = warning
-                        }
-                    }
                     recorder.onMicrophoneLevel = { [weak self] level in
                         DispatchQueue.main.async {
                             self?.microphoneLevel = level
@@ -407,16 +394,12 @@ class CaptureManager: ObservableObject {
                     self.videoRecorder = recorder
                     self.activeRecordingRegion = region
                     self.isRecording = true
-                    self.recordingSystemAudioEnabled = false
-                    self.systemAudioWarningMessage = nil
-                    self.systemAudioLevel = 0
                     self.recordingMicrophoneEnabled = false
                     self.microphoneWarningMessage = nil
                     self.microphoneLevel = 0
                     self.activeMicrophoneName = nil
 
                     try await recorder.start(region: region, outputURL: url)
-                    self.recordingSystemAudioEnabled = recorder.isSystemAudioCaptureActive
                     self.recordingMicrophoneEnabled = recorder.isMicrophoneCaptureActive
                     self.showStopPanel()
                 } catch {
@@ -692,9 +675,6 @@ class CaptureManager: ObservableObject {
     }
 
     private func resetRecordingAudioStatus() {
-        recordingSystemAudioEnabled = false
-        systemAudioLevel = 0
-        systemAudioWarningMessage = nil
         recordingMicrophoneEnabled = false
         activeMicrophoneName = nil
         microphoneLevel = 0

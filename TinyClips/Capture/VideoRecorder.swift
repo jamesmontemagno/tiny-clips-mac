@@ -27,8 +27,6 @@ enum MicrophoneDeviceCatalog {
 }
 
 class VideoRecorder: NSObject, @unchecked Sendable {
-    private let systemAudioSignalThreshold = 0.01
-    private let systemAudioSignalTimeoutSeconds: TimeInterval = 2
     private let microphoneSignalThreshold = 0.01
     private let microphoneSignalTimeoutSeconds: TimeInterval = 2
     private var stream: SCStream?
@@ -39,7 +37,6 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     private var microphoneSession: AVCaptureSession?
     private var microphoneOutputDelegate: MicrophoneOutputDelegate?
     private var microphoneObservers: [NSObjectProtocol] = []
-    private var lastSystemAudioSignalAt = CACurrentMediaTime()
     private var lastMicSignalAt = CACurrentMediaTime()
     private var hasStartedWriting = false
     private var recordSystemAudio = false
@@ -47,16 +44,10 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     private var outputURL: URL?
     private let writingQueue = DispatchQueue(label: "com.tinyclips.video-writing")
     private let microphoneQueue = DispatchQueue(label: "com.tinyclips.microphone-capture")
-    var onSystemAudioLevel: ((Double) -> Void)?
-    var onSystemAudioWarning: ((String?) -> Void)?
     var onMicrophoneLevel: ((Double) -> Void)?
     var onMicrophoneWarning: ((String?) -> Void)?
     var onMicrophoneDeviceName: ((String) -> Void)?
     var onMicrophoneError: ((String) -> Void)?
-
-    var isSystemAudioCaptureActive: Bool {
-        stream != nil && recordSystemAudio
-    }
 
     var isMicrophoneCaptureActive: Bool {
         microphoneSession != nil && recordMicrophone
@@ -76,7 +67,6 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         self.recordMicrophone = settings.recordMicrophone
 
         if recordSystemAudio {
-            lastSystemAudioSignalAt = CACurrentMediaTime()
             config.capturesAudio = true
             config.sampleRate = 48000
             config.channelCount = 2
@@ -204,19 +194,6 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         writingQueue.async { [weak self] in
             guard let self, self.hasStartedWriting, let micAudioInput = self.micAudioInput, micAudioInput.isReadyForMoreMediaData else { return }
             micAudioInput.append(sampleBuffer)
-        }
-    }
-
-    private func handleSystemAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
-        let level = rmsLevel(from: sampleBuffer)
-        onSystemAudioLevel?(level)
-
-        let now = CACurrentMediaTime()
-        if level > systemAudioSignalThreshold {
-            lastSystemAudioSignalAt = now
-            onSystemAudioWarning?(nil)
-        } else if now - lastSystemAudioSignalAt > systemAudioSignalTimeoutSeconds {
-            onSystemAudioWarning?("No output audio detected.")
         }
     }
 
@@ -367,8 +344,6 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         hasStartedWriting = false
         recordSystemAudio = false
         recordMicrophone = false
-        onSystemAudioWarning?(nil)
-        onSystemAudioLevel?(0)
         onMicrophoneWarning?(nil)
         onMicrophoneLevel?(0)
         onMicrophoneDeviceName?("")
@@ -423,7 +398,6 @@ extension VideoRecorder: SCStreamOutput {
             }
 
         case .audio:
-            handleSystemAudioSampleBuffer(sampleBuffer)
             guard hasStartedWriting, let systemAudioInput, systemAudioInput.isReadyForMoreMediaData else { return }
             systemAudioInput.append(sampleBuffer)
 

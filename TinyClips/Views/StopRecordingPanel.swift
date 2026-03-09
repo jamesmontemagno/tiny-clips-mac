@@ -4,7 +4,7 @@ import SwiftUI
 class StopRecordingPanel: NSPanel {
     convenience init(captureManager: CaptureManager, onStop: @escaping () -> Void) {
         self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 240, height: 44),
+            contentRect: NSRect(x: 0, y: 0, width: 200, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -53,16 +53,6 @@ private struct StopRecordingView: View {
                 .font(.system(size: 13, weight: .medium))
                 .accessibilityLabel("Elapsed recording time")
                 .accessibilityValue(formattedTime)
-
-            if captureManager.recordingSystemAudioEnabled {
-                RecordingStatusIcon(
-                    systemName: "speaker.wave.2.fill",
-                    tint: captureManager.systemAudioWarningMessage == nil ? .green : .yellow,
-                    accessibilityLabel: "Output audio recording",
-                    accessibilityValue: captureManager.systemAudioWarningMessage ?? "Active"
-                )
-                .help(captureManager.systemAudioWarningMessage ?? "Output audio is being recorded.")
-            }
 
             if captureManager.recordingMicrophoneEnabled {
                 RecordingStatusIcon(
