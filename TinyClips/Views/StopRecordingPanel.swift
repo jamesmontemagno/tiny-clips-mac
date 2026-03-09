@@ -2,9 +2,9 @@ import AppKit
 import SwiftUI
 
 class StopRecordingPanel: NSPanel {
-    convenience init(onStop: @escaping () -> Void) {
+    convenience init(captureManager: CaptureManager, onStop: @escaping () -> Void) {
         self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 160, height: 44),
+            contentRect: NSRect(x: 0, y: 0, width: 240, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -17,7 +17,7 @@ class StopRecordingPanel: NSPanel {
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         self.isMovableByWindowBackground = true
 
-        let hostingView = NSHostingView(rootView: StopRecordingView(onStop: onStop))
+        let hostingView = NSHostingView(rootView: StopRecordingView(captureManager: captureManager, onStop: onStop))
         self.contentView = hostingView
     }
 
@@ -34,6 +34,7 @@ class StopRecordingPanel: NSPanel {
 }
 
 private struct StopRecordingView: View {
+    @ObservedObject var captureManager: CaptureManager
     let onStop: () -> Void
     @State private var elapsed: TimeInterval = 0
     @State private var startDate = Date()
@@ -52,6 +53,26 @@ private struct StopRecordingView: View {
                 .font(.system(size: 13, weight: .medium))
                 .accessibilityLabel("Elapsed recording time")
                 .accessibilityValue(formattedTime)
+
+            if captureManager.recordingSystemAudioEnabled {
+                RecordingStatusIcon(
+                    systemName: "speaker.wave.2.fill",
+                    tint: captureManager.systemAudioWarningMessage == nil ? .green : .yellow,
+                    accessibilityLabel: "Output audio recording",
+                    accessibilityValue: captureManager.systemAudioWarningMessage ?? "Active"
+                )
+                .help(captureManager.systemAudioWarningMessage ?? "Output audio is being recorded.")
+            }
+
+            if captureManager.recordingMicrophoneEnabled {
+                RecordingStatusIcon(
+                    systemName: "mic.fill",
+                    tint: captureManager.microphoneWarningMessage == nil ? .green : .yellow,
+                    accessibilityLabel: "Microphone recording",
+                    accessibilityValue: captureManager.microphoneWarningMessage ?? (captureManager.activeMicrophoneName ?? "Active")
+                )
+                .help(captureManager.microphoneWarningMessage ?? captureManager.activeMicrophoneName ?? "Microphone is being recorded.")
+            }
 
             Button(action: onStop) {
                 Image(systemName: "stop.fill")
@@ -85,5 +106,23 @@ private struct StopRecordingView: View {
         let minutes = Int(elapsed) / 60
         let seconds = Int(elapsed) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+private struct RecordingStatusIcon: View {
+    let systemName: String
+    let tint: Color
+    let accessibilityLabel: String
+    let accessibilityValue: String
+
+    var body: some View {
+        Image(systemName: systemName)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: 24, height: 24)
+            .background(.white.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .accessibilityLabel(accessibilityLabel)
+            .accessibilityValue(accessibilityValue)
     }
 }

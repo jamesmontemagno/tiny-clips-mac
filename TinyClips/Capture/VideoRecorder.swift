@@ -10,19 +10,25 @@ struct MicrophoneDeviceOption: Identifiable, Hashable {
 }
 
 enum MicrophoneDeviceCatalog {
+    private static func audioDevices() -> [AVCaptureDevice] {
+        AVCaptureDevice.DiscoverySession(deviceTypes: [.microphone, .external], mediaType: .audio, position: .unspecified).devices
+    }
+
     static func availableOptions() -> [MicrophoneDeviceOption] {
-        AVCaptureDevice.devices(for: .audio)
+        audioDevices()
             .map { MicrophoneDeviceOption(id: $0.uniqueID, name: $0.localizedName) }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     static func device(for uniqueID: String) -> AVCaptureDevice? {
         guard !uniqueID.isEmpty else { return nil }
-        return AVCaptureDevice.devices(for: .audio).first(where: { $0.uniqueID == uniqueID })
+        return audioDevices().first(where: { $0.uniqueID == uniqueID })
     }
 }
 
 class VideoRecorder: NSObject, @unchecked Sendable {
+    private let systemAudioSignalThreshold = 0.01
+    private let systemAudioSignalTimeoutSeconds: TimeInterval = 2
     private let microphoneSignalThreshold = 0.01
     private let microphoneSignalTimeoutSeconds: TimeInterval = 2
     private var stream: SCStream?
@@ -33,6 +39,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     private var microphoneSession: AVCaptureSession?
     private var microphoneOutputDelegate: MicrophoneOutputDelegate?
     private var microphoneObservers: [NSObjectProtocol] = []
+    private var lastSystemAudioSignalAt = CACurrentMediaTime()
     private var lastMicSignalAt = CACurrentMediaTime()
     private var hasStartedWriting = false
     private var recordSystemAudio = false
@@ -40,10 +47,20 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     private var outputURL: URL?
     private let writingQueue = DispatchQueue(label: "com.tinyclips.video-writing")
     private let microphoneQueue = DispatchQueue(label: "com.tinyclips.microphone-capture")
+    var onSystemAudioLevel: ((Double) -> Void)?
+    var onSystemAudioWarning: ((String?) -> Void)?
     var onMicrophoneLevel: ((Double) -> Void)?
     var onMicrophoneWarning: ((String?) -> Void)?
     var onMicrophoneDeviceName: ((String) -> Void)?
     var onMicrophoneError: ((String) -> Void)?
+
+    var isSystemAudioCaptureActive: Bool {
+        stream != nil && recordSystemAudio
+    }
+
+    var isMicrophoneCaptureActive: Bool {
+        microphoneSession != nil && recordMicrophone
+    }
 
     func start(region: CaptureRegion, outputURL: URL) async throws {
         let filter = try await region.makeFilter()
@@ -59,6 +76,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         self.recordMicrophone = settings.recordMicrophone
 
         if recordSystemAudio {
+            lastSystemAudioSignalAt = CACurrentMediaTime()
             config.capturesAudio = true
             config.sampleRate = 48000
             config.channelCount = 2
@@ -106,23 +124,28 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         self.videoInput = videoInput
         self.hasStartedWriting = false
 
-        let stream = SCStream(filter: filter, configuration: config, delegate: nil)
-        try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: writingQueue)
-        if recordSystemAudio {
-            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: writingQueue)
-        }
-        try await stream.startCapture()
-        self.stream = stream
-
-        if recordMicrophone {
-            let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
-            if micGranted {
-                try startMicCapture(selectedMicrophoneID: settings.selectedMicrophoneID)
-            } else {
-                self.recordMicrophone = false
-                self.micAudioInput = nil
-                onMicrophoneError?("Microphone permission was denied.")
+        do {
+            let stream = SCStream(filter: filter, configuration: config, delegate: nil)
+            try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: writingQueue)
+            if recordSystemAudio {
+                try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: writingQueue)
             }
+            try await stream.startCapture()
+            self.stream = stream
+
+            if recordMicrophone {
+                let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
+                if micGranted {
+                    try startMicCapture(selectedMicrophoneID: settings.selectedMicrophoneID)
+                } else {
+                    self.recordMicrophone = false
+                    self.micAudioInput = nil
+                    onMicrophoneError?("Microphone permission was denied.")
+                }
+            }
+        } catch {
+            await resetAfterFailedStart(removeOutputFile: true)
+            throw error
         }
     }
 
@@ -184,6 +207,19 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         }
     }
 
+    private func handleSystemAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer) {
+        let level = rmsLevel(from: sampleBuffer)
+        onSystemAudioLevel?(level)
+
+        let now = CACurrentMediaTime()
+        if level > systemAudioSignalThreshold {
+            lastSystemAudioSignalAt = now
+            onSystemAudioWarning?(nil)
+        } else if now - lastSystemAudioSignalAt > systemAudioSignalTimeoutSeconds {
+            onSystemAudioWarning?("No output audio detected.")
+        }
+    }
+
     private func rmsLevel(from sampleBuffer: CMSampleBuffer) -> Double {
         guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
               let asbdPointer = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) else {
@@ -201,7 +237,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
             bufferListSizeNeededOut: nil,
             bufferListOut: &audioBufferList,
             bufferListSize: MemoryLayout<AudioBufferList>.size,
-            blockBufferStructureAllocator: nil,
+            blockBufferAllocator: nil,
             blockBufferMemoryAllocator: nil,
             flags: UInt32(kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment),
             blockBufferOut: &blockBuffer
@@ -316,6 +352,31 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         microphoneOutputDelegate = nil
         microphoneSession = nil
     }
+
+    private func resetAfterFailedStart(removeOutputFile: Bool) async {
+        stopMicrophoneCapture()
+        if let stream {
+            try? await stream.stopCapture()
+        }
+        stream = nil
+        writer?.cancelWriting()
+        writer = nil
+        videoInput = nil
+        systemAudioInput = nil
+        micAudioInput = nil
+        hasStartedWriting = false
+        recordSystemAudio = false
+        recordMicrophone = false
+        onSystemAudioWarning?(nil)
+        onSystemAudioLevel?(0)
+        onMicrophoneWarning?(nil)
+        onMicrophoneLevel?(0)
+        onMicrophoneDeviceName?("")
+        if removeOutputFile, let outputURL {
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+        outputURL = nil
+    }
 }
 
 private final class MicrophoneOutputDelegate: NSObject, AVCaptureAudioDataOutputSampleBufferDelegate {
@@ -362,6 +423,7 @@ extension VideoRecorder: SCStreamOutput {
             }
 
         case .audio:
+            handleSystemAudioSampleBuffer(sampleBuffer)
             guard hasStartedWriting, let systemAudioInput, systemAudioInput.isReadyForMoreMediaData else { return }
             systemAudioInput.append(sampleBuffer)
 

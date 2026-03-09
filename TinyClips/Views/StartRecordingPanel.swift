@@ -7,7 +7,7 @@ class StartRecordingPanel: NSPanel {
 
     convenience init(onStart: @escaping (Bool, Bool, String) -> Void, onCancel: @escaping () -> Void) {
         self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 44),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -86,10 +86,22 @@ private struct StartRecordingView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
             .buttonStyle(.plain)
-            .help(systemAudio ? "System audio: ON" : "System audio: OFF")
-            .accessibilityLabel("System audio")
+            .help(systemAudio ? "Output audio: ON" : "Output audio: OFF")
+            .accessibilityLabel("Output audio")
             .accessibilityValue(systemAudio ? "On" : "Off")
-            .accessibilityHint("Toggles recording system audio.")
+            .accessibilityHint("Toggles recording output audio.")
+
+            if systemAudio {
+                Label("Output audio", systemImage: "speaker.wave.2.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .help("TinyClips records the current system output mix.")
+                    .accessibilityHint("Records the current system output mix.")
+            }
 
             // Microphone toggle
             Button {
