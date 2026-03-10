@@ -11,24 +11,24 @@
         <item>
             
             
-            <title>0.0.20</title>
+            <title>0.0.21</title>
             
             
-            <pubDate>Mon, 09 Mar 2026 19:06:56 +0000</pubDate>
+            <pubDate>Tue, 10 Mar 2026 06:14:29 +0000</pubDate>
             
             
-            <sparkle:version>24</sparkle:version>
+            <sparkle:version>25</sparkle:version>
             
             
-            <sparkle:shortVersionString>0.0.20</sparkle:shortVersionString>
+            <sparkle:shortVersionString>0.0.21</sparkle:shortVersionString>
             
             
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             
             
-            <description><![CDATA[<h3>What's Changed</h3><ul><li>Update CHANGELOG.md for v0.0.20 release</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v0.0.19...v0.0.20">Full Changelog</a></p>]]></description>
-            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v0.0.20</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v0.0.20/TinyClips-v0.0.20.zip" length="2846987" type="application/octet-stream" sparkle:edSignature="Dvf5Nudm2i0z48jR4c2bAJD9/gOIySE+DEaa5PYZhRjLtMGZuYjXvoNj8JsEuqVeDt1RujThEyNDP4/aPIGtBA=="/>
+            <description><![CDATA[<h3>What's Changed</h3><ul><li>Update CHANGELOG for v0.0.21</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v0.0.20...v0.0.21">Full Changelog</a></p>]]></description>
+            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v0.0.21</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v0.0.21/TinyClips-v0.0.21.zip" length="2848107" type="application/octet-stream" sparkle:edSignature="TmcQL5DMgxrNWEpWNuHmkE1RAIQmf0AVytnJOAjbXnyt8hHz+eyHnJNjbUBe/PKtdZ/Pc6hHzP2Qonb95RoYBA=="/>
             
         
         </item>
