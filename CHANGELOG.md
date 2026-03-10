@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.0.21 - 2026-03-09
+
+### Improved
+- Refactored video recording and clips manager logic for improved state persistence and microphone handling.
+- Enhanced microphone state management and recording flow coordination.
+- Updated UI settings for better user experience in recording panels.
+- Improved copilot instructions documentation.
+
 ## v0.0.20 - 2026-03-09
 
 ### Added
