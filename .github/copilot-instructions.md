@@ -8,9 +8,9 @@ The project supports two app variants from one codebase:
 
 ## Architecture
 
-- **Menu bar app** using SwiftUI `MenuBarExtra` + `Settings` scene — no Dock icon (`LSUIElement = true`)
-- **Mixed SwiftUI + AppKit**: SwiftUI for menu bar content, settings, and inline UI; AppKit `NSWindow`/`NSPanel` subclasses for all floating windows (stop panel, trimmer, editor). AppKit windows host SwiftUI views via `NSHostingView`.
-- **`CaptureManager`** in `TinyClipsApp.swift` is the central coordinator owning recorders, writers, and editor windows.
+- **Menu bar app** using SwiftUI `MenuBarExtra` plus dedicated SwiftUI `Window` scenes for `clips-manager` and `settings-window` — no Dock icon by default (`LSUIElement = true`).
+- **Mixed SwiftUI + AppKit**: SwiftUI for menu bar content, settings, and Clips Manager; AppKit `NSWindow`/`NSPanel` subclasses for capture-time and utility windows (picker panels, start/stop/countdown, screen picker, region indicator, editor/trimmer, onboarding, guide). AppKit windows host SwiftUI views via `NSHostingView`.
+- **`CaptureManager`** in `TinyClipsApp.swift` is the central coordinator owning recorders, writers, and AppKit popup/window lifecycles used during capture flows.
 - **Singleton services**: `CaptureSettings.shared`, `SaveService.shared`, `PermissionManager.shared`, `SparkleController.shared`.
 - **Direct target is not sandboxed** — hardened runtime is enabled.
 - **App Store target is sandboxed** with separate entitlements and Info.plist.
@@ -47,20 +47,33 @@ App Store variant setup details are in `docs/app-store-variant-setup.md`.
 ## Project Conventions
 
 ### Window Pattern
-AppKit `NSWindow`/`NSPanel` subclass with `convenience init(..., onComplete: @escaping (URL?) -> Void)`, hosting SwiftUI via `NSHostingView`. Always set `isReleasedWhenClosed = false`. Use a `didComplete` bool guard to prevent double-completion. `nil` from `onComplete` means cancelled. See `TinyClips/Views/VideoTrimmerWindow.swift` for reference.
+Use SwiftUI `Window` scenes for long-lived app windows (`clips-manager`, `settings-window`) and AppKit subclasses for capture-time windows/panels.
+
+For callback-driven AppKit windows/panels, keep a completion closure, guard with `didComplete`/`didClose` to prevent double-callbacks, set `isReleasedWhenClosed = false`, and nil out callbacks after firing.
+
+For editor/trimmer/selection flows, `nil` completion payload means cancelled. See `TinyClips/Views/VideoTrimmerWindow.swift`, `TinyClips/Views/CapturePickerPanel.swift`, and `TinyClips/Views/ScreenPickerWindow.swift`.
 
 ### Floating Panel Recipe
-Panels (`StopRecordingPanel`, `StartRecordingPanel`, `CountdownWindow`) use: `styleMask: [.borderless, .nonactivatingPanel]`, `level = .floating`, `backgroundColor = .clear`, `isOpaque = false`, `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`.
+Floating capture panels (`StopRecordingPanel`, `StartRecordingPanel`, `CountdownWindow`, `CapturePickerPanel`, `ScreenPickerWindow`, `RegionIndicatorPanel`) use: `styleMask: [.borderless, .nonactivatingPanel]`, `level = .floating`, `backgroundColor = .clear`, `isOpaque = false`, `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`.
+
+Keyboard-interactive picker panels override `canBecomeKey`, call `NSApp.activate()`, and install/remove local+global key monitors (for shortcuts like `R`/`S`/`W`, number keys, and `Esc` cancel).
 
 ### Window Lifecycle
-`CaptureManager` holds a strong reference to windows and defers `nil`'ing via `DispatchQueue.main.async` to avoid deallocating mid-callback. Same pattern for `makeKeyAndOrderFront` to escape menu tracking run loops.
+Open SwiftUI scene windows via `openWindow(id:)` from menu actions, then immediately activate and bring existing windows to front using identifier/title lookup (including a delayed second pass to escape menu tracking timing).
+
+`CaptureManager` holds strong references to capture-time AppKit windows/panels and defers some `nil` releases with `DispatchQueue.main.async` to avoid deallocation mid-callback. Persist floating panel positions on dismiss and reuse them on reopen.
 
 ### Capture Flows
-1. **Screenshot:** permission → region select → `ScreenshotCapture.capture()` → optional editor → save
-2. **Video:** permission → region select → `StartRecordingPanel` → optional countdown → `VideoRecorder.start()` → `StopRecordingPanel` → stop → optional trimmer → save
-3. **GIF:** permission → region select → optional countdown → `GifWriter.start()` → `StopRecordingPanel` → stop → optional trimmer → save
+1. **Screenshot:** permission → `CapturePickerPanel` (region/screen/window + countdown) → optional `ScreenPickerWindow` for multi-display screen mode → optional `RegionIndicatorPanel` before countdown → capture → optional editor → save.
+2. **Video:** permission → `CapturePickerPanel` (region/screen/window + countdown) → optional `RegionIndicatorPanel` for region mode → `StartRecordingPanel` → optional countdown → `VideoRecorder.start()` → `StopRecordingPanel` → stop → optional trimmer → save.
+3. **GIF:** permission → `CapturePickerPanel` (region/screen/window + countdown) → optional `RegionIndicatorPanel` for region mode → `StartRecordingPanel` → optional countdown → `GifWriter.start()` → `StopRecordingPanel` → stop → optional trimmer → save.
 
 Editor/trimmer windows are shown **after** all recording resources are released to avoid file contention.
+
+### Popup Windows
+- Onboarding uses `OnboardingWizardWindow` and is shown once on app startup when `hasCompletedOnboarding == false`.
+- Guide uses a retained `GuideWindow`; if already open, bring it to front instead of creating a duplicate.
+- Keep popup cleanup callback-driven and release strong refs on close/dismiss paths.
 
 ### Async/Await Bridging
 - Use `withCheckedContinuation` / `withCheckedThrowingContinuation` to bridge callback APIs to async (e.g., region selector, `AVAssetWriter.finishWriting`).
@@ -80,7 +93,7 @@ Single `CaptureError` enum conforming to `LocalizedError`. Surface errors via `S
 Output: `TinyClips yyyy-MM-dd 'at' HH.mm.ss.{ext}`. Trimmed video gets ` (trimmed)` suffix, original is deleted. Cancelled editor operations clean up via `try? FileManager.default.removeItem(at:)`.
 
 ### Keyboard Shortcuts
-Screenshot `⌘⇧5`, Video `⌘⇧6`, GIF `⌘⇧7`, Stop `⌘.`, Settings `⌘,`, Quit `⌘Q`. Dialogs use `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)`.
+Screenshot `⌃⌥⌘5`, Video `⌃⌥⌘6`, GIF `⌃⌥⌘7`, Stop `⌘.`, Settings `⌘,`, Quit `⌘Q`. Picker shortcuts: Region `R`, Screen `S`, Window `W`, Cancel `Esc`. Dialogs use `.keyboardShortcut(.defaultAction)` / `.keyboardShortcut(.cancelAction)`.
 
 ### Accessibility (VoiceOver + Keyboard)
 - Treat accessibility as a release gate for capture flows, settings, onboarding, editors/trimmers, and Clips Manager.
@@ -101,8 +114,9 @@ Screenshot `⌘⇧5`, Video `⌘⇧6`, GIF `⌘⇧7`, Stop `⌘.`, Settings `⌘
 
 ### Settings View
 - `SettingsTab` enum (`CaseIterable`, `rawValue` = display title, `icon` computed property for SF Symbol).
-- `Form` with `.formStyle(.grouped)`. Each tab is a `@ViewBuilder private var`.
-- Fixed frame: `.frame(width: 420, height: 340)`.
+- `NavigationSplitView` with sidebar tab list and `Form` detail using `.formStyle(.grouped)`.
+- Minimum frame: `.frame(minWidth: 720, minHeight: 460)` with scene default size `720x460`.
+- Dock visibility changes may reopen settings via `openWindow(id: "settings-window")` after activation policy updates.
 - For MAS (`APPSTORE`): keep save location UI minimal and sandbox-safe (default Pictures/Movies behavior plus user-selected folder bookmark path display).
 
 ## Security

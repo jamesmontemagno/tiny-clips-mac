@@ -237,8 +237,12 @@ class SaveService: NSObject, UNUserNotificationCenterDelegate {
                     publicKey: publicKey,
                     secretKey: secretKey
                 )
-                if shouldCopyLink {
-                    await MainActor.run {
+
+                await MainActor.run {
+                    ClipMetadataStore.shared.upsert(path: url.path) { metadata in
+                        metadata.uploadcareURL = result.fileURL.absoluteString
+                    }
+                    if shouldCopyLink {
                         self.copyTextToClipboard(result.fileURL.absoluteString)
                     }
                 }

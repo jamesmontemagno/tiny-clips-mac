@@ -71,7 +71,7 @@ struct ClipItem: Identifiable {
 
 // MARK: - Metadata
 
-private struct ClipMetadata {
+struct ClipMetadata {
     var displayName: String?
     var tags: [String]
     var isFavorite: Bool
@@ -81,7 +81,7 @@ private struct ClipMetadata {
 }
 
 @Model
-private final class ClipMetadataRecord {
+final class ClipMetadataRecord {
     @Attribute(.unique) var clipPath: String
     var displayName: String?
     var tagsBlob: String
@@ -122,7 +122,7 @@ private final class ClipMetadataRecord {
 }
 
 @MainActor
-private final class ClipMetadataStore {
+final class ClipMetadataStore {
     static let shared = ClipMetadataStore()
 
     private let modelContext: ModelContext?
@@ -229,6 +229,7 @@ private class ClipsViewModel: ObservableObject {
 
     private let metadataStore = ClipMetadataStore.shared
     private let defaults = UserDefaults.standard
+    private var isApplyingStatePreferences = false
 
     private var editorWindows: [NSWindow] = []
 
@@ -471,58 +472,53 @@ private class ClipsViewModel: ObservableObject {
     func applyStatePreferences() {
         let settings = CaptureSettings.shared
 
+        isApplyingStatePreferences = true
+        defer { isApplyingStatePreferences = false }
+
+        // Start from defaults.
+        var resolvedViewMode = ViewMode(rawValue: settings.clipsManagerDefaultViewMode) ?? .grid
+        var resolvedSortOption = SortOption(rawValue: settings.clipsManagerDefaultSortOption) ?? .newest
+        var resolvedFilterType = FilterType(rawValue: settings.clipsManagerDefaultFilterType) ?? .all
+        var resolvedDateFilter = DateFilter(rawValue: settings.clipsManagerDefaultDateFilter) ?? .allTime
+        var resolvedSmartCollection: SmartCollection = .all
+        var resolvedSearchText = ""
+        var resolvedSelectedTag = ""
+        var resolvedSelectedCollection = ""
+
+        // If enabled, overlay all last-used values.
         if settings.clipsManagerRememberLastState {
             if let savedViewMode = ViewMode(rawValue: defaults.string(forKey: "clipsManagerLastViewMode") ?? "") {
-                viewMode = savedViewMode
-            } else if let defaultViewMode = ViewMode(rawValue: settings.clipsManagerDefaultViewMode) {
-                viewMode = defaultViewMode
+                resolvedViewMode = savedViewMode
             }
-
             if let savedSort = SortOption(rawValue: defaults.string(forKey: "clipsManagerLastSortOption") ?? "") {
-                sortOption = savedSort
-            } else if let defaultSort = SortOption(rawValue: settings.clipsManagerDefaultSortOption) {
-                sortOption = defaultSort
+                resolvedSortOption = savedSort
             }
-
             if let savedType = FilterType(rawValue: defaults.string(forKey: "clipsManagerLastFilterType") ?? "") {
-                filterType = savedType
-            } else if let defaultType = FilterType(rawValue: settings.clipsManagerDefaultFilterType) {
-                filterType = defaultType
+                resolvedFilterType = savedType
             }
-
             if let savedDate = DateFilter(rawValue: defaults.string(forKey: "clipsManagerLastDateFilter") ?? "") {
-                dateFilter = savedDate
-            } else if let defaultDate = DateFilter(rawValue: settings.clipsManagerDefaultDateFilter) {
-                dateFilter = defaultDate
+                resolvedDateFilter = savedDate
             }
-
             if let savedCollection = SmartCollection(rawValue: defaults.string(forKey: "clipsManagerLastSmartCollection") ?? "") {
-                smartCollection = savedCollection
-            } else {
-                smartCollection = .all
+                resolvedSmartCollection = savedCollection
             }
-
-            searchText = defaults.string(forKey: "clipsManagerLastSearchText") ?? ""
-            selectedTag = defaults.string(forKey: "clipsManagerLastSelectedTag") ?? ""
-            selectedCollection = defaults.string(forKey: "clipsManagerLastSelectedCollection") ?? ""
-        } else {
-            if let defaultViewMode = ViewMode(rawValue: settings.clipsManagerDefaultViewMode) {
-                viewMode = defaultViewMode
-            } else {
-                viewMode = .grid
-            }
-            sortOption = SortOption(rawValue: settings.clipsManagerDefaultSortOption) ?? .newest
-            filterType = FilterType(rawValue: settings.clipsManagerDefaultFilterType) ?? .all
-            dateFilter = DateFilter(rawValue: settings.clipsManagerDefaultDateFilter) ?? .allTime
-            smartCollection = .all
-            searchText = ""
-            selectedTag = ""
-            selectedCollection = ""
+            resolvedSearchText = defaults.string(forKey: "clipsManagerLastSearchText") ?? ""
+            resolvedSelectedTag = defaults.string(forKey: "clipsManagerLastSelectedTag") ?? ""
+            resolvedSelectedCollection = defaults.string(forKey: "clipsManagerLastSelectedCollection") ?? ""
         }
+
+        viewMode = resolvedViewMode
+        sortOption = resolvedSortOption
+        filterType = resolvedFilterType
+        dateFilter = resolvedDateFilter
+        smartCollection = resolvedSmartCollection
+        searchText = resolvedSearchText
+        selectedTag = resolvedSelectedTag
+        selectedCollection = resolvedSelectedCollection
     }
 
     func persistUIStateIfNeeded() {
-        guard CaptureSettings.shared.clipsManagerRememberLastState else { return }
+        guard !isApplyingStatePreferences else { return }
         defaults.set(viewMode.rawValue, forKey: "clipsManagerLastViewMode")
         defaults.set(sortOption.rawValue, forKey: "clipsManagerLastSortOption")
         defaults.set(filterType.rawValue, forKey: "clipsManagerLastFilterType")
@@ -534,14 +530,7 @@ private class ClipsViewModel: ObservableObject {
     }
 
     private func applyInitialPreferences() {
-        let settings = CaptureSettings.shared
-        viewMode = ViewMode(rawValue: settings.clipsManagerDefaultViewMode) ?? .grid
-        sortOption = SortOption(rawValue: settings.clipsManagerDefaultSortOption) ?? .newest
-        filterType = FilterType(rawValue: settings.clipsManagerDefaultFilterType) ?? .all
-        dateFilter = DateFilter(rawValue: settings.clipsManagerDefaultDateFilter) ?? .allTime
-        if settings.clipsManagerRememberLastState {
-            applyStatePreferences()
-        }
+        applyStatePreferences()
     }
 
     private func archiveOldClipsIfNeeded(in directories: [URL]) {
@@ -856,6 +845,15 @@ private class ClipsViewModel: ObservableObject {
 
     func clearSelection() {
         selectedClipIDs.removeAll()
+    }
+
+    func selectAllVisible() {
+        selectedClipIDs = Set(filteredSortedClips.map(\.id))
+    }
+
+    var canSelectAllVisible: Bool {
+        let visibleIDs = Set(filteredSortedClips.map(\.id))
+        return !visibleIDs.isEmpty && !visibleIDs.isSubset(of: selectedClipIDs)
     }
 
     var selectedItems: [ClipItem] {
@@ -1435,6 +1433,8 @@ private struct ClipsManagerContentView: View {
 
             Spacer()
 
+            Button("Select All") { viewModel.selectAllVisible() }
+                .disabled(!viewModel.canSelectAllVisible)
             Button("Favorite") { viewModel.favoriteSelected() }
                 .disabled(viewModel.selectedItems.isEmpty)
             Button("Delete", role: .destructive) {
@@ -2583,33 +2583,38 @@ private struct ClipManagerUploadcareSettingsView: View {
                 Section("Behavior") {
                     Toggle("Always confirm delete", isOn: $settings.clipsManagerConfirmDelete)
                     Toggle("Row tap selects in selection mode", isOn: $settings.clipsManagerSelectionRowTapSelects)
-                    Toggle("Remember last sidebar/search state", isOn: $settings.clipsManagerRememberLastState)
                     Toggle("Ignore non-TinyClips files", isOn: $settings.clipsManagerIgnoreNonTinyClipsFiles)
                 }
 
                 Section("Defaults") {
+                    Toggle("Remember last used manager settings", isOn: $settings.clipsManagerRememberLastState)
+
                     Picker("Default view", selection: $settings.clipsManagerDefaultViewMode) {
                         Text("Grid").tag("grid")
                         Text("List").tag("list")
                     }
+                    .disabled(settings.clipsManagerRememberLastState)
 
                     Picker("Default sort", selection: $settings.clipsManagerDefaultSortOption) {
                         ForEach(ClipsViewModel.SortOption.allCases, id: \.self) { option in
                             Text(option.rawValue).tag(option.rawValue)
                         }
                     }
+                    .disabled(settings.clipsManagerRememberLastState)
 
                     Picker("Default type filter", selection: $settings.clipsManagerDefaultFilterType) {
                         ForEach(ClipsViewModel.FilterType.allCases, id: \.self) { option in
                             Text(option.rawValue).tag(option.rawValue)
                         }
                     }
+                    .disabled(settings.clipsManagerRememberLastState)
 
                     Picker("Default date filter", selection: $settings.clipsManagerDefaultDateFilter) {
                         ForEach(ClipsViewModel.DateFilter.allCases, id: \.self) { option in
                             Text(option.rawValue).tag(option.rawValue)
                         }
                     }
+                    .disabled(settings.clipsManagerRememberLastState)
                 }
 
                 Section("Automation") {
@@ -2662,11 +2667,6 @@ private struct ClipManagerUploadcareSettingsView: View {
             publicKey = credentials.publicKey
             secretKey = credentials.secretKey
         }
-        .onChange(of: settings.clipsManagerRememberLastState) { _, enabled in
-            if !enabled {
-                clearRememberedState()
-            }
-        }
         .onChange(of: publicKey) { _, updated in
             UploadcareCredentialsStore.shared.setPublicKey(updated)
         }
@@ -2680,21 +2680,6 @@ private struct ClipManagerUploadcareSettingsView: View {
         return "\(seconds) seconds"
     }
 
-    private func clearRememberedState() {
-        let keys = [
-            "clipsManagerLastViewMode",
-            "clipsManagerLastSortOption",
-            "clipsManagerLastFilterType",
-            "clipsManagerLastDateFilter",
-            "clipsManagerLastSmartCollection",
-            "clipsManagerLastSearchText",
-            "clipsManagerLastSelectedTag",
-            "clipsManagerLastSelectedCollection"
-        ]
-        for key in keys {
-            UserDefaults.standard.removeObject(forKey: key)
-        }
-    }
 }
 
 // MARK: - Pro Upsell View

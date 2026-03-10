@@ -41,6 +41,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     private var hasStartedWriting = false
     private var recordSystemAudio = false
     private var recordMicrophone = false
+    private var selectedMicrophoneID = ""
     private var outputURL: URL?
     private let writingQueue = DispatchQueue(label: "com.tinyclips.video-writing")
     private let microphoneQueue = DispatchQueue(label: "com.tinyclips.microphone-capture")
@@ -53,7 +54,13 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         microphoneSession != nil && recordMicrophone
     }
 
-    func start(region: CaptureRegion, outputURL: URL) async throws {
+    func start(
+        region: CaptureRegion,
+        outputURL: URL,
+        recordSystemAudio: Bool,
+        recordMicrophone: Bool,
+        selectedMicrophoneID: String
+    ) async throws {
         let filter = try await region.makeFilter()
         let config = region.makeStreamConfig()
 
@@ -63,8 +70,9 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         config.queueDepth = 8
         config.pixelFormat = kCVPixelFormatType_32BGRA
 
-        self.recordSystemAudio = settings.recordAudio
-        self.recordMicrophone = settings.recordMicrophone
+        self.recordSystemAudio = recordSystemAudio
+        self.recordMicrophone = recordMicrophone
+        self.selectedMicrophoneID = selectedMicrophoneID
 
         if recordSystemAudio {
             config.capturesAudio = true
@@ -126,7 +134,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
             if recordMicrophone {
                 let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
                 if micGranted {
-                    try startMicCapture(selectedMicrophoneID: settings.selectedMicrophoneID)
+                    try startMicCapture(selectedMicrophoneID: self.selectedMicrophoneID)
                 } else {
                     self.recordMicrophone = false
                     self.micAudioInput = nil
@@ -344,6 +352,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         hasStartedWriting = false
         recordSystemAudio = false
         recordMicrophone = false
+        selectedMicrophoneID = ""
         onMicrophoneWarning?(nil)
         onMicrophoneLevel?(0)
         onMicrophoneDeviceName?("")

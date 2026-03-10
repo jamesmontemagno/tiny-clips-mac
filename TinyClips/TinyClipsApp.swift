@@ -390,9 +390,6 @@ class CaptureManager: ObservableObject {
         countdownDuration: Int
     ) {
         let settings = CaptureSettings.shared
-        settings.recordAudio = systemAudio
-        settings.recordMicrophone = microphone
-        settings.selectedMicrophoneID = selectedMicrophoneID
 
         let doRecord = { [weak self] in
             guard let self else { return }
@@ -433,7 +430,13 @@ class CaptureManager: ObservableObject {
                     self.microphoneLevel = 0
                     self.activeMicrophoneName = nil
 
-                    try await recorder.start(region: region, outputURL: url)
+                    try await recorder.start(
+                        region: region,
+                        outputURL: url,
+                        recordSystemAudio: systemAudio,
+                        recordMicrophone: microphone,
+                        selectedMicrophoneID: selectedMicrophoneID
+                    )
                     self.recordingMicrophoneEnabled = recorder.isMicrophoneCaptureActive
                     self.showStopPanel()
                 } catch {
