@@ -309,13 +309,13 @@ private struct CanvasView: View {
                 Canvas { context, size in
                     for annotation in viewModel.annotations {
                         let scaledRect = viewModel.scaledRect(annotation.rect, imageSize: imageSize, origin: origin)
-                        drawAnnotation(annotation, in: context, scaledRect: scaledRect, imageSize: imageSize, origin: origin)
+                        drawAnnotation(annotation, in: context, scaledRect: scaledRect, imageSize: imageSize, origin: origin, sourceImage: viewModel.originalImage)
                     }
 
                     // Draw in-progress annotation
                     if let current = viewModel.currentAnnotation {
                         let scaledRect = viewModel.scaledRect(current.rect, imageSize: imageSize, origin: origin)
-                        drawAnnotation(current, in: context, scaledRect: scaledRect, imageSize: imageSize, origin: origin)
+                        drawAnnotation(current, in: context, scaledRect: scaledRect, imageSize: imageSize, origin: origin, sourceImage: viewModel.originalImage)
                     }
 
                     // Draw crop overlay
@@ -451,7 +451,7 @@ private struct CanvasView: View {
         ]
     }
 
-    private func drawAnnotation(_ annotation: Annotation, in context: GraphicsContext, scaledRect: CGRect, imageSize: CGSize, origin: CGPoint) {
+    private func drawAnnotation(_ annotation: Annotation, in context: GraphicsContext, scaledRect: CGRect, imageSize: CGSize, origin: CGPoint, sourceImage: NSImage? = nil) {
         let color = annotation.color
         let lineWidth = annotation.lineWidth
 
@@ -520,20 +520,52 @@ private struct CanvasView: View {
             }
 
         case .blur:
-            // Draw a pixelated/redacted fill
+            // Draw a pixelated/redacted fill using true pixel sampling when possible
             let blockSize: CGFloat = 10
             let cols = max(1, Int(scaledRect.width / blockSize))
             let rows = max(1, Int(scaledRect.height / blockSize))
-            for row in 0..<rows {
-                for col in 0..<cols {
-                    let brightness = Double((row + col) % 3) * 0.15 + 0.15
-                    let blockRect = CGRect(
-                        x: scaledRect.minX + CGFloat(col) * blockSize,
-                        y: scaledRect.minY + CGFloat(row) * blockSize,
-                        width: blockSize,
-                        height: blockSize
-                    )
-                    context.fill(Path(blockRect), with: .color(.gray.opacity(0.6 + brightness)))
+            var didPixelate = false
+            if let nsImage = sourceImage,
+               let cgSrc = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                let srcW = CGFloat(cgSrc.width)
+                let srcH = CGFloat(cgSrc.height)
+                // Map normalized annotation rect to cgImage pixels (cgImage uses Y-up coords)
+                let cgRegion = CGRect(
+                    x: annotation.rect.origin.x * srcW,
+                    y: (1.0 - annotation.rect.origin.y - annotation.rect.height) * srcH,
+                    width: max(1, annotation.rect.width * srcW),
+                    height: max(1, annotation.rect.height * srcH)
+                )
+                if let regionCG = cgSrc.cropping(to: cgRegion),
+                   let tinyCtx = CGContext(
+                       data: nil, width: cols, height: rows,
+                       bitsPerComponent: 8, bytesPerRow: 0,
+                       space: CGColorSpaceCreateDeviceRGB(),
+                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                   ) {
+                    tinyCtx.interpolationQuality = .none
+                    tinyCtx.draw(regionCG, in: CGRect(x: 0, y: 0, width: cols, height: rows))
+                    if let tinyImage = tinyCtx.makeImage() {
+                        let pixelatedNS = NSImage(cgImage: tinyImage, size: NSSize(width: cols, height: rows))
+                        let resolved = context.resolve(Image(nsImage: pixelatedNS))
+                        context.draw(resolved, in: scaledRect)
+                        didPixelate = true
+                    }
+                }
+            }
+            if !didPixelate {
+                // Fallback: fully opaque checkerboard-style gray blocks
+                for row in 0..<rows {
+                    for col in 0..<cols {
+                        let brightness = Double((row + col) % 2) * 0.15 + 0.25
+                        let blockRect = CGRect(
+                            x: scaledRect.minX + CGFloat(col) * blockSize,
+                            y: scaledRect.minY + CGFloat(row) * blockSize,
+                            width: blockSize,
+                            height: blockSize
+                        )
+                        context.fill(Path(blockRect), with: .color(Color(white: brightness, opacity: 1.0)))
+                    }
                 }
             }
 
@@ -1070,7 +1102,8 @@ private class EditorViewModel: ObservableObject {
 
         // Draw the original image (cropped)
         let drawRect = CGRect(x: 0, y: 0, width: outputW, height: outputH)
-        if let cgImage = original.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+        let sourceCGImage = original.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        if let cgImage = sourceCGImage {
             let cropCGRect = CGRect(
                 x: cropPixelRect.origin.x,
                 y: pixelH - cropPixelRect.origin.y - cropPixelRect.height, // flip Y for CG
@@ -1084,13 +1117,13 @@ private class EditorViewModel: ObservableObject {
 
         // Draw annotations
         for annotation in annotations {
-            drawAnnotationCG(annotation, in: context, cropOrigin: cropPixelRect.origin, outputSize: CGSize(width: outputW, height: outputH), fullSize: imagePixelSize)
+            drawAnnotationCG(annotation, in: context, cropOrigin: cropPixelRect.origin, outputSize: CGSize(width: outputW, height: outputH), fullSize: imagePixelSize, sourceCGImage: sourceCGImage)
         }
 
         return result
     }
 
-    private func drawAnnotationCG(_ annotation: Annotation, in ctx: CGContext, cropOrigin: CGPoint, outputSize: CGSize, fullSize: CGSize) {
+    private func drawAnnotationCG(_ annotation: Annotation, in ctx: CGContext, cropOrigin: CGPoint, outputSize: CGSize, fullSize: CGSize, sourceCGImage: CGImage? = nil) {
         // Convert normalized rect to pixel coords relative to crop
         let pixelRect = CGRect(
             x: (annotation.rect.origin.x * fullSize.width) - cropOrigin.x,
@@ -1181,23 +1214,55 @@ private class EditorViewModel: ObservableObject {
             }
 
         case .blur:
-            // Fill the redacted area with solid blocks
-            ctx.setFillColor(CGColor(gray: 0.4, alpha: 1.0))
-            ctx.fill(pixelRect)
+            // True pixelation: downsample the source image region to block size, then draw back at full size
             let blockSize: CGFloat = 12
             let cols = max(1, Int(pixelRect.width / blockSize))
             let rows = max(1, Int(pixelRect.height / blockSize))
-            for row in 0..<rows {
-                for col in 0..<cols {
-                    let brightness = CGFloat((row + col) % 3) * 0.08 + 0.3
-                    ctx.setFillColor(CGColor(gray: brightness, alpha: 1.0))
-                    let blockRect = CGRect(
-                        x: pixelRect.minX + CGFloat(col) * blockSize,
-                        y: pixelRect.minY + CGFloat(row) * blockSize,
-                        width: blockSize,
-                        height: blockSize
-                    )
-                    ctx.fill(blockRect)
+            var didPixelate = false
+            if let cgSrc = sourceCGImage {
+                let srcW = CGFloat(cgSrc.width)
+                let srcH = CGFloat(cgSrc.height)
+                // Map normalized annotation rect to cgImage pixels (cgImage uses Y-up coords)
+                let cgRegion = CGRect(
+                    x: annotation.rect.origin.x * srcW,
+                    y: (1.0 - annotation.rect.origin.y - annotation.rect.height) * srcH,
+                    width: max(1, annotation.rect.width * srcW),
+                    height: max(1, annotation.rect.height * srcH)
+                )
+                if let regionCG = cgSrc.cropping(to: cgRegion),
+                   let tinyCtx = CGContext(
+                       data: nil, width: cols, height: rows,
+                       bitsPerComponent: 8, bytesPerRow: 0,
+                       space: CGColorSpaceCreateDeviceRGB(),
+                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                   ) {
+                    tinyCtx.interpolationQuality = .none
+                    tinyCtx.draw(regionCG, in: CGRect(x: 0, y: 0, width: cols, height: rows))
+                    if let tinyImage = tinyCtx.makeImage() {
+                        ctx.saveGState()
+                        ctx.interpolationQuality = .none
+                        ctx.draw(tinyImage, in: pixelRect)
+                        ctx.restoreGState()
+                        didPixelate = true
+                    }
+                }
+            }
+            if !didPixelate {
+                // Fallback: solid fully-opaque blocks
+                ctx.setFillColor(CGColor(gray: 0.4, alpha: 1.0))
+                ctx.fill(pixelRect)
+                for row in 0..<rows {
+                    for col in 0..<cols {
+                        let brightness = CGFloat((row + col) % 2) * 0.15 + 0.25
+                        ctx.setFillColor(CGColor(gray: brightness, alpha: 1.0))
+                        let blockRect = CGRect(
+                            x: pixelRect.minX + CGFloat(col) * blockSize,
+                            y: pixelRect.minY + CGFloat(row) * blockSize,
+                            width: blockSize,
+                            height: blockSize
+                        )
+                        ctx.fill(blockRect)
+                    }
                 }
             }
 
