@@ -54,9 +54,5 @@ private struct RegionIndicatorView: View {
     var body: some View {
         Rectangle()
             .strokeBorder(.red, lineWidth: 2)
-            .background {
-                Rectangle()
-                    .fill(.red.opacity(0.05))
-            }
     }
 }
