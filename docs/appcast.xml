@@ -11,24 +11,24 @@
         <item>
             
             
-            <title>0.0.21</title>
+            <title>0.0.22</title>
             
             
-            <pubDate>Tue, 10 Mar 2026 06:14:29 +0000</pubDate>
+            <pubDate>Wed, 18 Mar 2026 05:38:31 +0000</pubDate>
             
             
-            <sparkle:version>25</sparkle:version>
+            <sparkle:version>26</sparkle:version>
             
             
-            <sparkle:shortVersionString>0.0.21</sparkle:shortVersionString>
+            <sparkle:shortVersionString>0.0.22</sparkle:shortVersionString>
             
             
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             
             
-            <description><![CDATA[<h3>What's Changed</h3><ul><li>Update CHANGELOG for v0.0.21</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v0.0.20...v0.0.21">Full Changelog</a></p>]]></description>
-            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v0.0.21</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v0.0.21/TinyClips-v0.0.21.zip" length="2848107" type="application/octet-stream" sparkle:edSignature="TmcQL5DMgxrNWEpWNuHmkE1RAIQmf0AVytnJOAjbXnyt8hHz+eyHnJNjbUBe/PKtdZ/Pc6hHzP2Qonb95RoYBA=="/>
+            <description><![CDATA[<h3>What's Changed</h3><ul><li>docs: update CHANGELOG for v0.0.22</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v0.0.21...v0.0.22">Full Changelog</a></p>]]></description>
+            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v0.0.22</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v0.0.22/TinyClips-v0.0.22.zip" length="2858271" type="application/octet-stream" sparkle:edSignature="R9LSs60/MMN5QdmRgotW75alqPpP7wZ5xxrjl2KNkAr2a9ILk2Vh/GI2SIhElk0+apFiiK06VxX4QVvuXvl8Dw=="/>
             
         
         </item>
