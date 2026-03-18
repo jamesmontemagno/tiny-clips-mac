@@ -11,24 +11,24 @@
         <item>
             
             
-            <title>0.0.22</title>
+            <title>0.0.23</title>
             
             
-            <pubDate>Wed, 18 Mar 2026 05:38:31 +0000</pubDate>
+            <pubDate>Wed, 18 Mar 2026 05:55:40 +0000</pubDate>
             
             
-            <sparkle:version>26</sparkle:version>
+            <sparkle:version>27</sparkle:version>
             
             
-            <sparkle:shortVersionString>0.0.22</sparkle:shortVersionString>
+            <sparkle:shortVersionString>0.0.23</sparkle:shortVersionString>
             
             
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             
             
-            <description><![CDATA[<h3>What's Changed</h3><ul><li>docs: update CHANGELOG for v0.0.22</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v0.0.21...v0.0.22">Full Changelog</a></p>]]></description>
-            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v0.0.22</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v0.0.22/TinyClips-v0.0.22.zip" length="2858271" type="application/octet-stream" sparkle:edSignature="R9LSs60/MMN5QdmRgotW75alqPpP7wZ5xxrjl2KNkAr2a9ILk2Vh/GI2SIhElk0+apFiiK06VxX4QVvuXvl8Dw=="/>
+            <description><![CDATA[<h3>What's Changed</h3><ul><li>docs: update CHANGELOG for v0.0.23</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v0.0.22...v0.0.23">Full Changelog</a></p>]]></description>
+            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v0.0.23</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v0.0.23/TinyClips-v0.0.23.zip" length="2858101" type="application/octet-stream" sparkle:edSignature="ZrEgZiLTvfBygvjkz5AEPjLyDb2jQ/mQpv7g1/iTsL4s6yqhceEe4OA3Bfhk15oXu0cBQScYwy59NoruI3LtDA=="/>
             
         
         </item>
