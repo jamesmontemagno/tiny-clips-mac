@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.0.23 - 2026-03-17
+
+### Improved
+- RegionIndicatorView now has cleaner appearance with background removed.
+
 ## v0.0.22 - 2026-03-17
 
 ### Added
