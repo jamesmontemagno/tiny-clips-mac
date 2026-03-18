@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## v0.0.22 - 2026-03-17
+
+### Added
+- CONTRIBUTING.md guide for new contributors.
+
+### Fixed
+- Button out of frame on first setup.
+- True pixelation for redact tool so content is fully obscured.
+
 ## v0.0.21 - 2026-03-09
 
 ### Improved
