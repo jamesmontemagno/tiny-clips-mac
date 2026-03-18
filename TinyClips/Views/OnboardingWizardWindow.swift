@@ -94,21 +94,9 @@ private struct OnboardingWizardView: View {
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
 
-            Group {
-                switch step {
-                case .welcome:
-                    welcomeContent
-                case .screen:
-                    screenPermissionContent
-                case .optional:
-                    optionalPermissionsContent
-                case .settings:
-                    commonSettingsContent
-#if !APPSTORE
-                case .updates:
-                    updatesContent
-#endif
-                }
+            ScrollView {
+                stepContent
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
@@ -149,6 +137,24 @@ private struct OnboardingWizardView: View {
             }
         } message: {
             Text("You can run setup later from Settings.")
+        }
+    }
+
+    @ViewBuilder
+    private var stepContent: some View {
+        switch step {
+        case .welcome:
+            welcomeContent
+        case .screen:
+            screenPermissionContent
+        case .optional:
+            optionalPermissionsContent
+        case .settings:
+            commonSettingsContent
+#if !APPSTORE
+        case .updates:
+            updatesContent
+#endif
         }
     }
 
@@ -264,8 +270,11 @@ private struct OnboardingWizardView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            editorDefaultsRow(
+            capturePreferenceCard(
                 title: "Screenshots",
+                subtitle: "Control what happens after each screenshot finishes.",
+                symbolName: "camera.viewfinder",
+                accentColor: .blue,
                 openLabel: "Open editor after capture",
                 openBinding: $settings.showScreenshotEditor,
                 saveBinding: $settings.saveImmediatelyScreenshot,
@@ -275,8 +284,11 @@ private struct OnboardingWizardView: View {
                 copyHelp: "Copy saved screenshots to the clipboard as an image."
             )
 
-            editorDefaultsRow(
+            capturePreferenceCard(
                 title: "Videos",
+                subtitle: "Decide whether recordings open in the trimmer or save immediately.",
+                symbolName: "video",
+                accentColor: .red,
                 openLabel: "Open trimmer after recording",
                 openBinding: $settings.showTrimmer,
                 saveBinding: $settings.saveImmediatelyVideo,
@@ -286,8 +298,11 @@ private struct OnboardingWizardView: View {
                 copyHelp: "Copy saved videos to the clipboard as a file URL."
             )
 
-            editorDefaultsRow(
+            capturePreferenceCard(
                 title: "GIFs",
+                subtitle: "Set the default post-capture flow for GIF recordings.",
+                symbolName: "sparkles.rectangle.stack",
+                accentColor: .orange,
                 openLabel: "Open trimmer after recording",
                 openBinding: $settings.showGifTrimmer,
                 saveBinding: $settings.saveImmediatelyGif,
@@ -402,8 +417,11 @@ private struct OnboardingWizardView: View {
         .accessibilityValue(isGranted ? grantedText : deniedText)
     }
 
-    private func editorDefaultsRow(
+    private func capturePreferenceCard(
         title: String,
+        subtitle: String,
+        symbolName: String,
+        accentColor: Color,
         openLabel: String,
         openBinding: Binding<Bool>,
         saveBinding: Binding<Bool>,
@@ -412,37 +430,78 @@ private struct OnboardingWizardView: View {
         saveHelp: String,
         copyHelp: String
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: symbolName)
+                    .font(.title3)
+                    .foregroundStyle(accentColor)
+                    .frame(width: 28)
+                    .accessibilityHidden(true)
 
-            toggleRow(openLabel, binding: openBinding, helpText: openHelp)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.headline)
+
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            preferenceToggleRow(
+                title: openLabel,
+                description: openHelp,
+                binding: openBinding
+            )
                 .onChange(of: openBinding.wrappedValue) { _, isEnabled in
                     if !isEnabled {
                         saveBinding.wrappedValue = true
                     }
                 }
 
-            toggleRow("Save immediately", binding: saveBinding, isIndented: true, helpText: saveHelp)
+            preferenceToggleRow(
+                title: "Save immediately",
+                description: saveHelp,
+                binding: saveBinding
+            )
                 .disabled(!openBinding.wrappedValue)
-            toggleRow("Copy to clipboard", binding: copyBinding, helpText: copyHelp)
+
+            if !openBinding.wrappedValue {
+                Text("Save immediately stays enabled while the editor or trimmer is turned off.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, -4)
+            }
+
+            preferenceToggleRow(
+                title: "Copy to clipboard",
+                description: copyHelp,
+                binding: copyBinding
+            )
         }
-        .padding(12)
-        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
+        .padding(14)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 14))
     }
 
-    @ViewBuilder
-    private func toggleRow(_ title: String, binding: Binding<Bool>, isIndented: Bool = false, helpText: String? = nil) -> some View {
-        let row = Toggle(title, isOn: binding)
-            .toggleStyle(.checkbox)
-            .font(.callout)
-            .padding(.leading, isIndented ? 18 : 0)
+    private func preferenceToggleRow(title: String, description: String, binding: Binding<Bool>) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Toggle("", isOn: binding)
+                .labelsHidden()
+                .toggleStyle(.switch)
 
-        if let helpText {
-            row.help(helpText)
-        } else {
-            row
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.callout.weight(.medium))
+
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .help(description)
     }
 }
