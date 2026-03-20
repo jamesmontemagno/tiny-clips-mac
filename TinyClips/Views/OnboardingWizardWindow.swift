@@ -234,7 +234,7 @@ private struct OnboardingWizardView: View {
             )
 
             HStack(spacing: 10) {
-                Button(microphoneGranted ? "Re-check" : "Allow Microphone") {
+                Button(microphoneGranted ? "Re-check" : "Continue") {
                     requestMicrophonePermission()
                 }
 
