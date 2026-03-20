@@ -428,7 +428,17 @@ struct SettingsView: View {
 
         Section {
             Link("GitHub Repository", destination: URL(string: "https://github.com/jamesmontemagno/tiny-clips-mac")!)
+                .accessibilityHint("Opens the TinyClips GitHub repository in your browser.")
             Link("Report an Issue", destination: reportIssueURL)
+                .accessibilityHint("Opens the issue reporter in your browser.")
+            if let privacyURL = URL(string: "https://tinyclips.app/privacy.html") {
+                Link("Privacy Policy", destination: privacyURL)
+                    .accessibilityHint("Opens Privacy Policy in your browser.")
+            }
+            if let termsURL = URL(string: "https://tinyclips.app/terms.html") {
+                Link("Terms of Use", destination: termsURL)
+                    .accessibilityHint("Opens Terms of Use in your browser.")
+            }
         }
 
 #if !APPSTORE
