@@ -23,6 +23,9 @@ struct ProSubscriptionView: View {
                     restoreLink
                 }
                 errorMessage
+                if !storeService.isPro {
+                    legalLinks
+                }
             }
             .padding(32)
             .frame(maxWidth: 520)
@@ -167,6 +170,31 @@ struct ProSubscriptionView: View {
             .buttonStyle(.bordered)
 
             restoreLink
+        }
+    }
+
+    // MARK: - Legal Links
+
+    private var legalLinks: some View {
+        HStack(spacing: 16) {
+            if let privacyURL = URL(string: "https://tinyclips.app/privacy.html") {
+                Link("Privacy Policy", destination: privacyURL)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHint("Opens Privacy Policy in your browser.")
+            }
+
+            Text("·")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+
+            if let termsURL = URL(string: "https://tinyclips.app/terms.html") {
+                Link("Terms of Use", destination: termsURL)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityHint("Opens Terms of Use in your browser.")
+            }
         }
     }
 
