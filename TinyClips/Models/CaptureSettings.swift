@@ -183,6 +183,15 @@ class CaptureSettings: ObservableObject {
     @AppStorage("alwaysCaptureMainDisplay") var alwaysCaptureMainDisplay: Bool = false
     @AppStorage("showRegionIndicator") var showRegionIndicator: Bool = true
     @AppStorage("includeTinyClipsInCapture") var includeTinyClipsInCapture: Bool = false
+    // Custom global hotkeys (stored as Carbon keyCode + modifiers bitmask).
+    // Defaults: ⌃⌥⌘5 / ⌃⌥⌘6 / ⌃⌥⌘7
+    // 6400 = controlKey (4096) | optionKey (2048) | cmdKey (256)
+    @AppStorage("screenshotHotKeyCode") var screenshotHotKeyCode: Int = 23      // kVK_ANSI_5
+    @AppStorage("screenshotHotKeyModifiers") var screenshotHotKeyModifiers: Int = 6400
+    @AppStorage("videoHotKeyCode") var videoHotKeyCode: Int = 22                // kVK_ANSI_6
+    @AppStorage("videoHotKeyModifiers") var videoHotKeyModifiers: Int = 6400
+    @AppStorage("gifHotKeyCode") var gifHotKeyCode: Int = 26                    // kVK_ANSI_7
+    @AppStorage("gifHotKeyModifiers") var gifHotKeyModifiers: Int = 6400
 
 #if APPSTORE
     var hasCustomSaveDirectory: Bool {
@@ -230,6 +239,9 @@ class CaptureSettings: ObservableObject {
             "screenshotCountdownEnabled", "screenshotCountdownDuration",
             "hasCompletedOnboarding", "alwaysCaptureMainDisplay", "showRegionIndicator",
             "includeTinyClipsInCapture",
+            "screenshotHotKeyCode", "screenshotHotKeyModifiers",
+            "videoHotKeyCode", "videoHotKeyModifiers",
+            "gifHotKeyCode", "gifHotKeyModifiers",
             "appStoreClipCountForReview", "appStoreReviewRequested"
         ]
 #if APPSTORE

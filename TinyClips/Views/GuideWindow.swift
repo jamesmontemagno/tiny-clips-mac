@@ -32,6 +32,7 @@ class GuideWindow: NSWindow, NSWindowDelegate {
 
 private struct GuideWindowView: View {
     @State private var selectedSection: GuideSection = .captureModes
+    @ObservedObject private var settings = CaptureSettings.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -87,9 +88,9 @@ private struct GuideWindowView: View {
         case .shortcuts:
             sectionCard(title: "Keyboard Shortcuts", icon: "command") {
                 VStack(alignment: .leading, spacing: 8) {
-                    shortcutRow(title: "Screenshot", keys: "⌃⌥⌘5")
-                    shortcutRow(title: "Record Video", keys: "⌃⌥⌘6")
-                    shortcutRow(title: "Record GIF", keys: "⌃⌥⌘7")
+                    shortcutRow(title: "Screenshot", keys: HotKeyBinding(keyCode: settings.screenshotHotKeyCode, carbonModifiers: settings.screenshotHotKeyModifiers).displayString)
+                    shortcutRow(title: "Record Video", keys: HotKeyBinding(keyCode: settings.videoHotKeyCode, carbonModifiers: settings.videoHotKeyModifiers).displayString)
+                    shortcutRow(title: "Record GIF", keys: HotKeyBinding(keyCode: settings.gifHotKeyCode, carbonModifiers: settings.gifHotKeyModifiers).displayString)
                     shortcutRow(title: "Picker: Region", keys: "R")
                     shortcutRow(title: "Picker: Screen", keys: "S")
                     shortcutRow(title: "Picker: Window", keys: "W")
