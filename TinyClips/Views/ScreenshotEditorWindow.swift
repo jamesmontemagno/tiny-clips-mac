@@ -53,6 +53,7 @@ private enum EditTool: String, CaseIterable {
     case line = "line.diagonal"
     case pencil = "pencil.tip"
     case text = "textformat"
+    case number = "number.circle.fill"
     case blur = "eye.slash"
 
     var label: String {
@@ -65,6 +66,7 @@ private enum EditTool: String, CaseIterable {
         case .line: return "Line"
         case .pencil: return "Draw"
         case .text: return "Text"
+        case .number: return "Number"
         case .blur: return "Redact"
         }
     }
@@ -448,6 +450,8 @@ private struct CanvasView: View {
                                     viewModel.textEditPosition = normalized
                                     viewModel.textEditValue = ""
                                     viewModel.isEditingText = true
+                                } else if viewModel.selectedTool == .number {
+                                    viewModel.placeNumberAnnotation(at: normalized)
                                 } else if viewModel.selectedTool == .move {
                                     // Tap to select/deselect annotations
                                     if let idx = viewModel.annotationIndex(at: normalized) {
@@ -596,6 +600,16 @@ private struct CanvasView: View {
                 }
             }
 
+        case .number:
+            // Draw filled circle
+            context.fill(Path(ellipseIn: scaledRect), with: .color(color))
+            // Draw number centered in circle
+            let fontSize = scaledRect.width * 0.55
+            let numberText = Text(annotation.text)
+                .font(.system(size: fontSize, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+            context.draw(numberText, at: CGPoint(x: scaledRect.midX, y: scaledRect.midY), anchor: .center)
+
         case .text, .crop, .move:
             break
         }
@@ -622,6 +636,8 @@ private class EditorViewModel: ObservableObject {
     @Published var saveFormat: ImageFormat
     @Published var saveScale: Int
     @Published var saveJpegQuality: Double
+
+    @Published var nextNumberLabel: Int = 1
 
     private var pencilPoints: [CGPoint] = []
     private var imagePixelSize: CGSize = .zero
@@ -857,8 +873,8 @@ private class EditorViewModel: ObservableObject {
                 points: pencilPoints
             )
 
-        case .text:
-            break // text uses click, not drag
+        case .text, .number:
+            break // text/number use click, not drag
 
         default:
             let rect = makeRect(from: start, to: current)
@@ -898,7 +914,7 @@ private class EditorViewModel: ObservableObject {
             pencilPoints = []
             currentAnnotation = nil
 
-        case .text:
+        case .text, .number:
             break // handled by SpatialTapGesture
 
         default:
@@ -945,7 +961,11 @@ private class EditorViewModel: ObservableObject {
 
     func undo() {
         if !annotations.isEmpty {
+            let last = annotations.last
             annotations.removeLast()
+            if last?.tool == .number {
+                nextNumberLabel = max(1, nextNumberLabel - 1)
+            }
         }
         if cropRect != nil {
             cropRect = nil
@@ -1088,6 +1108,29 @@ private class EditorViewModel: ObservableObject {
         textEditPosition = nil
         textEditValue = ""
         isEditingText = false
+    }
+
+    func placeNumberAnnotation(at position: CGPoint) {
+        guard imagePixelSize.width > 0, imagePixelSize.height > 0 else { return }
+        // Choose a side length in pixel space so the circle is always round
+        let sidePixels = max(20, min(80, imagePixelSize.width * 0.05))
+        let normW = sidePixels / imagePixelSize.width
+        let normH = sidePixels / imagePixelSize.height
+        let rect = CGRect(
+            x: position.x - normW / 2,
+            y: position.y - normH / 2,
+            width: normW,
+            height: normH
+        )
+        annotations.append(Annotation(
+            tool: .number,
+            rect: rect,
+            color: selectedColor,
+            lineWidth: lineWidth,
+            text: "\(nextNumberLabel)",
+            points: []
+        ))
+        nextNumberLabel += 1
     }
 
     private func renderFinalImage() -> NSBitmapImageRep? {
@@ -1305,6 +1348,31 @@ private class EditorViewModel: ObservableObject {
                     }
                 }
             }
+
+        case .number:
+            // Draw filled circle
+            ctx.setFillColor(cgColor)
+            ctx.fillEllipse(in: pixelRect)
+
+            // Draw number centered in circle
+            let numberStr = annotation.text as NSString
+            let numFontSize = pixelRect.width * 0.55
+            let numAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.boldSystemFont(ofSize: numFontSize),
+                .foregroundColor: NSColor.white,
+            ]
+            let numTextSize = numberStr.size(withAttributes: numAttrs)
+            ctx.saveGState()
+            ctx.translateBy(x: 0, y: outputSize.height)
+            ctx.scaleBy(x: 1, y: -1)
+            let numTextRect = CGRect(
+                x: pixelRect.midX - numTextSize.width / 2,
+                y: outputSize.height - pixelRect.midY - numTextSize.height / 2,
+                width: numTextSize.width,
+                height: numTextSize.height
+            )
+            numberStr.draw(in: numTextRect, withAttributes: numAttrs)
+            ctx.restoreGState()
 
         case .text:
             let str = annotation.text as NSString
