@@ -49,8 +49,8 @@ struct HotKeyBinding: Equatable {
     }
 
     /// Returns SwiftUI `EventModifiers` equivalent to the stored Carbon modifiers.
-    var swiftUIModifiers: EventModifiers {
-        var mods: EventModifiers = []
+    var swiftUIModifiers: SwiftUI.EventModifiers {
+        var mods: SwiftUI.EventModifiers = []
         if carbonModifiers & Int(cmdKey)     != 0 { mods.insert(.command) }
         if carbonModifiers & Int(shiftKey)   != 0 { mods.insert(.shift)   }
         if carbonModifiers & Int(optionKey)  != 0 { mods.insert(.option)  }
