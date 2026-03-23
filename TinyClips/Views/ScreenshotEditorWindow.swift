@@ -604,7 +604,7 @@ private struct CanvasView: View {
             // Draw filled circle
             context.fill(Path(ellipseIn: scaledRect), with: .color(color))
             // Draw number centered in circle
-            let fontSize = scaledRect.width * 0.55
+            let fontSize = scaledRect.width * numberCircleFontRatio
             let numberText = Text(annotation.text)
                 .font(.system(size: fontSize, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
@@ -617,6 +617,12 @@ private struct CanvasView: View {
 }
 
 // MARK: - ViewModel
+
+// Number tool rendering constants
+private let numberCircleMinPixels: CGFloat = 20
+private let numberCircleMaxPixels: CGFloat = 80
+private let numberCircleSizeRatio: CGFloat = 0.05
+private let numberCircleFontRatio: CGFloat = 0.55
 
 private class EditorViewModel: ObservableObject {
     let sourceURL: URL
@@ -1113,7 +1119,7 @@ private class EditorViewModel: ObservableObject {
     func placeNumberAnnotation(at position: CGPoint) {
         guard imagePixelSize.width > 0, imagePixelSize.height > 0 else { return }
         // Choose a side length in pixel space so the circle is always round
-        let sidePixels = max(20, min(80, imagePixelSize.width * 0.05))
+        let sidePixels = max(numberCircleMinPixels, min(numberCircleMaxPixels, imagePixelSize.width * numberCircleSizeRatio))
         let normW = sidePixels / imagePixelSize.width
         let normH = sidePixels / imagePixelSize.height
         let rect = CGRect(
@@ -1356,9 +1362,16 @@ private class EditorViewModel: ObservableObject {
 
             // Draw number centered in circle
             let numberStr = annotation.text as NSString
-            let numFontSize = pixelRect.width * 0.55
+            let numFontSize = pixelRect.width * numberCircleFontRatio
+            let baseFont = NSFont.systemFont(ofSize: numFontSize, weight: .bold)
+            let numFont: NSFont
+            if let roundedDesc = baseFont.fontDescriptor.withDesign(.rounded) {
+                numFont = NSFont(descriptor: roundedDesc, size: numFontSize) ?? baseFont
+            } else {
+                numFont = baseFont
+            }
             let numAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.boldSystemFont(ofSize: numFontSize),
+                .font: numFont,
                 .foregroundColor: NSColor.white,
             ]
             let numTextSize = numberStr.size(withAttributes: numAttrs)
