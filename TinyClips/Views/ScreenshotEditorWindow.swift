@@ -77,6 +77,7 @@ private struct Annotation: Identifiable {
     let tool: EditTool
     var rect: CGRect
     var color: Color
+    var fillColor: Color = .clear
     var lineWidth: CGFloat
     var text: String
     var points: [CGPoint] // for pencil
@@ -155,12 +156,32 @@ private struct ScreenshotEditorView: View {
 
             Spacer()
 
-            // Color picker
-            ColorPicker("", selection: $viewModel.selectedColor)
-                .labelsHidden()
-                .frame(width: 30)
-                .accessibilityLabel("Annotation color")
-                .accessibilityHint("Selects the color for drawing and text.")
+            // Color pickers
+            HStack(spacing: 8) {
+                VStack(spacing: 1) {
+                    ColorPicker("", selection: $viewModel.selectedColor, supportsOpacity: true)
+                        .labelsHidden()
+                        .frame(width: 28)
+                        .accessibilityLabel("Border color")
+                        .accessibilityHint("Selects the border or stroke color for shapes and drawing.")
+                    Text("Border")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+
+                VStack(spacing: 1) {
+                    ColorPicker("", selection: $viewModel.selectedFillColor, supportsOpacity: true)
+                        .labelsHidden()
+                        .frame(width: 28)
+                        .accessibilityLabel("Fill color")
+                        .accessibilityHint("Selects the fill color for rectangle and circle shapes. Use transparent for no fill.")
+                    Text("Fill")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+            }
 
             // Line width
             Picker("", selection: $viewModel.lineWidth) {
@@ -457,9 +478,15 @@ private struct CanvasView: View {
 
         switch annotation.tool {
         case .rectangle:
+            if annotation.fillColor != .clear {
+                context.fill(Path(scaledRect), with: .color(annotation.fillColor))
+            }
             context.stroke(Path(scaledRect), with: .color(color), lineWidth: lineWidth)
 
         case .circle:
+            if annotation.fillColor != .clear {
+                context.fill(Path(ellipseIn: scaledRect), with: .color(annotation.fillColor))
+            }
             context.stroke(Path(ellipseIn: scaledRect), with: .color(color), lineWidth: lineWidth)
 
         case .arrow:
@@ -582,6 +609,7 @@ private class EditorViewModel: ObservableObject {
     @Published var originalImage: NSImage?
     @Published var selectedTool: EditTool = .move
     @Published var selectedColor: Color = .red
+    @Published var selectedFillColor: Color = .clear
     @Published var lineWidth: CGFloat = 4
     @Published var annotations: [Annotation] = []
     @Published var currentAnnotation: Annotation?
@@ -838,6 +866,7 @@ private class EditorViewModel: ObservableObject {
                 tool: selectedTool,
                 rect: rect,
                 color: selectedColor,
+                fillColor: selectedFillColor,
                 lineWidth: lineWidth,
                 text: "",
                 points: (selectedTool == .arrow || selectedTool == .line) ? [start, current] : []
@@ -881,6 +910,7 @@ private class EditorViewModel: ObservableObject {
                     tool: selectedTool,
                     rect: rect,
                     color: selectedColor,
+                    fillColor: selectedFillColor,
                     lineWidth: lineWidth,
                     text: "",
                     points: (selectedTool == .arrow || selectedTool == .line) ? [start, end] : []
@@ -1140,9 +1170,19 @@ private class EditorViewModel: ObservableObject {
 
         switch annotation.tool {
         case .rectangle:
+            if annotation.fillColor != .clear {
+                let fillCGColor = NSColor(annotation.fillColor).cgColor
+                ctx.setFillColor(fillCGColor)
+                ctx.fill(pixelRect)
+            }
             ctx.stroke(pixelRect)
 
         case .circle:
+            if annotation.fillColor != .clear {
+                let fillCGColor = NSColor(annotation.fillColor).cgColor
+                ctx.setFillColor(fillCGColor)
+                ctx.fillEllipse(in: pixelRect)
+            }
             ctx.strokeEllipse(in: pixelRect)
 
         case .arrow:
