@@ -77,7 +77,12 @@ private struct MenuBarContentView: View {
         }
 #if !APPSTORE
         Button("Check for Updates\u{2026}") {
-            sparkleController.checkForUpdates()
+            // Open Settings first so Sparkle has a parent window for its update dialog.
+            // Without a key window (which doesn't exist after the menu bar menu closes),
+            // Sparkle cannot present its UI and shows "Update failed" instead.
+            openWindow(id: "settings-window")
+            bringSettingsWindowToFront()
+            checkForUpdatesAfterSettingsWindowAppears()
         }
 #endif
         Button("Clips Manager…") {
@@ -111,6 +116,24 @@ private struct MenuBarContentView: View {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)
+    }
+
+    private func checkForUpdatesAfterSettingsWindowAppears() {
+        // Poll until the Settings window becomes key (or a 2 s timeout elapses) so
+        // Sparkle has a valid parent window for its update dialog. A menu bar app has
+        // no key window after the menu closes, which causes Sparkle to show "Update
+        // failed" when checkForUpdates is called immediately.
+        let start = Date()
+        let timeout: TimeInterval = 2.0
+        func tryCheck() {
+            let settingsIsKey = NSApp.keyWindow.map { $0.identifier?.rawValue == "settings-window" || $0.title == "Tiny Clips Settings" } ?? false
+            if settingsIsKey || Date().timeIntervalSince(start) >= timeout {
+                sparkleController.checkForUpdates()
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { tryCheck() }
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { tryCheck() }
     }
 
     private func bringSettingsWindowToFront() {
