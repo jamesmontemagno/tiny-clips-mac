@@ -44,28 +44,34 @@ final class HotKeyManager {
     // MARK: - Public
 
     func registerCaptureHotKeys(
+        screenshotKeyCode: UInt32,
+        screenshotModifiers: UInt32,
         onScreenshot: @escaping () -> Void,
+        videoKeyCode: UInt32,
+        videoModifiers: UInt32,
         onRecordVideo: @escaping () -> Void,
+        gifKeyCode: UInt32,
+        gifModifiers: UInt32,
         onRecordGif: @escaping () -> Void
     ) {
         register(
             id: .screenshot,
-            keyCode: 23, // kVK_ANSI_5
-            modifiers: UInt32(controlKey | optionKey | cmdKey),
+            keyCode: screenshotKeyCode,
+            modifiers: screenshotModifiers,
             action: onScreenshot
         )
 
         register(
             id: .recordVideo,
-            keyCode: 22, // kVK_ANSI_6
-            modifiers: UInt32(controlKey | optionKey | cmdKey),
+            keyCode: videoKeyCode,
+            modifiers: videoModifiers,
             action: onRecordVideo
         )
 
         register(
             id: .recordGif,
-            keyCode: 26, // kVK_ANSI_7
-            modifiers: UInt32(controlKey | optionKey | cmdKey),
+            keyCode: gifKeyCode,
+            modifiers: gifModifiers,
             action: onRecordGif
         )
     }

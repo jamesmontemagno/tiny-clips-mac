@@ -1,5 +1,6 @@
 import SwiftUI
 import ScreenCaptureKit
+import Combine
 #if APPSTORE
 import StoreKit
 #endif
@@ -38,6 +39,7 @@ struct TinyClipsApp: App {
 private struct MenuBarContentView: View {
     @ObservedObject var captureManager: CaptureManager
     @ObservedObject var sparkleController: SparkleController
+    @ObservedObject private var settings = CaptureSettings.shared
     @Environment(\.openWindow) private var openWindow
 #if APPSTORE
     @Environment(\.requestReview) private var requestReview
@@ -50,19 +52,19 @@ private struct MenuBarContentView: View {
             Button("Screenshot…") {
                 captureManager.takeScreenshot()
             }
-            .keyboardShortcut("5", modifiers: [.control, .option, .command])
+            .keyboardShortcut(screenshotKey, modifiers: screenshotModifiers)
             .accessibilityHint("Starts screenshot capture.")
 
             Button("Record Video...") {
                 captureManager.startVideoRecording()
             }
-            .keyboardShortcut("6", modifiers: [.control, .option, .command])
+            .keyboardShortcut(videoKey, modifiers: videoModifiers)
             .accessibilityHint("Starts video recording.")
 
             Button("Record GIF...") {
                 captureManager.startGifRecording()
             }
-            .keyboardShortcut("7", modifiers: [.control, .option, .command])
+            .keyboardShortcut(gifKey, modifiers: gifModifiers)
             .accessibilityHint("Starts GIF recording.")
 
             Divider()
@@ -148,6 +150,45 @@ private struct MenuBarContentView: View {
             }
         }
     }
+
+    // MARK: - Dynamic Shortcut Keys
+
+    private var screenshotKey: KeyEquivalent {
+        keyEquivalent(for: settings.screenshotHotKeyCode, fallback: "5")
+    }
+
+    private var screenshotModifiers: EventModifiers {
+        HotKeyBinding(keyCode: settings.screenshotHotKeyCode, carbonModifiers: settings.screenshotHotKeyModifiers).swiftUIModifiers
+    }
+
+    private var videoKey: KeyEquivalent {
+        keyEquivalent(for: settings.videoHotKeyCode, fallback: "6")
+    }
+
+    private var videoModifiers: EventModifiers {
+        HotKeyBinding(keyCode: settings.videoHotKeyCode, carbonModifiers: settings.videoHotKeyModifiers).swiftUIModifiers
+    }
+
+    private var gifKey: KeyEquivalent {
+        keyEquivalent(for: settings.gifHotKeyCode, fallback: "7")
+    }
+
+    private var gifModifiers: EventModifiers {
+        HotKeyBinding(keyCode: settings.gifHotKeyCode, carbonModifiers: settings.gifHotKeyModifiers).swiftUIModifiers
+    }
+
+    private func keyEquivalent(for keyCode: Int, fallback: Character) -> KeyEquivalent {
+        // Only use UCKeyTranslate result when it produces a single letter or digit —
+        // this avoids passing multi-char strings (e.g. "Space", "Esc") or symbol
+        // characters (e.g. "←") to SwiftUI's KeyEquivalent.
+        guard let str = HotKeyBinding.keyCodeToDisplayString(keyCode),
+              str.count == 1,
+              let ch = str.lowercased().first,
+              ch.isLetter || ch.isNumber else {
+            return KeyEquivalent(fallback)
+        }
+        return KeyEquivalent(ch)
+    }
 }
 
 private struct MenuBarLabelView: View {
@@ -194,9 +235,17 @@ class CaptureManager: ObservableObject {
     private var guideWindow: GuideWindow?
     private var screenPickerWindow: ScreenPickerWindow?
     private let hotKeyManager = HotKeyManager()
+    private var hotKeySettingsCancellable: AnyCancellable?
 
     init() {
         configureGlobalHotKeys()
+
+        // Re-register capture hotkeys whenever shortcut settings change.
+        hotKeySettingsCancellable = CaptureSettings.shared.objectWillChange
+            .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.configureGlobalHotKeys()
+            }
 
         DispatchQueue.main.async { [weak self] in
             self?.showOnboardingIfNeeded()
@@ -218,15 +267,22 @@ class CaptureManager: ObservableObject {
     }
 
     private func configureGlobalHotKeys() {
+        let settings = CaptureSettings.shared
         hotKeyManager.registerCaptureHotKeys(
+            screenshotKeyCode: UInt32(settings.screenshotHotKeyCode),
+            screenshotModifiers: UInt32(settings.screenshotHotKeyModifiers),
             onScreenshot: { [weak self] in
                 guard let self, !self.isRecording else { return }
                 self.takeScreenshot()
             },
+            videoKeyCode: UInt32(settings.videoHotKeyCode),
+            videoModifiers: UInt32(settings.videoHotKeyModifiers),
             onRecordVideo: { [weak self] in
                 guard let self, !self.isRecording else { return }
                 self.startVideoRecording()
             },
+            gifKeyCode: UInt32(settings.gifHotKeyCode),
+            gifModifiers: UInt32(settings.gifHotKeyModifiers),
             onRecordGif: { [weak self] in
                 guard let self, !self.isRecording else { return }
                 self.startGifRecording()
