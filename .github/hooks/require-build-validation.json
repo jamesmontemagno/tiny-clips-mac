@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "/usr/bin/env python3 .github/hooks/require_build_validation.py",
+        "timeout": 10
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "/usr/bin/env python3 .github/hooks/require_build_validation.py",
+        "timeout": 10
+      }
+    ]
+  }
+}

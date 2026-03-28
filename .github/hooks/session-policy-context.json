@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "/usr/bin/env python3 .github/hooks/session_policy_context.py",
+        "timeout": 10
+      }
+    ]
+  }
+}
