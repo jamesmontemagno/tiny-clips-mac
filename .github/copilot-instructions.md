@@ -74,6 +74,8 @@ Open SwiftUI scene windows via `openWindow(id:)` from menu actions, then immedia
 2. **Video:** permission → `CapturePickerPanel` (region/screen/window + countdown) → optional `RegionIndicatorPanel` for region mode → `StartRecordingPanel` → optional countdown → `VideoRecorder.start()` → `StopRecordingPanel` → stop → optional trimmer → save.
 3. **GIF:** permission → `CapturePickerPanel` (region/screen/window + countdown) → optional `RegionIndicatorPanel` for region mode → `StartRecordingPanel` → optional countdown → `GifWriter.start()` → `StopRecordingPanel` → stop → optional trimmer → save.
 
+Each capture type also has an independent "show capture picker" setting, defaulting to enabled. When disabled, that type skips the picker and goes straight to region selection; canceling region selection in that path cancels the request instead of reopening the picker.
+
 Editor/trimmer windows are shown **after** all recording resources are released to avoid file contention.
 
 ### Popup Windows
@@ -123,6 +125,7 @@ Screenshot `⌃⌥⌘5`, Video `⌃⌥⌘6`, GIF `⌃⌥⌘7`, Stop `⌘.`, Sett
 - `NavigationSplitView` with sidebar tab list and `Form` detail using `.formStyle(.grouped)`.
 - Minimum frame: `.frame(minWidth: 720, minHeight: 460)` with scene default size `720x460`.
 - Dock visibility changes may reopen settings via `openWindow(id: "settings-window")` after activation policy updates.
+- Screenshot, Video, and GIF settings each expose a per-type "show capture picker" toggle; default it to enabled so the current picker-first experience remains unchanged unless the user opts out.
 - For MAS (`APPSTORE`): keep save location UI minimal and sandbox-safe (default Pictures/Movies behavior plus user-selected folder bookmark path display).
 
 ## Security
