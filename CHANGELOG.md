@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.3.1 - 2026-03-28
+
+### Improved
+- Increased default width of screenshot editor window for better usability and editing space.
+
 ## v1.3.0 - 2026-03-28
 
 ### Added
