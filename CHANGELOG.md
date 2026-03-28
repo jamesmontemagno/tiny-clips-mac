@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.3.0 - 2026-03-28
+
+### Added
+- Require changelog update hook to enforce changelog entries on each commit.
+- Independent "show capture picker" settings for each capture type (screenshot, video, GIF).
+- Number annotation tool to screenshot editor for adding numbered callouts.
+- Customizable keyboard shortcuts for capture actions.
+- Fill color option to image editor rectangle and circle shapes.
+- Privacy Policy and Terms of Use links in About section of Settings.
+
+### Improved
+- Encapsulated countdown properties in CapturePickerState for better state management.
+- Extracted number tool constants and improved export path font alignment in code review.
+- App Store metadata and legal links for compliance.
+
+### Fixed
+- Ambiguous EventModifiers by qualifying as SwiftUI.EventModifiers.
+- Settings window now opens before checkForUpdates from menu bar to prevent Sparkle "Update failed" error.
+
 ## v0.0.23 - 2026-03-17
 
 ### Improved
