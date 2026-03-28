@@ -9,17 +9,28 @@ enum CapturePickerMode {
     case window
 }
 
+@MainActor
+private final class CapturePickerState: ObservableObject {
+    @Published var countdownEnabled: Bool
+    @Published var countdownDuration: Int
+
+    init(countdownEnabled: Bool, countdownDuration: Int) {
+        self.countdownEnabled = countdownEnabled
+        self.countdownDuration = countdownDuration
+    }
+}
+
 
 // MARK: - Panel
 
+@MainActor
 class CapturePickerPanel: NSPanel {
     private var didComplete = false
     private var localMonitor: Any?
     private var globalMonitor: Any?
     private var onCapture: ((CapturePickerMode, Bool, Int) -> Void)?
     private var onCancel: (() -> Void)?
-    private var countdownEnabled = false
-    private var countdownDuration = 3
+    private let state: CapturePickerState
 
     override var canBecomeKey: Bool { true }
 
@@ -36,8 +47,10 @@ class CapturePickerPanel: NSPanel {
             backing: .buffered,
             defer: false
         )
-        self.countdownEnabled = countdownEnabled
-        self.countdownDuration = countdownDuration
+        self.state = CapturePickerState(
+            countdownEnabled: countdownEnabled,
+            countdownDuration: countdownDuration
+        )
         self.onCapture = onCapture
         self.onCancel = onCancel
         self.isReleasedWhenClosed = false
@@ -50,14 +63,7 @@ class CapturePickerPanel: NSPanel {
 
         let hostingView = NSHostingView(rootView: CapturePickerView(
             captureType: captureType,
-            countdownEnabled: Binding(
-                get: { [weak self] in self?.countdownEnabled ?? false },
-                set: { [weak self] in self?.countdownEnabled = $0 }
-            ),
-            countdownDuration: Binding(
-                get: { [weak self] in self?.countdownDuration ?? 3 },
-                set: { [weak self] in self?.countdownDuration = $0 }
-            ),
+            state: state,
             onCapture: { [weak self] mode, enabled, duration in
                 self?.finishCapture(mode: mode, countdownEnabled: enabled, countdownDuration: duration)
             },
@@ -137,13 +143,13 @@ class CapturePickerPanel: NSPanel {
 
         switch key {
         case "r":
-            finishCapture(mode: .region, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+            finishCapture(mode: .region, countdownEnabled: state.countdownEnabled, countdownDuration: state.countdownDuration)
             return true
         case "s":
-            finishCapture(mode: .screen, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+            finishCapture(mode: .screen, countdownEnabled: state.countdownEnabled, countdownDuration: state.countdownDuration)
             return true
         case "w":
-            finishCapture(mode: .window, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+            finishCapture(mode: .window, countdownEnabled: state.countdownEnabled, countdownDuration: state.countdownDuration)
             return true
         default:
             return false
@@ -176,28 +182,25 @@ class CapturePickerPanel: NSPanel {
 private struct CapturePickerView: View {
     @Environment(\.colorScheme) private var colorScheme
     let captureType: CaptureType
-    @Binding var countdownEnabled: Bool
-    @Binding var countdownDuration: Int
+    @ObservedObject var state: CapturePickerState
 
     let onCapture: (CapturePickerMode, Bool, Int) -> Void
     let onCancel: () -> Void
 
     init(
         captureType: CaptureType,
-        countdownEnabled: Binding<Bool>,
-        countdownDuration: Binding<Int>,
+        state: CapturePickerState,
         onCapture: @escaping (CapturePickerMode, Bool, Int) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.captureType = captureType
-        _countdownEnabled = countdownEnabled
-        _countdownDuration = countdownDuration
+        self.state = state
         self.onCapture = onCapture
         self.onCancel = onCancel
     }
 
     private var timerLabel: String {
-        countdownEnabled ? "\(countdownDuration)s" : "Off"
+        state.countdownEnabled ? "\(state.countdownDuration)s" : "Off"
     }
 
     private var modeIcon: String {
@@ -231,7 +234,7 @@ private struct CapturePickerView: View {
             Divider()
                 .frame(height: 20)
                 .overlay(.primary.opacity(0.2))
-            Button { onCapture(.region, countdownEnabled, countdownDuration) } label: {
+            Button { onCapture(.region, state.countdownEnabled, state.countdownDuration) } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "viewfinder.rectangular")
                         .font(.system(size: 12))
@@ -249,7 +252,7 @@ private struct CapturePickerView: View {
             .keyboardShortcut("r", modifiers: [])
             .accessibilityHint("Starts region capture.")
 
-            Button { onCapture(.screen, countdownEnabled, countdownDuration) } label: {
+            Button { onCapture(.screen, state.countdownEnabled, state.countdownDuration) } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "display")
                         .font(.system(size: 12))
@@ -267,7 +270,7 @@ private struct CapturePickerView: View {
             .keyboardShortcut("s", modifiers: [])
             .accessibilityHint("Starts full screen capture.")
 
-            Button { onCapture(.window, countdownEnabled, countdownDuration) } label: {
+            Button { onCapture(.window, state.countdownEnabled, state.countdownDuration) } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "macwindow")
                         .font(.system(size: 12))
@@ -291,13 +294,13 @@ private struct CapturePickerView: View {
 
             Menu {
                 Button("Off") {
-                    countdownEnabled = false
+                    state.countdownEnabled = false
                 }
                 Divider()
                 ForEach([1, 2, 3, 5, 10], id: \.self) { seconds in
                     Button("\(seconds)s") {
-                        countdownEnabled = true
-                        countdownDuration = seconds
+                        state.countdownEnabled = true
+                        state.countdownDuration = seconds
                     }
                 }
             } label: {
@@ -319,7 +322,7 @@ private struct CapturePickerView: View {
             .fixedSize()
             .help("Countdown timer")
             .accessibilityLabel("Countdown timer")
-            .accessibilityValue(countdownEnabled ? "\(countdownDuration) seconds" : "Off")
+            .accessibilityValue(state.countdownEnabled ? "\(state.countdownDuration) seconds" : "Off")
             .accessibilityHint("Choose a delay before capture starts.")
 
             Button { onCancel() } label: {
