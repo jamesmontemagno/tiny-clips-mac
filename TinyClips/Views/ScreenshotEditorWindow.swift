@@ -10,7 +10,7 @@ class ScreenshotEditorWindow: NSWindow, NSWindowDelegate {
 
     convenience init(imageURL: URL, onComplete: @escaping (URL?) -> Void) {
         self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 760, height: 580),
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 580),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
