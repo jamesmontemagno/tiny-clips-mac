@@ -330,7 +330,17 @@ class CaptureManager: ObservableObject {
         Task {
             await prepareForNewCaptureRequest()
             guard await PermissionManager.shared.checkPermission() else { return }
-            showScreenshotPicker()
+            let settings = CaptureSettings.shared
+            if settings.shouldShowCapturePicker(for: .screenshot) {
+                showScreenshotPicker()
+            } else {
+                await performScreenshotCapture(
+                    mode: .region,
+                    countdownEnabled: settings.screenshotCountdownEnabled,
+                    countdownDuration: settings.screenshotCountdownDuration,
+                    shouldReturnToPicker: false
+                )
+            }
         }
     }
 
@@ -348,7 +358,12 @@ class CaptureManager: ObservableObject {
                 guard let self else { return }
                 self.dismissScreenshotPicker()
                 Task {
-                    await self.performScreenshotCapture(mode: mode, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+                    await self.performScreenshotCapture(
+                        mode: mode,
+                        countdownEnabled: countdownEnabled,
+                        countdownDuration: countdownDuration,
+                        shouldReturnToPicker: true
+                    )
                 }
             },
             onCancel: { [weak self] in
@@ -367,14 +382,27 @@ class CaptureManager: ObservableObject {
         screenshotPickerPanel = nil
     }
 
-    private func performScreenshotCapture(mode: CapturePickerMode, countdownEnabled: Bool, countdownDuration: Int) async {
+    private func performScreenshotCapture(
+        mode: CapturePickerMode,
+        countdownEnabled: Bool,
+        countdownDuration: Int,
+        shouldReturnToPicker: Bool
+    ) async {
         switch mode {
         case .region:
             guard let region = await RegionSelector.selectRegion() else {
-                showScreenshotPicker()
+                if shouldReturnToPicker {
+                    showScreenshotPicker()
+                }
                 return
             }
-            doScreenshotCapture(region: region, window: nil, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+            doScreenshotCapture(
+                region: region,
+                window: nil,
+                countdownEnabled: countdownEnabled,
+                countdownDuration: countdownDuration,
+                shouldReturnToPickerAfterCapture: shouldReturnToPicker
+            )
 
         case .screen:
             let needsPicker = NSScreen.screens.count > 1 && !CaptureSettings.shared.alwaysCaptureMainDisplay
@@ -385,21 +413,43 @@ class CaptureManager: ObservableObject {
                 screen = screenUnderMouseCursor() ?? NSScreen.main
             }
             guard let screen, let region = CaptureRegion.fullScreen(for: screen) else {
-                showScreenshotPicker()
+                if shouldReturnToPicker {
+                    showScreenshotPicker()
+                }
                 return
             }
-            doScreenshotCapture(region: region, window: nil, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+            doScreenshotCapture(
+                region: region,
+                window: nil,
+                countdownEnabled: countdownEnabled,
+                countdownDuration: countdownDuration,
+                shouldReturnToPickerAfterCapture: shouldReturnToPicker
+            )
 
         case .window:
             guard let window = await WindowSelector.selectWindow() else {
-                showScreenshotPicker()
+                if shouldReturnToPicker {
+                    showScreenshotPicker()
+                }
                 return
             }
-            doScreenshotCapture(region: nil, window: window, countdownEnabled: countdownEnabled, countdownDuration: countdownDuration)
+            doScreenshotCapture(
+                region: nil,
+                window: window,
+                countdownEnabled: countdownEnabled,
+                countdownDuration: countdownDuration,
+                shouldReturnToPickerAfterCapture: shouldReturnToPicker
+            )
         }
     }
 
-    private func doScreenshotCapture(region: CaptureRegion?, window: SCWindow?, countdownEnabled: Bool, countdownDuration: Int) {
+    private func doScreenshotCapture(
+        region: CaptureRegion?,
+        window: SCWindow?,
+        countdownEnabled: Bool,
+        countdownDuration: Int,
+        shouldReturnToPickerAfterCapture: Bool
+    ) {
         let doCapture = { [weak self] in
             guard let self else { return }
             self.dismissRegionIndicator()
@@ -431,7 +481,9 @@ class CaptureManager: ObservableObject {
                 } catch {
                     SaveService.shared.showError("Screenshot failed: \(error.localizedDescription)")
                 }
-                self.showScreenshotPicker()
+                if shouldReturnToPickerAfterCapture {
+                    self.showScreenshotPicker()
+                }
             }
         }
         if let region,
@@ -456,7 +508,18 @@ class CaptureManager: ObservableObject {
         Task {
             await prepareForNewCaptureRequest()
             guard await PermissionManager.shared.checkPermission() else { return }
-            showRecordingPicker(for: .video)
+            let settings = CaptureSettings.shared
+            if settings.shouldShowCapturePicker(for: .video) {
+                showRecordingPicker(for: .video)
+            } else {
+                await performRecordingSetup(
+                    type: .video,
+                    mode: .region,
+                    countdownEnabled: settings.videoCountdownEnabled,
+                    countdownDuration: settings.videoCountdownDuration,
+                    shouldReturnToPicker: false
+                )
+            }
         }
     }
 
@@ -540,7 +603,18 @@ class CaptureManager: ObservableObject {
         Task {
             await prepareForNewCaptureRequest()
             guard await PermissionManager.shared.checkPermission() else { return }
-            showRecordingPicker(for: .gif)
+            let settings = CaptureSettings.shared
+            if settings.shouldShowCapturePicker(for: .gif) {
+                showRecordingPicker(for: .gif)
+            } else {
+                await performRecordingSetup(
+                    type: .gif,
+                    mode: .region,
+                    countdownEnabled: settings.gifCountdownEnabled,
+                    countdownDuration: settings.gifCountdownDuration,
+                    shouldReturnToPicker: false
+                )
+            }
         }
     }
 
@@ -926,7 +1000,8 @@ class CaptureManager: ObservableObject {
                         type: type,
                         mode: mode,
                         countdownEnabled: enabled,
-                        countdownDuration: duration
+                        countdownDuration: duration,
+                        shouldReturnToPicker: true
                     )
                 }
             },
@@ -950,10 +1025,13 @@ class CaptureManager: ObservableObject {
         type: CaptureType,
         mode: CapturePickerMode,
         countdownEnabled: Bool,
-        countdownDuration: Int
+        countdownDuration: Int,
+        shouldReturnToPicker: Bool
     ) async {
         guard let region = await chooseCaptureRegion(for: mode) else {
-            showRecordingPicker(for: type)
+            if shouldReturnToPicker {
+                showRecordingPicker(for: type)
+            }
             return
         }
 

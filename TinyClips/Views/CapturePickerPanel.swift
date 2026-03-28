@@ -34,6 +34,16 @@ class CapturePickerPanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
 
+    override init(contentRect: NSRect, styleMask style: NSWindow.StyleMask, backing bufferingType: NSWindow.BackingStoreType, defer flag: Bool) {
+        self.state = CapturePickerState(countdownEnabled: false, countdownDuration: 0)
+        super.init(contentRect: contentRect, styleMask: style, backing: bufferingType, defer: flag)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     convenience init(
         captureType: CaptureType = .screenshot,
         countdownEnabled: Bool,
@@ -47,10 +57,8 @@ class CapturePickerPanel: NSPanel {
             backing: .buffered,
             defer: false
         )
-        self.state = CapturePickerState(
-            countdownEnabled: countdownEnabled,
-            countdownDuration: countdownDuration
-        )
+        self.state.countdownEnabled = countdownEnabled
+        self.state.countdownDuration = countdownDuration
         self.onCapture = onCapture
         self.onCancel = onCancel
         self.isReleasedWhenClosed = false

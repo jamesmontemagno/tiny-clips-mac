@@ -41,6 +41,12 @@ xcodebuild build -project TinyClips.xcodeproj -scheme TinyClipsMAS -configuratio
 open TinyClips.xcodeproj  # then ⌘R in Xcode
 ```
 
+### Agent Sandbox Guidance
+
+- VS Code agent runs of `xcodebuild` may need `requestUnsandboxedExecution=true` because SwiftPM writes package caches and manifest diagnostics outside the workspace.
+- If a sandboxed build fails with `Operation not permitted`, missing temp/cache directories, or SwiftPM manifest/diagnostics write errors such as `sparkle.dia`, rerun the same `xcodebuild` command unsandboxed.
+- Apply the same unsandboxed retry rule to SwiftPM resolution commands that Xcode triggers for the Sparkle dependency.
+
 No test target exists. Adding Sparkle dependency requires following `docs/sparkle-setup.md`.
 App Store variant setup details are in `docs/app-store-variant-setup.md`.
 

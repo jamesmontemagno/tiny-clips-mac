@@ -201,6 +201,9 @@ struct SettingsView: View {
     @ViewBuilder
     private var screenshotSection: some View {
         Section("Capture Settings") {
+            Toggle("Show capture picker before screenshot", isOn: $settings.showScreenshotCapturePicker)
+                .help("When disabled, screenshots go straight to region selection.")
+
             Picker("Default format:", selection: $settings.screenshotFormat) {
                 ForEach(ImageFormat.allCases, id: \.rawValue) { format in
                     Text(format.label).tag(format.rawValue)
@@ -270,6 +273,9 @@ struct SettingsView: View {
     @ViewBuilder
     private var videoSection: some View {
         Section("Capture Settings") {
+            Toggle("Show capture picker before recording", isOn: $settings.showVideoCapturePicker)
+                .help("When disabled, video recording goes straight to region selection.")
+
             Picker("Frame rate:", selection: $settings.videoFrameRate) {
                 Text("24 fps").tag(24)
                 Text("30 fps").tag(30)
@@ -335,6 +341,9 @@ struct SettingsView: View {
     @ViewBuilder
     private var gifSection: some View {
         Section("Capture Settings") {
+            Toggle("Show capture picker before recording", isOn: $settings.showGifCapturePicker)
+                .help("When disabled, GIF recording goes straight to region selection.")
+
             HStack {
                 Text("Frame rate:")
                 Slider(value: $settings.gifFrameRate, in: 5...30, step: 1)

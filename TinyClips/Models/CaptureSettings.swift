@@ -170,6 +170,9 @@ class CaptureSettings: ObservableObject {
     @AppStorage("saveImmediatelyScreenshot") var saveImmediatelyScreenshot: Bool = true
     @AppStorage("saveImmediatelyVideo") var saveImmediatelyVideo: Bool = true
     @AppStorage("saveImmediatelyGif") var saveImmediatelyGif: Bool = true
+    @AppStorage("showScreenshotCapturePicker") var showScreenshotCapturePicker: Bool = true
+    @AppStorage("showVideoCapturePicker") var showVideoCapturePicker: Bool = true
+    @AppStorage("showGifCapturePicker") var showGifCapturePicker: Bool = true
     @AppStorage("screenshotFormat") var screenshotFormat: String = ImageFormat.jpeg.rawValue
     @AppStorage("screenshotScale") var screenshotScale: Int = 100
     @AppStorage("jpegQuality") var jpegQuality: Double = 0.85
@@ -215,6 +218,17 @@ class CaptureSettings: ObservableObject {
         }
     }
 
+    func shouldShowCapturePicker(for type: CaptureType) -> Bool {
+        switch type {
+        case .screenshot:
+            return showScreenshotCapturePicker
+        case .video:
+            return showVideoCapturePicker
+        case .gif:
+            return showGifCapturePicker
+        }
+    }
+
     func resetToDefaults() {
         // Remove all keys in one pass so only a single objectWillChange fires
         let keys: [String] = [
@@ -233,6 +247,7 @@ class CaptureSettings: ObservableObject {
             "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showTrimmer",
             "recordAudio", "recordMicrophone", "selectedMicrophoneID", "showScreenshotEditor", "showGifTrimmer",
             "saveImmediatelyScreenshot", "saveImmediatelyVideo", "saveImmediatelyGif",
+            "showScreenshotCapturePicker", "showVideoCapturePicker", "showGifCapturePicker",
             "screenshotFormat", "screenshotScale", "jpegQuality",
             "videoCountdownEnabled", "videoCountdownDuration",
             "gifCountdownEnabled", "gifCountdownDuration",
