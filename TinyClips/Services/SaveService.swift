@@ -2,6 +2,57 @@ import AppKit
 import UserNotifications
 import CryptoKit
 
+@MainActor
+final class AccessibilityAnnouncementService {
+    static let shared = AccessibilityAnnouncementService()
+
+    private init() {}
+
+    func announceCaptureStart(for type: CaptureType, countdownCompleted: Bool) {
+        let message: String
+
+        switch type {
+        case .screenshot:
+            message = countdownCompleted ? "Countdown complete. Taking screenshot." : "Taking screenshot."
+        case .video:
+            message = countdownCompleted ? "Countdown complete. Starting video recording." : "Starting video recording."
+        case .gif:
+            message = countdownCompleted ? "Countdown complete. Starting GIF recording." : "Starting GIF recording."
+        }
+
+        announce(message, priority: .high)
+    }
+
+    func announceRecordingStopped(for type: CaptureType) {
+        announce("\(type.label) recording stopped.", priority: .high)
+    }
+
+    func announceSaveSuccess(for type: CaptureType, url: URL) {
+        announce("\(type.label) saved as \(url.lastPathComponent).", priority: .medium)
+    }
+
+    func announceError(_ message: String) {
+        announce("Error. \(message) Press OK to dismiss.", priority: .high)
+    }
+
+    func announce(_ message: String, priority: NSAccessibilityPriorityLevel) {
+        let userInfo: [NSAccessibility.NotificationUserInfoKey: Any] = [
+            .announcement: message,
+            .priority: priority.rawValue
+        ]
+
+        NSAccessibility.post(
+            element: announcementElement(),
+            notification: .announcementRequested,
+            userInfo: userInfo
+        )
+    }
+
+    private func announcementElement() -> Any {
+        NSApp.mainWindow ?? NSApp.keyWindow ?? NSApp.windows.first ?? NSApp
+    }
+}
+
 class SaveService: NSObject, UNUserNotificationCenterDelegate {
     static let shared = SaveService()
     private let notificationURLKey = "savedFileURL"
@@ -192,6 +243,8 @@ class SaveService: NSObject, UNUserNotificationCenterDelegate {
             copyToClipboard(url: url, type: type)
         }
 
+        AccessibilityAnnouncementService.shared.announceSaveSuccess(for: type, url: url)
+
         if settings.showInFinder {
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
@@ -304,6 +357,8 @@ class SaveService: NSObject, UNUserNotificationCenterDelegate {
 
     @MainActor
     func showError(_ message: String) {
+        AccessibilityAnnouncementService.shared.announceError(message)
+
         let alert = NSAlert()
         alert.messageText = "TinyClips"
         alert.informativeText = message
