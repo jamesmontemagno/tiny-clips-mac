@@ -453,6 +453,10 @@ class CaptureManager: ObservableObject {
         let doCapture = { [weak self] in
             guard let self else { return }
             self.dismissRegionIndicator()
+            AccessibilityAnnouncementService.shared.announceCaptureStart(
+                for: .screenshot,
+                countdownCompleted: countdownEnabled
+            )
             Task {
                 do {
                     let settings = CaptureSettings.shared
@@ -535,6 +539,10 @@ class CaptureManager: ObservableObject {
 
         let doRecord = { [weak self] in
             guard let self else { return }
+            AccessibilityAnnouncementService.shared.announceCaptureStart(
+                for: .video,
+                countdownCompleted: countdownEnabled
+            )
             Task {
                 let shouldSaveImmediately = !settings.showTrimmer || settings.saveImmediatelyVideo
                 let url = shouldSaveImmediately
@@ -622,6 +630,10 @@ class CaptureManager: ObservableObject {
         resetRecordingAudioStatus()
         let doRecord = { [weak self] in
             guard let self else { return }
+            AccessibilityAnnouncementService.shared.announceCaptureStart(
+                for: .gif,
+                countdownCompleted: countdownEnabled
+            )
             Task {
                 do {
                     let writer = GifWriter()
@@ -655,6 +667,15 @@ class CaptureManager: ObservableObject {
     }
 
     private func stopRecordingFlow() async {
+        let stoppedRecordingType: CaptureType?
+        if videoRecorder != nil {
+            stoppedRecordingType = .video
+        } else if gifWriter != nil {
+            stoppedRecordingType = .gif
+        } else {
+            stoppedRecordingType = nil
+        }
+
         var savedVideoURL: URL?
 
         if let recorder = videoRecorder {
@@ -701,6 +722,10 @@ class CaptureManager: ObservableObject {
         dismissStopPanel()
         dismissRegionIndicator()
         resetRecordingAudioStatus()
+
+        if let stoppedRecordingType {
+            AccessibilityAnnouncementService.shared.announceRecordingStopped(for: stoppedRecordingType)
+        }
 
         // Show editor windows AFTER all recording resources are released
         // and UI state is cleaned up, so AVPlayer doesn't contend with
