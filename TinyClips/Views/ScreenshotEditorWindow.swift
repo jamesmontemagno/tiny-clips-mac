@@ -727,7 +727,7 @@ private class EditorViewModel: ObservableObject {
             return .zero
         }
         let imageAspect = image.size.width / image.size.height
-        let containerAspect = containerSize.width / containerSize.height
+        _ = containerSize.width / containerSize.height
 
         // Cap at native pixel dimensions to prevent upscaling blur on Retina
         let screenScale = NSScreen.main?.backingScaleFactor ?? 2.0

@@ -49,7 +49,10 @@ final class AccessibilityAnnouncementService {
     }
 
     private func announcementElement() -> Any {
-        NSApp.mainWindow ?? NSApp.keyWindow ?? NSApp.windows.first ?? NSApp
+        if let window = NSApp.mainWindow ?? NSApp.keyWindow ?? NSApp.windows.first {
+            return window
+        }
+        return NSApp as Any
     }
 }
 

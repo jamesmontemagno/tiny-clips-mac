@@ -104,7 +104,7 @@ final class HotKeyManager {
         unregister(id: id)
 
         var hotKeyRef: EventHotKeyRef?
-        var hotKeyID = EventHotKeyID(signature: Self.hotKeySignature, id: id.rawValue)
+        let hotKeyID = EventHotKeyID(signature: Self.hotKeySignature, id: id.rawValue)
 
         let status = RegisterEventHotKey(
             keyCode,
