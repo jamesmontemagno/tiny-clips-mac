@@ -10,13 +10,15 @@ Create a new annotated git tag for a release based on the current project's chan
 
 ## Steps:
 1. Check the most recent git tags to understand the versioning scheme
-2. Read the CHANGELOG.md file to identify the latest unreleased version and its release notes, if they don't exist for the verison ceate them
-3. Update the CHANGELOG.md file to mark the version as released
-4. Verify the git working directory is clean (no uncommitted changes)
-5. Create an annotated git tag with:
+2. **Check the app's version setting** (typically in project settings file, build configuration, or Info.plist) — only increment to a new minor version (e.g., 1.3.x → 1.4.0) if the app version has been updated in the codebase; otherwise stay on patch version (e.g., 1.3.2)
+3. Read the CHANGELOG.md file to identify the latest unreleased version and its release notes; if they don't exist for that version, create them
+4. Update the CHANGELOG.md file to mark the version as released (add the release date if not already set)
+5. Verify the git working directory is clean (no uncommitted changes)
+6. Create an annotated git tag with:
    - Tag name matching the version (e.g., v1.2.3)
    - Tag message containing the version and formatted release notes from the CHANGELOG
-6. Confirm the tag was created successfully by showing the tag details
-7. Optionally suggest pushing the tag to origin with `git push origin <tag-name>`
+7. Confirm the tag was created successfully by showing the tag details
+8. Optionally suggest pushing the tag to origin with `git push origin <tag-name>`
 
 The release notes in the tag message should be cleanly formatted and include all sections (Added, Improved, Fixed, Changed, Deprecated, Removed, Security, etc.) from the CHANGELOG entry for that version.
+
