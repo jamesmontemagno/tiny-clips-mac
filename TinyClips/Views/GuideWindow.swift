@@ -34,6 +34,27 @@ private struct GuideWindowView: View {
     @State private var selectedSection: GuideSection = .captureModes
     @ObservedObject private var settings = CaptureSettings.shared
 
+    private var screenshotShortcut: String {
+        HotKeyBinding(
+            keyCode: settings.screenshotHotKeyCode,
+            carbonModifiers: settings.screenshotHotKeyModifiers
+        ).displayString
+    }
+
+    private var videoShortcut: String {
+        HotKeyBinding(
+            keyCode: settings.videoHotKeyCode,
+            carbonModifiers: settings.videoHotKeyModifiers
+        ).displayString
+    }
+
+    private var gifShortcut: String {
+        HotKeyBinding(
+            keyCode: settings.gifHotKeyCode,
+            carbonModifiers: settings.gifHotKeyModifiers
+        ).displayString
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
@@ -88,9 +109,13 @@ private struct GuideWindowView: View {
         case .shortcuts:
             sectionCard(title: "Keyboard Shortcuts", icon: "command") {
                 VStack(alignment: .leading, spacing: 8) {
-                    shortcutRow(title: "Screenshot", keys: HotKeyBinding(keyCode: settings.screenshotHotKeyCode, carbonModifiers: settings.screenshotHotKeyModifiers).displayString)
-                    shortcutRow(title: "Record Video", keys: HotKeyBinding(keyCode: settings.videoHotKeyCode, carbonModifiers: settings.videoHotKeyModifiers).displayString)
-                    shortcutRow(title: "Record GIF", keys: HotKeyBinding(keyCode: settings.gifHotKeyCode, carbonModifiers: settings.gifHotKeyModifiers).displayString)
+                    Text("Screenshot, Record Video, and Record GIF show your current bindings. Change them anytime in Settings > Shortcuts.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    shortcutRow(title: "Screenshot", keys: screenshotShortcut)
+                    shortcutRow(title: "Record Video", keys: videoShortcut)
+                    shortcutRow(title: "Record GIF", keys: gifShortcut)
                     shortcutRow(title: "Picker: Region", keys: "R")
                     shortcutRow(title: "Picker: Screen", keys: "S")
                     shortcutRow(title: "Picker: Window", keys: "W")
@@ -104,6 +129,7 @@ private struct GuideWindowView: View {
             sectionCard(title: "Quick Tips", icon: "lightbulb") {
                 VStack(alignment: .leading, spacing: 10) {
                     bullet(text: "Use Settings to enable countdowns, screenshot editor, and trimmer windows.")
+                    bullet(text: "Your current capture shortcuts are \(screenshotShortcut) for Screenshot, \(videoShortcut) for Record Video, and \(gifShortcut) for Record GIF. You can change them in Settings > Shortcuts.")
                     bullet(text: "If Screen Recording permission changes, restart TinyClips.")
                     bullet(text: "For video/GIF, pick Region, Screen, or Window directly from the recording picker.")
                 }

@@ -124,6 +124,9 @@ class StoreService: ObservableObject {
         do {
             try await AppStore.sync()
             await updatePurchaseStatus()
+            if !isPro {
+                showNoPurchasesRestoredAlert()
+            }
         } catch {
             purchaseError = error.localizedDescription
         }
@@ -154,6 +157,15 @@ class StoreService: ObservableObject {
         }
         isPro = foundPro
         activeProPlan = foundPlan
+    }
+
+    private func showNoPurchasesRestoredAlert() {
+        let alert = NSAlert()
+        alert.messageText = "No Purchases Found"
+        alert.informativeText = "We couldn't find any TinyClips Pro purchases to restore for this App Store account. If you bought Pro with a different Apple Account, sign in with that account and try again."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     // MARK: - Helpers
