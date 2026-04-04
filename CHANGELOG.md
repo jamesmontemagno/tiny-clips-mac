@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.3.2 - 2026-04-04
+
+### Added
+- VoiceOver capture announcements for screenshot, video, and GIF lifecycle events providing spoken feedback for capture start, recording stop, save success, and save errors.
+
 ## v1.3.1 - 2026-03-28
 
 ### Improved
