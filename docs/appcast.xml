@@ -11,24 +11,24 @@
         <item>
             
             
-            <title>1.3.1</title>
+            <title>1.3.2</title>
             
             
-            <pubDate>Sat, 28 Mar 2026 15:31:50 +0000</pubDate>
+            <pubDate>Sat, 04 Apr 2026 14:30:29 +0000</pubDate>
             
             
-            <sparkle:version>28</sparkle:version>
+            <sparkle:version>29</sparkle:version>
             
             
-            <sparkle:shortVersionString>1.3.1</sparkle:shortVersionString>
+            <sparkle:shortVersionString>1.3.2</sparkle:shortVersionString>
             
             
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             
             
-            <description><![CDATA[<h3>What's Changed</h3><ul><li>chore: add changelog entry for v1.3.1</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v0.0.23...v1.3.1">Full Changelog</a></p>]]></description>
-            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v1.3.1</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.3.1/TinyClips-v1.3.1.zip" length="2909049" type="application/octet-stream" sparkle:edSignature="FgqNMrJiW//IQnt1dmAD14gvadlL5Wl51fOjIR24XtUfRezzC/TogZaWdJc/vAa9IO2qYjYzmaFeP2Z2Rj2rAg=="/>
+            <description><![CDATA[<h3>What's Changed</h3><ul><li>Update CHANGELOG for v1.3.2</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v1.3.1...v1.3.2">Full Changelog</a></p>]]></description>
+            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v1.3.2</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.3.2/TinyClips-v1.3.2.zip" length="2913906" type="application/octet-stream" sparkle:edSignature="8FHSXiW6mAkz62q1T31q1cHeioYTXVvs1MZNFEYAsILWgWLWZboPwRD0r8YBKOuReHjSlJsl6+ddmcjE+gbLDg=="/>
             
         
         </item>
