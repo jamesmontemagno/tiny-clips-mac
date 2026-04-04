@@ -103,6 +103,36 @@ private struct ScreenshotEditorView: View {
         _viewModel = StateObject(wrappedValue: EditorViewModel(url: imageURL))
     }
 
+    private var primaryColorLabel: String? {
+        switch viewModel.selectedTool {
+        case .rectangle, .circle:
+            return "Border"
+        case .arrow, .line, .pencil, .text:
+            return "Color"
+        case .number:
+            return "Badge"
+        default:
+            return nil
+        }
+    }
+
+    private var showsFillColorPicker: Bool {
+        viewModel.selectedTool == .rectangle || viewModel.selectedTool == .circle
+    }
+
+    private var numberSizeBinding: Binding<CGFloat> {
+        Binding(
+            get: {
+                viewModel.selectedNumberSizeMultiplier() ?? viewModel.numberSizeMultiplier
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedNumberSizeMultiplier(newValue) {
+                    viewModel.numberSizeMultiplier = newValue
+                }
+            }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Toolbar
@@ -158,46 +188,65 @@ private struct ScreenshotEditorView: View {
 
             Spacer()
 
-            // Color pickers
-            HStack(spacing: 8) {
-                VStack(spacing: 1) {
-                    ColorPicker("", selection: $viewModel.selectedColor, supportsOpacity: true)
-                        .labelsHidden()
-                        .frame(width: 28)
-                        .accessibilityLabel("Border color")
-                        .accessibilityHint("Selects the border or stroke color for shapes and drawing.")
-                    Text("Border")
-                        .font(.system(size: 8))
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
-                }
+            if let primaryColorLabel {
+                HStack(spacing: 14) {
+                    VStack(spacing: 1) {
+                        ColorPicker("", selection: $viewModel.selectedColor, supportsOpacity: true)
+                            .labelsHidden()
+                            .frame(width: 28)
+                            .accessibilityLabel("\(primaryColorLabel) color")
+                            .accessibilityHint("Adjusts the color used by the selected annotation tool.")
+                        Text(primaryColorLabel)
+                            .font(.system(size: 8))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
 
-                VStack(spacing: 1) {
-                    ColorPicker("", selection: $viewModel.selectedFillColor, supportsOpacity: true)
-                        .labelsHidden()
-                        .frame(width: 28)
-                        .accessibilityLabel("Fill color")
-                        .accessibilityHint("Selects the fill color for rectangle and circle shapes. Use transparent for no fill.")
-                    Text("Fill")
-                        .font(.system(size: 8))
-                        .foregroundStyle(.secondary)
-                        .accessibilityHidden(true)
+                    if showsFillColorPicker {
+                        VStack(spacing: 1) {
+                            ColorPicker("", selection: $viewModel.selectedFillColor, supportsOpacity: true)
+                                .labelsHidden()
+                                .frame(width: 28)
+                                .accessibilityLabel("Fill color")
+                                .accessibilityHint("Selects the fill color for rectangle and circle shapes. Use transparent for no fill.")
+                            Text("Fill")
+                                .font(.system(size: 8))
+                                .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
+                        }
+                    }
                 }
+                .padding(.trailing, 8)
             }
 
-            // Line width
-            Picker("", selection: $viewModel.lineWidth) {
-                Text("1 px").tag(CGFloat(1))
-                Text("2 px").tag(CGFloat(2))
-                Text("4 px").tag(CGFloat(4))
-                Text("6 px").tag(CGFloat(6))
-                Text("8 px").tag(CGFloat(8))
-                Text("10 px").tag(CGFloat(10))
+            if viewModel.showsLineWidthControl {
+                Picker("", selection: $viewModel.lineWidth) {
+                    Text("1 px").tag(CGFloat(1))
+                    Text("2 px").tag(CGFloat(2))
+                    Text("4 px").tag(CGFloat(4))
+                    Text("6 px").tag(CGFloat(6))
+                    Text("8 px").tag(CGFloat(8))
+                    Text("10 px").tag(CGFloat(10))
+                }
+                .labelsHidden()
+                .frame(width: 96)
+                .accessibilityLabel("Line width")
+                .accessibilityValue("\(Int(viewModel.lineWidth)) pixels")
             }
-            .labelsHidden()
-            .frame(width: 96)
-            .accessibilityLabel("Line width")
-            .accessibilityValue("\(Int(viewModel.lineWidth)) pixels")
+
+            if viewModel.showsNumberSizeControl {
+                Picker("", selection: numberSizeBinding) {
+                    Text("75%").tag(CGFloat(0.75))
+                    Text("100%").tag(CGFloat(1.0))
+                    Text("125%").tag(CGFloat(1.25))
+                    Text("150%").tag(CGFloat(1.5))
+                    Text("200%").tag(CGFloat(2.0))
+                }
+                .labelsHidden()
+                .frame(width: 96)
+                .accessibilityLabel("Number size")
+                .accessibilityValue("\(Int(numberSizeBinding.wrappedValue * 100)) percent")
+            }
 
             // Undo
             Button {
@@ -623,6 +672,7 @@ private let numberCircleMinPixels: CGFloat = 20
 private let numberCircleMaxPixels: CGFloat = 80
 private let numberCircleSizeRatio: CGFloat = 0.05
 private let numberCircleFontRatio: CGFloat = 0.55
+private let numberCircleMinimumDisplayPixels: CGFloat = 16
 
 private class EditorViewModel: ObservableObject {
     let sourceURL: URL
@@ -644,6 +694,7 @@ private class EditorViewModel: ObservableObject {
     @Published var saveJpegQuality: Double
 
     @Published var nextNumberLabel: Int = 1
+    @Published var numberSizeMultiplier: CGFloat = 1.0
 
     private var pencilPoints: [CGPoint] = []
     private var imagePixelSize: CGSize = .zero
@@ -794,6 +845,19 @@ private class EditorViewModel: ObservableObject {
             normRect = ann.rect
         }
         return scaledRect(normRect, imageSize: imageSize, origin: origin)
+    }
+
+    var showsLineWidthControl: Bool {
+        switch selectedTool {
+        case .rectangle, .circle, .arrow, .line, .pencil:
+            return true
+        default:
+            return false
+        }
+    }
+
+    var showsNumberSizeControl: Bool {
+        selectedTool == .number || (selectedTool == .move && selectedAnnotationIsNumber)
     }
 
     func handleDrag(start: CGPoint, current: CGPoint) {
@@ -1118,8 +1182,7 @@ private class EditorViewModel: ObservableObject {
 
     func placeNumberAnnotation(at position: CGPoint) {
         guard imagePixelSize.width > 0, imagePixelSize.height > 0 else { return }
-        // Choose a side length in pixel space so the circle is always round
-        let sidePixels = max(numberCircleMinPixels, min(numberCircleMaxPixels, imagePixelSize.width * numberCircleSizeRatio))
+        let sidePixels = currentNumberSidePixels()
         let normW = sidePixels / imagePixelSize.width
         let normH = sidePixels / imagePixelSize.height
         let rect = CGRect(
@@ -1137,6 +1200,38 @@ private class EditorViewModel: ObservableObject {
             points: []
         ))
         nextNumberLabel += 1
+    }
+
+    func selectedNumberSizeMultiplier() -> CGFloat? {
+        guard selectedAnnotationIsNumber else { return nil }
+        let currentWidthPixels = annotations[selectedAnnotationIndex ?? 0].rect.width * imagePixelSize.width
+        let baseWidthPixels = baseNumberSidePixels()
+        guard baseWidthPixels > 0 else { return nil }
+        return currentWidthPixels / baseWidthPixels
+    }
+
+    @discardableResult
+    func updateSelectedNumberSizeMultiplier(_ multiplier: CGFloat) -> Bool {
+        guard selectedAnnotationIsNumber,
+              let index = selectedAnnotationIndex,
+              imagePixelSize.width > 0,
+              imagePixelSize.height > 0 else {
+            return false
+        }
+
+        var annotation = annotations[index]
+        let sidePixels = max(numberCircleMinimumDisplayPixels, baseNumberSidePixels() * multiplier)
+        let normW = sidePixels / imagePixelSize.width
+        let normH = sidePixels / imagePixelSize.height
+        let center = CGPoint(x: annotation.rect.midX, y: annotation.rect.midY)
+        annotation.rect = CGRect(
+            x: center.x - normW / 2,
+            y: center.y - normH / 2,
+            width: normW,
+            height: normH
+        )
+        annotations[index] = annotation
+        return true
     }
 
     private func renderFinalImage() -> NSBitmapImageRep? {
@@ -1415,6 +1510,21 @@ private class EditorViewModel: ObservableObject {
     private func exportStrokeWidth(baseWidth: CGFloat, outputWidth: CGFloat) -> CGFloat {
         let widthScale = max(1.0, outputWidth / 900.0)
         return baseWidth * widthScale
+    }
+
+    private var selectedAnnotationIsNumber: Bool {
+        guard let index = selectedAnnotationIndex, annotations.indices.contains(index) else {
+            return false
+        }
+        return annotations[index].tool == .number
+    }
+
+    private func baseNumberSidePixels() -> CGFloat {
+        max(numberCircleMinPixels, min(numberCircleMaxPixels, imagePixelSize.width * numberCircleSizeRatio))
+    }
+
+    private func currentNumberSidePixels() -> CGFloat {
+        max(numberCircleMinimumDisplayPixels, baseNumberSidePixels() * numberSizeMultiplier)
     }
 }
 
