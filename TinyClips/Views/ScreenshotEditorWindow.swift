@@ -89,6 +89,165 @@ private struct Annotation: Identifiable {
 
 private typealias LinePoints = (start: CGPoint, end: CGPoint)
 
+private let redactionFallbackColor = Color.black.opacity(0.92)
+private let redactionFallbackCGColor = NSColor.black.withAlphaComponent(0.92).cgColor
+private let redactionPreviewMaxDimension: CGFloat = 420
+private let redactionTileTargetPixels: CGFloat = 18
+private let redactionMinimumTileCount = 3
+private let redactionMaximumTileCount = 18
+
+private struct SeededGenerator: RandomNumberGenerator {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        self.state = seed == 0 ? 0x9E3779B97F4A7C15 : seed
+    }
+
+    mutating func next() -> UInt64 {
+        state &+= 0x9E3779B97F4A7C15
+        var value = state
+        value = (value ^ (value >> 30)) &* 0xBF58476D1CE4E5B9
+        value = (value ^ (value >> 27)) &* 0x94D049BB133111EB
+        return value ^ (value >> 31)
+    }
+}
+
+private func makeScrambledRedactionImage(
+    from sourceCGImage: CGImage,
+    annotationRect: CGRect,
+    maxOutputDimension: CGFloat? = nil
+) -> CGImage? {
+    guard let sourceRect = redactionSourceRect(for: annotationRect, imageSize: CGSize(width: sourceCGImage.width, height: sourceCGImage.height)),
+          let croppedImage = sourceCGImage.cropping(to: sourceRect) else {
+        return nil
+    }
+
+    let outputSize = scaledRedactionOutputSize(for: sourceRect.size, maxDimension: maxOutputDimension)
+    let outputWidth = max(1, Int(outputSize.width.rounded(.toNearestOrAwayFromZero)))
+    let outputHeight = max(1, Int(outputSize.height.rounded(.toNearestOrAwayFromZero)))
+
+    guard let context = CGContext(
+        data: nil,
+        width: outputWidth,
+        height: outputHeight,
+        bitsPerComponent: 8,
+        bytesPerRow: 0,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else {
+        return nil
+    }
+
+    let columns = redactionTileCount(for: sourceRect.width)
+    let rows = redactionTileCount(for: sourceRect.height)
+    let tileCount = max(1, columns * rows)
+
+    if tileCount == 1 {
+        context.draw(croppedImage, in: CGRect(x: 0, y: 0, width: outputWidth, height: outputHeight))
+        return context.makeImage()
+    }
+
+    let sourceX = tileBreakpoints(length: Int(sourceRect.width), segments: columns)
+    let sourceY = tileBreakpoints(length: Int(sourceRect.height), segments: rows)
+    let destinationX = tileBreakpoints(length: outputWidth, segments: columns)
+    let destinationY = tileBreakpoints(length: outputHeight, segments: rows)
+
+    var order = Array(0..<tileCount)
+    var generator = SeededGenerator(seed: redactionSeed(for: annotationRect, tileCount: tileCount))
+    order.shuffle(using: &generator)
+
+    context.interpolationQuality = .none
+
+    for destinationIndex in 0..<tileCount {
+        let sourceIndex = order[destinationIndex]
+        let sourceTile = tileRect(at: sourceIndex, columns: columns, xBreakpoints: sourceX, yBreakpoints: sourceY)
+        let destinationTile = tileRect(at: destinationIndex, columns: columns, xBreakpoints: destinationX, yBreakpoints: destinationY)
+
+        guard sourceTile.width > 0,
+              sourceTile.height > 0,
+              destinationTile.width > 0,
+              destinationTile.height > 0,
+              let tileImage = croppedImage.cropping(to: sourceTile) else {
+            continue
+        }
+
+        context.draw(tileImage, in: destinationTile)
+    }
+
+    return context.makeImage()
+}
+
+private func redactionSourceRect(for annotationRect: CGRect, imageSize: CGSize) -> CGRect? {
+    let clampedRect = annotationRect.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+    guard !clampedRect.isNull, clampedRect.width > 0, clampedRect.height > 0 else {
+        return nil
+    }
+
+    let imageWidth = Int(imageSize.width)
+    let imageHeight = Int(imageSize.height)
+    guard imageWidth > 0, imageHeight > 0 else { return nil }
+
+    let minX = max(0, min(imageWidth - 1, Int(floor(clampedRect.minX * imageSize.width))))
+    let maxX = max(minX + 1, min(imageWidth, Int(ceil(clampedRect.maxX * imageSize.width))))
+    let minY = max(0, min(imageHeight - 1, Int(floor((1.0 - clampedRect.maxY) * imageSize.height))))
+    let maxY = max(minY + 1, min(imageHeight, Int(ceil((1.0 - clampedRect.minY) * imageSize.height))))
+
+    return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+}
+
+private func scaledRedactionOutputSize(for sourceSize: CGSize, maxDimension: CGFloat?) -> CGSize {
+    guard let maxDimension, maxDimension > 0 else {
+        return sourceSize
+    }
+
+    let largestDimension = max(sourceSize.width, sourceSize.height)
+    guard largestDimension > maxDimension else {
+        return sourceSize
+    }
+
+    let scale = maxDimension / largestDimension
+    return CGSize(
+        width: max(1, floor(sourceSize.width * scale)),
+        height: max(1, floor(sourceSize.height * scale))
+    )
+}
+
+private func redactionTileCount(for length: CGFloat) -> Int {
+    let estimatedCount = Int((length / redactionTileTargetPixels).rounded(.toNearestOrAwayFromZero))
+    return min(redactionMaximumTileCount, max(redactionMinimumTileCount, estimatedCount))
+}
+
+private func tileBreakpoints(length: Int, segments: Int) -> [Int] {
+    guard segments > 0 else { return [0, length] }
+    return (0...segments).map { index in
+        Int((Double(index) * Double(length) / Double(segments)).rounded(.down))
+    }
+}
+
+private func tileRect(at index: Int, columns: Int, xBreakpoints: [Int], yBreakpoints: [Int]) -> CGRect {
+    let column = index % columns
+    let row = index / columns
+    let minX = xBreakpoints[column]
+    let maxX = xBreakpoints[column + 1]
+    let minY = yBreakpoints[row]
+    let maxY = yBreakpoints[row + 1]
+    return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+}
+
+private func redactionSeed(for annotationRect: CGRect, tileCount: Int) -> UInt64 {
+    let components: [UInt64] = [
+        UInt64((annotationRect.minX * 100_000).rounded()),
+        UInt64((annotationRect.minY * 100_000).rounded()),
+        UInt64((annotationRect.width * 100_000).rounded()),
+        UInt64((annotationRect.height * 100_000).rounded()),
+        UInt64(tileCount)
+    ]
+
+    return components.reduce(0xCBF29CE484222325) { partial, component in
+        (partial ^ (component &+ 0x9E3779B97F4A7C15)) &* 0x100000001B3
+    }
+}
+
 // MARK: - Editor View
 
 private struct ScreenshotEditorView: View {
@@ -649,53 +808,29 @@ private struct CanvasView: View {
             }
 
         case .blur:
-            // Draw a pixelated/redacted fill using true pixel sampling when possible
-            let blockSize: CGFloat = 10
-            let cols = max(1, Int(scaledRect.width / blockSize))
-            let rows = max(1, Int(scaledRect.height / blockSize))
-            var didPixelate = false
+            var didRenderScramble = false
             if let nsImage = sourceImage,
                let cgSrc = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                let srcW = CGFloat(cgSrc.width)
-                let srcH = CGFloat(cgSrc.height)
-                // Map normalized annotation rect to cgImage pixels (cgImage uses Y-up coords)
-                let cgRegion = CGRect(
-                    x: annotation.rect.origin.x * srcW,
-                    y: (1.0 - annotation.rect.origin.y - annotation.rect.height) * srcH,
-                    width: max(1, annotation.rect.width * srcW),
-                    height: max(1, annotation.rect.height * srcH)
+                let previewLimit = min(
+                    redactionPreviewMaxDimension,
+                    max(scaledRect.width, scaledRect.height) * (NSScreen.main?.backingScaleFactor ?? 2.0)
                 )
-                if let regionCG = cgSrc.cropping(to: cgRegion),
-                   let tinyCtx = CGContext(
-                       data: nil, width: cols, height: rows,
-                       bitsPerComponent: 8, bytesPerRow: 0,
-                       space: CGColorSpaceCreateDeviceRGB(),
-                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-                   ) {
-                    tinyCtx.interpolationQuality = .none
-                    tinyCtx.draw(regionCG, in: CGRect(x: 0, y: 0, width: cols, height: rows))
-                    if let tinyImage = tinyCtx.makeImage() {
-                        let pixelatedNS = NSImage(cgImage: tinyImage, size: NSSize(width: cols, height: rows))
-                        let resolved = context.resolve(Image(nsImage: pixelatedNS))
+                if let scrambledImage = makeScrambledRedactionImage(
+                    from: cgSrc,
+                    annotationRect: annotation.rect,
+                    maxOutputDimension: previewLimit
+                ) {
+                    let previewImage = NSImage(
+                        cgImage: scrambledImage,
+                        size: NSSize(width: scrambledImage.width, height: scrambledImage.height)
+                    )
+                    let resolved = context.resolve(Image(nsImage: previewImage))
                         context.draw(resolved, in: scaledRect)
-                        didPixelate = true
-                    }
+                    didRenderScramble = true
                 }
             }
-            if !didPixelate {
-                // Fallback: fully opaque checkerboard-style gray blocks
-                for row in 0..<rows {
-                    for col in 0..<cols {
-                        let brightness = Double((row + col) % 2) * 0.15 + 0.25
-                        let blockRect = CGRect(
-                            x: scaledRect.minX + CGFloat(col) * blockSize,
-                            y: scaledRect.minY + CGFloat(row) * blockSize,
-                            width: blockSize,
-                            height: blockSize
-                        )
-                        context.fill(Path(blockRect), with: .color(Color(white: brightness, opacity: 1.0)))
-                    }
-                }
+            if !didRenderScramble {
+                context.fill(Path(scaledRect), with: .color(redactionFallbackColor))
             }
 
         case .number:
@@ -1491,56 +1626,15 @@ private class EditorViewModel: ObservableObject {
             }
 
         case .blur:
-            // True pixelation: downsample the source image region to block size, then draw back at full size
-            let blockSize: CGFloat = 12
-            let cols = max(1, Int(pixelRect.width / blockSize))
-            let rows = max(1, Int(pixelRect.height / blockSize))
-            var didPixelate = false
-            if let cgSrc = sourceCGImage {
-                let srcW = CGFloat(cgSrc.width)
-                let srcH = CGFloat(cgSrc.height)
-                // Map normalized annotation rect to cgImage pixels (cgImage uses Y-up coords)
-                let cgRegion = CGRect(
-                    x: annotation.rect.origin.x * srcW,
-                    y: (1.0 - annotation.rect.origin.y - annotation.rect.height) * srcH,
-                    width: max(1, annotation.rect.width * srcW),
-                    height: max(1, annotation.rect.height * srcH)
-                )
-                if let regionCG = cgSrc.cropping(to: cgRegion),
-                   let tinyCtx = CGContext(
-                       data: nil, width: cols, height: rows,
-                       bitsPerComponent: 8, bytesPerRow: 0,
-                       space: CGColorSpaceCreateDeviceRGB(),
-                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-                   ) {
-                    tinyCtx.interpolationQuality = .none
-                    tinyCtx.draw(regionCG, in: CGRect(x: 0, y: 0, width: cols, height: rows))
-                    if let tinyImage = tinyCtx.makeImage() {
-                        ctx.saveGState()
-                        ctx.interpolationQuality = .none
-                        ctx.draw(tinyImage, in: pixelRect)
-                        ctx.restoreGState()
-                        didPixelate = true
-                    }
-                }
-            }
-            if !didPixelate {
-                // Fallback: solid fully-opaque blocks
-                ctx.setFillColor(CGColor(gray: 0.4, alpha: 1.0))
+            if let cgSrc = sourceCGImage,
+               let scrambledImage = makeScrambledRedactionImage(from: cgSrc, annotationRect: annotation.rect) {
+                ctx.saveGState()
+                ctx.interpolationQuality = .none
+                ctx.draw(scrambledImage, in: pixelRect)
+                ctx.restoreGState()
+            } else {
+                ctx.setFillColor(redactionFallbackCGColor)
                 ctx.fill(pixelRect)
-                for row in 0..<rows {
-                    for col in 0..<cols {
-                        let brightness = CGFloat((row + col) % 2) * 0.15 + 0.25
-                        ctx.setFillColor(CGColor(gray: brightness, alpha: 1.0))
-                        let blockRect = CGRect(
-                            x: pixelRect.minX + CGFloat(col) * blockSize,
-                            y: pixelRect.minY + CGFloat(row) * blockSize,
-                            width: blockSize,
-                            height: blockSize
-                        )
-                        ctx.fill(blockRect)
-                    }
-                }
             }
 
         case .number:
