@@ -15,6 +15,8 @@ SOURCE_PREFIXES = (
 EDIT_TOOL_NAMES = {
     "apply_patch",
     "create_file",
+    "multi_replace_string_in_file",
+    "replace_string_in_file",
     "vscode_renameSymbol",
 }
 BUILD_TOOL_NAMES = {

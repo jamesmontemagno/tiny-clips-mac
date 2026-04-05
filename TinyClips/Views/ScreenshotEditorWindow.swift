@@ -1,4 +1,5 @@
 import AppKit
+import CoreImage
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -85,96 +86,140 @@ private struct Annotation: Identifiable {
     var text: String
     var points: [CGPoint] // for pencil
     var fontSize: CGFloat = 16 // for text annotations
+    var redactionBlurPreset: RedactionBlurPreset = .medium
 }
 
 private typealias LinePoints = (start: CGPoint, end: CGPoint)
 
-private let redactionFallbackColor = Color.black.opacity(0.92)
-private let redactionFallbackCGColor = NSColor.black.withAlphaComponent(0.92).cgColor
-private let redactionPreviewMaxDimension: CGFloat = 420
-private let redactionTileTargetPixels: CGFloat = 18
-private let redactionMinimumTileCount = 3
-private let redactionMaximumTileCount = 18
+private enum RedactionBlurPreset: String, CaseIterable, Identifiable {
+    case light
+    case medium
+    case heavy
 
-private struct SeededGenerator: RandomNumberGenerator {
-    private var state: UInt64
+    var id: Self { self }
 
-    init(seed: UInt64) {
-        self.state = seed == 0 ? 0x9E3779B97F4A7C15 : seed
+    var label: String {
+        switch self {
+        case .light: return "Light"
+        case .medium: return "Medium"
+        case .heavy: return "Heavy"
+        }
     }
 
-    mutating func next() -> UInt64 {
-        state &+= 0x9E3779B97F4A7C15
-        var value = state
-        value = (value ^ (value >> 30)) &* 0xBF58476D1CE4E5B9
-        value = (value ^ (value >> 27)) &* 0x94D049BB133111EB
-        return value ^ (value >> 31)
+    var blurRadius: CGFloat {
+        switch self {
+        case .light: return 10
+        case .medium: return 18
+        case .heavy: return 28
+        }
+    }
+
+    var overlayOpacity: CGFloat {
+        switch self {
+        case .light: return 0.09
+        case .medium: return 0.13
+        case .heavy: return 0.17
+        }
+    }
+
+    var saturation: CGFloat {
+        switch self {
+        case .light: return 0.9
+        case .medium: return 0.82
+        case .heavy: return 0.74
+        }
+    }
+
+    var brightness: CGFloat {
+        switch self {
+        case .light: return 0.01
+        case .medium: return 0.02
+        case .heavy: return 0.03
+        }
+    }
+
+    var edgeFeather: CGFloat {
+        switch self {
+        case .light: return 2.5
+        case .medium: return 3.5
+        case .heavy: return 4.5
+        }
     }
 }
 
-private func makeScrambledRedactionImage(
+private let redactionFallbackColor = Color.black.opacity(0.92)
+private let redactionFallbackCGColor = NSColor.black.withAlphaComponent(0.92).cgColor
+private let redactionPreviewMaxDimension: CGFloat = 420
+private let redactionCIContext = CIContext(options: nil)
+
+private func makeBlurredRedactionImage(
     from sourceCGImage: CGImage,
     annotationRect: CGRect,
+    preset: RedactionBlurPreset,
     maxOutputDimension: CGFloat? = nil
 ) -> CGImage? {
-    guard let sourceRect = redactionSourceRect(for: annotationRect, imageSize: CGSize(width: sourceCGImage.width, height: sourceCGImage.height)),
-          let croppedImage = sourceCGImage.cropping(to: sourceRect) else {
+    let imageSize = CGSize(width: sourceCGImage.width, height: sourceCGImage.height)
+    guard let sourceRect = redactionSourceRect(for: annotationRect, imageSize: imageSize) else {
+        return nil
+    }
+
+    let blurPadding = ceil(preset.blurRadius * 2.5 + preset.edgeFeather * 2.0)
+    let expandedRect = redactionExpandedSourceRect(
+        from: sourceRect,
+        padding: blurPadding,
+        imageSize: imageSize
+    )
+    guard let expandedImage = sourceCGImage.cropping(to: expandedRect) else {
         return nil
     }
 
     let outputSize = scaledRedactionOutputSize(for: sourceRect.size, maxDimension: maxOutputDimension)
-    let outputWidth = max(1, Int(outputSize.width.rounded(.toNearestOrAwayFromZero)))
-    let outputHeight = max(1, Int(outputSize.height.rounded(.toNearestOrAwayFromZero)))
+    let outputWidth = max(1, Int(outputSize.width.rounded(.up)))
+    let outputHeight = max(1, Int(outputSize.height.rounded(.up)))
+    let scale = min(CGFloat(outputWidth) / sourceRect.width, CGFloat(outputHeight) / sourceRect.height)
 
-    guard let context = CGContext(
-        data: nil,
-        width: outputWidth,
-        height: outputHeight,
-        bitsPerComponent: 8,
-        bytesPerRow: 0,
-        space: CGColorSpaceCreateDeviceRGB(),
-        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-    ) else {
-        return nil
-    }
+    let ciExpandedImage = CIImage(cgImage: expandedImage)
+    let scaledExpandedImage = ciExpandedImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+    let targetRect = CGRect(
+        x: (sourceRect.origin.x - expandedRect.origin.x) * scale,
+        y: (sourceRect.origin.y - expandedRect.origin.y) * scale,
+        width: sourceRect.width * scale,
+        height: sourceRect.height * scale
+    )
+    let adjustedBlurRadius = max(1, preset.blurRadius * scale)
+    let adjustedFeatherRadius = max(1, preset.edgeFeather * scale)
 
-    let columns = redactionTileCount(for: sourceRect.width)
-    let rows = redactionTileCount(for: sourceRect.height)
-    let tileCount = max(1, columns * rows)
+    let blurredImage = scaledExpandedImage
+        .clampedToExtent()
+        .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: adjustedBlurRadius])
+        .cropped(to: targetRect)
 
-    if tileCount == 1 {
-        context.draw(croppedImage, in: CGRect(x: 0, y: 0, width: outputWidth, height: outputHeight))
-        return context.makeImage()
-    }
+    let tunedImage = blurredImage.applyingFilter(
+        "CIColorControls",
+        parameters: [
+            kCIInputSaturationKey: preset.saturation,
+            kCIInputBrightnessKey: preset.brightness,
+            kCIInputContrastKey: 1.02,
+        ]
+    )
 
-    let sourceX = tileBreakpoints(length: Int(sourceRect.width), segments: columns)
-    let sourceY = tileBreakpoints(length: Int(sourceRect.height), segments: rows)
-    let destinationX = tileBreakpoints(length: outputWidth, segments: columns)
-    let destinationY = tileBreakpoints(length: outputHeight, segments: rows)
+    let overlay = CIImage(color: CIColor(red: 1, green: 1, blue: 1, alpha: preset.overlayOpacity))
+        .cropped(to: targetRect)
+    let frostedImage = overlay.composited(over: tunedImage).cropped(to: targetRect)
+    let transparentBackground = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))
+        .cropped(to: targetRect)
+    let maskImage = makeRedactionEdgeMask(extent: targetRect, featherRadius: adjustedFeatherRadius)
+    let finalImage = frostedImage
+        .applyingFilter(
+            "CIBlendWithMask",
+            parameters: [
+                kCIInputBackgroundImageKey: transparentBackground,
+                kCIInputMaskImageKey: maskImage,
+            ]
+        )
+        .cropped(to: targetRect)
 
-    var order = Array(0..<tileCount)
-    var generator = SeededGenerator(seed: redactionSeed(for: annotationRect, tileCount: tileCount))
-    order.shuffle(using: &generator)
-
-    context.interpolationQuality = .none
-
-    for destinationIndex in 0..<tileCount {
-        let sourceIndex = order[destinationIndex]
-        let sourceTile = tileRect(at: sourceIndex, columns: columns, xBreakpoints: sourceX, yBreakpoints: sourceY)
-        let destinationTile = tileRect(at: destinationIndex, columns: columns, xBreakpoints: destinationX, yBreakpoints: destinationY)
-
-        guard sourceTile.width > 0,
-              sourceTile.height > 0,
-              destinationTile.width > 0,
-              destinationTile.height > 0,
-              let tileImage = croppedImage.cropping(to: sourceTile) else {
-            continue
-        }
-
-        context.draw(tileImage, in: destinationTile)
-    }
-
-    return context.makeImage()
+    return redactionCIContext.createCGImage(finalImage, from: targetRect)
 }
 
 private func redactionSourceRect(for annotationRect: CGRect, imageSize: CGSize) -> CGRect? {
@@ -195,6 +240,13 @@ private func redactionSourceRect(for annotationRect: CGRect, imageSize: CGSize) 
     return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
 }
 
+private func redactionExpandedSourceRect(from sourceRect: CGRect, padding: CGFloat, imageSize: CGSize) -> CGRect {
+    sourceRect
+        .insetBy(dx: -padding, dy: -padding)
+        .intersection(CGRect(origin: .zero, size: imageSize))
+        .integral
+}
+
 private func scaledRedactionOutputSize(for sourceSize: CGSize, maxDimension: CGFloat?) -> CGSize {
     guard let maxDimension, maxDimension > 0 else {
         return sourceSize
@@ -212,40 +264,19 @@ private func scaledRedactionOutputSize(for sourceSize: CGSize, maxDimension: CGF
     )
 }
 
-private func redactionTileCount(for length: CGFloat) -> Int {
-    let estimatedCount = Int((length / redactionTileTargetPixels).rounded(.toNearestOrAwayFromZero))
-    return min(redactionMaximumTileCount, max(redactionMinimumTileCount, estimatedCount))
-}
+private func makeRedactionEdgeMask(extent: CGRect, featherRadius: CGFloat) -> CIImage {
+    let padding = max(1, featherRadius * 3)
+    let paddedExtent = extent.insetBy(dx: -padding, dy: -padding)
+    let whiteRect = CIImage(color: CIColor(red: 1, green: 1, blue: 1, alpha: 1))
+        .cropped(to: extent)
+    let blackBackground = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 1))
+        .cropped(to: paddedExtent)
+    let baseMask = whiteRect.composited(over: blackBackground)
 
-private func tileBreakpoints(length: Int, segments: Int) -> [Int] {
-    guard segments > 0 else { return [0, length] }
-    return (0...segments).map { index in
-        Int((Double(index) * Double(length) / Double(segments)).rounded(.down))
-    }
-}
-
-private func tileRect(at index: Int, columns: Int, xBreakpoints: [Int], yBreakpoints: [Int]) -> CGRect {
-    let column = index % columns
-    let row = index / columns
-    let minX = xBreakpoints[column]
-    let maxX = xBreakpoints[column + 1]
-    let minY = yBreakpoints[row]
-    let maxY = yBreakpoints[row + 1]
-    return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
-}
-
-private func redactionSeed(for annotationRect: CGRect, tileCount: Int) -> UInt64 {
-    let components: [UInt64] = [
-        UInt64((annotationRect.minX * 100_000).rounded()),
-        UInt64((annotationRect.minY * 100_000).rounded()),
-        UInt64((annotationRect.width * 100_000).rounded()),
-        UInt64((annotationRect.height * 100_000).rounded()),
-        UInt64(tileCount)
-    ]
-
-    return components.reduce(0xCBF29CE484222325) { partial, component in
-        (partial ^ (component &+ 0x9E3779B97F4A7C15)) &* 0x100000001B3
-    }
+    return baseMask
+        .clampedToExtent()
+        .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: featherRadius])
+        .cropped(to: extent)
 }
 
 // MARK: - Editor View
@@ -322,6 +353,19 @@ private struct ScreenshotEditorView: View {
             set: { newValue in
                 if !viewModel.updateSelectedNumberSizeMultiplier(newValue) {
                     viewModel.numberSizeMultiplier = newValue
+                }
+            }
+        )
+    }
+
+    private var blurPresetBinding: Binding<RedactionBlurPreset> {
+        Binding(
+            get: {
+                viewModel.selectedRedactionBlurPreset() ?? viewModel.redactionBlurPreset
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedRedactionBlurPreset(newValue) {
+                    viewModel.redactionBlurPreset = newValue
                 }
             }
         )
@@ -444,16 +488,33 @@ private struct ScreenshotEditorView: View {
 
             if viewModel.showsNumberSizeControl {
                 Picker("", selection: numberSizeBinding) {
+                    Text("50%").tag(CGFloat(0.5))
                     Text("75%").tag(CGFloat(0.75))
+                    Text("80%").tag(CGFloat(0.8))
+                    Text("90%").tag(CGFloat(0.9))
                     Text("100%").tag(CGFloat(1.0))
+                    Text("110%").tag(CGFloat(1.1))
                     Text("125%").tag(CGFloat(1.25))
                     Text("150%").tag(CGFloat(1.5))
+                    Text("175%").tag(CGFloat(1.75))
                     Text("200%").tag(CGFloat(2.0))
                 }
                 .labelsHidden()
                 .frame(width: 96)
                 .accessibilityLabel("Number size")
                 .accessibilityValue("\(Int(numberSizeBinding.wrappedValue * 100)) percent")
+            }
+
+            if viewModel.showsRedactionPresetControl {
+                Picker("", selection: blurPresetBinding) {
+                    ForEach(RedactionBlurPreset.allCases) { preset in
+                        Text(preset.label).tag(preset)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 110)
+                .accessibilityLabel("Redaction blur strength")
+                .accessibilityValue(blurPresetBinding.wrappedValue.label)
             }
 
             // Undo
@@ -488,8 +549,13 @@ private struct ScreenshotEditorView: View {
 
             Picker("Scale:", selection: $viewModel.saveScale) {
                 Text("100%").tag(100)
-                Text("75%").tag(75)
+                Text("90%").tag(90)
+                Text("80%").tag(80)
+                Text("70%").tag(70)
+                Text("60%").tag(60)
                 Text("50%").tag(50)
+                Text("40%").tag(40)
+                Text("30%").tag(30)
                 Text("25%").tag(25)
             }
             .frame(width: 120)
@@ -808,28 +874,29 @@ private struct CanvasView: View {
             }
 
         case .blur:
-            var didRenderScramble = false
+            var didRenderBlur = false
             if let nsImage = sourceImage,
                let cgSrc = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
                 let previewLimit = min(
                     redactionPreviewMaxDimension,
                     max(scaledRect.width, scaledRect.height) * (NSScreen.main?.backingScaleFactor ?? 2.0)
                 )
-                if let scrambledImage = makeScrambledRedactionImage(
+                if let blurredImage = makeBlurredRedactionImage(
                     from: cgSrc,
                     annotationRect: annotation.rect,
+                    preset: annotation.redactionBlurPreset,
                     maxOutputDimension: previewLimit
                 ) {
                     let previewImage = NSImage(
-                        cgImage: scrambledImage,
-                        size: NSSize(width: scrambledImage.width, height: scrambledImage.height)
+                        cgImage: blurredImage,
+                        size: NSSize(width: blurredImage.width, height: blurredImage.height)
                     )
                     let resolved = context.resolve(Image(nsImage: previewImage))
-                        context.draw(resolved, in: scaledRect)
-                    didRenderScramble = true
+                    context.draw(resolved, in: scaledRect)
+                    didRenderBlur = true
                 }
             }
-            if !didRenderScramble {
+            if !didRenderBlur {
                 context.fill(Path(scaledRect), with: .color(redactionFallbackColor))
             }
 
@@ -880,6 +947,7 @@ private class EditorViewModel: ObservableObject {
     @Published var nextNumberLabel: Int = 1
     @Published var numberSizeMultiplier: CGFloat = 1.0
     @Published var numberTextColor: Color = .white
+    @Published var redactionBlurPreset: RedactionBlurPreset = .medium
 
     private var pencilPoints: [CGPoint] = []
     private var imagePixelSize: CGSize = .zero
@@ -1045,6 +1113,10 @@ private class EditorViewModel: ObservableObject {
         inspectorTool == .number
     }
 
+    var showsRedactionPresetControl: Bool {
+        inspectorTool == .blur
+    }
+
     var inspectorTool: EditTool {
         if selectedTool == .move,
            let index = selectedAnnotationIndex,
@@ -1151,6 +1223,7 @@ private class EditorViewModel: ObservableObject {
                 lineWidth: lineWidth,
                 text: "",
                 points: (selectedTool == .arrow || selectedTool == .line) ? [start, current] : []
+                redactionBlurPreset: redactionBlurPreset
             )
         }
     }
@@ -1196,6 +1269,7 @@ private class EditorViewModel: ObservableObject {
                     lineWidth: lineWidth,
                     text: "",
                     points: (selectedTool == .arrow || selectedTool == .line) ? [start, end] : []
+                    redactionBlurPreset: redactionBlurPreset
                 ))
             }
             currentAnnotation = nil
@@ -1364,7 +1438,8 @@ private class EditorViewModel: ObservableObject {
             lineWidth: lineWidth,
             text: textEditValue,
             points: [],
-            fontSize: textFontSize
+            fontSize: textFontSize,
+            redactionBlurPreset: redactionBlurPreset
         ))
         textEditPosition = nil
         textEditValue = ""
@@ -1395,9 +1470,15 @@ private class EditorViewModel: ObservableObject {
             textColor: numberTextColor,
             lineWidth: lineWidth,
             text: "\(nextNumberLabel)",
-            points: []
+            points: [],
+            redactionBlurPreset: redactionBlurPreset
         ))
         nextNumberLabel += 1
+    }
+
+    func selectedRedactionBlurPreset() -> RedactionBlurPreset? {
+        guard selectedAnnotationIsBlur, let index = selectedAnnotationIndex else { return nil }
+        return annotations[index].redactionBlurPreset
     }
 
     func selectedNumberBadgeColor() -> Color? {
@@ -1459,6 +1540,16 @@ private class EditorViewModel: ObservableObject {
         }
 
         annotations[index].textColor = color
+        return true
+    }
+
+    @discardableResult
+    func updateSelectedRedactionBlurPreset(_ preset: RedactionBlurPreset) -> Bool {
+        guard selectedAnnotationIsBlur, let index = selectedAnnotationIndex else {
+            return false
+        }
+
+        annotations[index].redactionBlurPreset = preset
         return true
     }
 
@@ -1627,10 +1718,14 @@ private class EditorViewModel: ObservableObject {
 
         case .blur:
             if let cgSrc = sourceCGImage,
-               let scrambledImage = makeScrambledRedactionImage(from: cgSrc, annotationRect: annotation.rect) {
+               let blurredImage = makeBlurredRedactionImage(
+                from: cgSrc,
+                annotationRect: annotation.rect,
+                preset: annotation.redactionBlurPreset
+               ) {
                 ctx.saveGState()
-                ctx.interpolationQuality = .none
-                ctx.draw(scrambledImage, in: pixelRect)
+                ctx.interpolationQuality = .high
+                ctx.draw(blurredImage, in: pixelRect)
                 ctx.restoreGState()
             } else {
                 ctx.setFillColor(redactionFallbackCGColor)
@@ -1704,6 +1799,13 @@ private class EditorViewModel: ObservableObject {
             return false
         }
         return annotations[index].tool == .number
+    }
+
+    private var selectedAnnotationIsBlur: Bool {
+        guard let index = selectedAnnotationIndex, annotations.indices.contains(index) else {
+            return false
+        }
+        return annotations[index].tool == .blur
     }
 
     private func baseNumberSidePixels() -> CGFloat {

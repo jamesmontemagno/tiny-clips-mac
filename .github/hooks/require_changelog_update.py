@@ -15,6 +15,8 @@ SOURCE_PREFIXES = (
 EDIT_TOOL_NAMES = {
     "apply_patch",
     "create_file",
+    "multi_replace_string_in_file",
+    "replace_string_in_file",
     "vscode_renameSymbol",
 }
 PATCH_FILE_PATTERN = re.compile(
@@ -146,10 +148,12 @@ def handle_stop(payload, repo_root):
     changelog_touched = CHANGELOG_PATH in edited_paths
 
     if source_paths and not changelog_touched:
+        files_list = "\n".join(f"  - {p}" for p in source_paths[:10])
         reason = (
-            "Product source files were edited in this session without updating CHANGELOG.md. "
-            "Add a changelog entry before finishing if this work is a feature or fix. "
-            f"Edited files: {', '.join(source_paths[:5])}"
+            "The following product source files were edited this session but CHANGELOG.md was not updated:\n"
+            f"{files_list}\n\n"
+            "Please update CHANGELOG.md with an appropriate entry describing what was added or fixed, "
+            "then finish."
         )
         emit(
             {
