@@ -106,43 +106,11 @@ private enum RedactionBlurPreset: String, CaseIterable, Identifiable {
         }
     }
 
-    var blurRadius: CGFloat {
+    var pixelScale: CGFloat {
         switch self {
         case .light: return 10
         case .medium: return 18
         case .heavy: return 28
-        }
-    }
-
-    var overlayOpacity: CGFloat {
-        switch self {
-        case .light: return 0.09
-        case .medium: return 0.13
-        case .heavy: return 0.17
-        }
-    }
-
-    var saturation: CGFloat {
-        switch self {
-        case .light: return 0.9
-        case .medium: return 0.82
-        case .heavy: return 0.74
-        }
-    }
-
-    var brightness: CGFloat {
-        switch self {
-        case .light: return 0.01
-        case .medium: return 0.02
-        case .heavy: return 0.03
-        }
-    }
-
-    var edgeFeather: CGFloat {
-        switch self {
-        case .light: return 2.5
-        case .medium: return 3.5
-        case .heavy: return 4.5
         }
     }
 }
@@ -152,7 +120,7 @@ private let redactionFallbackCGColor = NSColor.black.withAlphaComponent(0.92).cg
 private let redactionPreviewMaxDimension: CGFloat = 420
 private let redactionCIContext = CIContext(options: nil)
 
-private func makeBlurredRedactionImage(
+private func makePixelatedRedactionImage(
     from sourceCGImage: CGImage,
     annotationRect: CGRect,
     preset: RedactionBlurPreset,
@@ -163,13 +131,7 @@ private func makeBlurredRedactionImage(
         return nil
     }
 
-    let blurPadding = ceil(preset.blurRadius * 2.5 + preset.edgeFeather * 2.0)
-    let expandedRect = redactionExpandedSourceRect(
-        from: sourceRect,
-        padding: blurPadding,
-        imageSize: imageSize
-    )
-    guard let expandedImage = sourceCGImage.cropping(to: expandedRect) else {
+    guard let croppedImage = sourceCGImage.cropping(to: sourceRect) else {
         return nil
     }
 
@@ -178,48 +140,21 @@ private func makeBlurredRedactionImage(
     let outputHeight = max(1, Int(outputSize.height.rounded(.up)))
     let scale = min(CGFloat(outputWidth) / sourceRect.width, CGFloat(outputHeight) / sourceRect.height)
 
-    let ciExpandedImage = CIImage(cgImage: expandedImage)
-    let scaledExpandedImage = ciExpandedImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-    let targetRect = CGRect(
-        x: (sourceRect.origin.x - expandedRect.origin.x) * scale,
-        y: (sourceRect.origin.y - expandedRect.origin.y) * scale,
-        width: sourceRect.width * scale,
-        height: sourceRect.height * scale
-    )
-    let adjustedBlurRadius = max(1, preset.blurRadius * scale)
-    let adjustedFeatherRadius = max(1, preset.edgeFeather * scale)
-
-    let blurredImage = scaledExpandedImage
-        .clampedToExtent()
-        .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: adjustedBlurRadius])
-        .cropped(to: targetRect)
-
-    let tunedImage = blurredImage.applyingFilter(
-        "CIColorControls",
-        parameters: [
-            kCIInputSaturationKey: preset.saturation,
-            kCIInputBrightnessKey: preset.brightness,
-            kCIInputContrastKey: 1.02,
-        ]
-    )
-
-    let overlay = CIImage(color: CIColor(red: 1, green: 1, blue: 1, alpha: preset.overlayOpacity))
-        .cropped(to: targetRect)
-    let frostedImage = overlay.composited(over: tunedImage).cropped(to: targetRect)
-    let transparentBackground = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))
-        .cropped(to: targetRect)
-    let maskImage = makeRedactionEdgeMask(extent: targetRect, featherRadius: adjustedFeatherRadius)
-    let finalImage = frostedImage
+    let targetRect = CGRect(x: 0, y: 0, width: sourceRect.width * scale, height: sourceRect.height * scale)
+    let adjustedPixelScale = max(4, preset.pixelScale * scale)
+    let scaledImage = CIImage(cgImage: croppedImage)
+        .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+    let pixelatedImage = scaledImage
         .applyingFilter(
-            "CIBlendWithMask",
+            "CIPixellate",
             parameters: [
-                kCIInputBackgroundImageKey: transparentBackground,
-                kCIInputMaskImageKey: maskImage,
+                kCIInputScaleKey: adjustedPixelScale,
+                kCIInputCenterKey: CIVector(x: targetRect.midX, y: targetRect.midY),
             ]
         )
         .cropped(to: targetRect)
 
-    return redactionCIContext.createCGImage(finalImage, from: targetRect)
+    return redactionCIContext.createCGImage(pixelatedImage, from: targetRect)
 }
 
 private func redactionSourceRect(for annotationRect: CGRect, imageSize: CGSize) -> CGRect? {
@@ -240,13 +175,6 @@ private func redactionSourceRect(for annotationRect: CGRect, imageSize: CGSize) 
     return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
 }
 
-private func redactionExpandedSourceRect(from sourceRect: CGRect, padding: CGFloat, imageSize: CGSize) -> CGRect {
-    sourceRect
-        .insetBy(dx: -padding, dy: -padding)
-        .intersection(CGRect(origin: .zero, size: imageSize))
-        .integral
-}
-
 private func scaledRedactionOutputSize(for sourceSize: CGSize, maxDimension: CGFloat?) -> CGSize {
     guard let maxDimension, maxDimension > 0 else {
         return sourceSize
@@ -262,21 +190,6 @@ private func scaledRedactionOutputSize(for sourceSize: CGSize, maxDimension: CGF
         width: max(1, floor(sourceSize.width * scale)),
         height: max(1, floor(sourceSize.height * scale))
     )
-}
-
-private func makeRedactionEdgeMask(extent: CGRect, featherRadius: CGFloat) -> CIImage {
-    let padding = max(1, featherRadius * 3)
-    let paddedExtent = extent.insetBy(dx: -padding, dy: -padding)
-    let whiteRect = CIImage(color: CIColor(red: 1, green: 1, blue: 1, alpha: 1))
-        .cropped(to: extent)
-    let blackBackground = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 1))
-        .cropped(to: paddedExtent)
-    let baseMask = whiteRect.composited(over: blackBackground)
-
-    return baseMask
-        .clampedToExtent()
-        .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: featherRadius])
-        .cropped(to: extent)
 }
 
 // MARK: - Editor View
@@ -513,7 +426,7 @@ private struct ScreenshotEditorView: View {
                 }
                 .labelsHidden()
                 .frame(width: 110)
-                .accessibilityLabel("Redaction blur strength")
+                .accessibilityLabel("Redaction pixelation strength")
                 .accessibilityValue(blurPresetBinding.wrappedValue.label)
             }
 
@@ -881,7 +794,7 @@ private struct CanvasView: View {
                     redactionPreviewMaxDimension,
                     max(scaledRect.width, scaledRect.height) * (NSScreen.main?.backingScaleFactor ?? 2.0)
                 )
-                if let blurredImage = makeBlurredRedactionImage(
+                if let blurredImage = makePixelatedRedactionImage(
                     from: cgSrc,
                     annotationRect: annotation.rect,
                     preset: annotation.redactionBlurPreset,
@@ -1718,13 +1631,13 @@ private class EditorViewModel: ObservableObject {
 
         case .blur:
             if let cgSrc = sourceCGImage,
-               let blurredImage = makeBlurredRedactionImage(
+               let blurredImage = makePixelatedRedactionImage(
                 from: cgSrc,
                 annotationRect: annotation.rect,
                 preset: annotation.redactionBlurPreset
                ) {
                 ctx.saveGState()
-                ctx.interpolationQuality = .high
+                ctx.interpolationQuality = .none
                 ctx.draw(blurredImage, in: pixelRect)
                 ctx.restoreGState()
             } else {
