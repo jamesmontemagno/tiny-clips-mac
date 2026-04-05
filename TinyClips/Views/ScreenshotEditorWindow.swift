@@ -1,5 +1,4 @@
 import AppKit
-import CoreImage
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -106,90 +105,91 @@ private enum RedactionBlurPreset: String, CaseIterable, Identifiable {
         }
     }
 
-    var pixelScale: CGFloat {
+    var previewBlockSize: CGFloat {
+        switch self {
+        case .light: return 8
+        case .medium: return 10
+        case .heavy: return 14
+        }
+    }
+
+    var exportBlockSize: CGFloat {
         switch self {
         case .light: return 10
-        case .medium: return 18
-        case .heavy: return 28
+        case .medium: return 12
+        case .heavy: return 16
+        }
+    }
+
+    var baseBrightness: Double {
+        switch self {
+        case .light: return 0.34
+        case .medium: return 0.29
+        case .heavy: return 0.24
+        }
+    }
+
+    var contrastStep: Double {
+        switch self {
+        case .light: return 0.08
+        case .medium: return 0.12
+        case .heavy: return 0.16
+        }
+    }
+
+    var cycleLength: Int {
+        switch self {
+        case .light: return 2
+        case .medium: return 3
+        case .heavy: return 4
         }
     }
 }
 
-private let redactionFallbackColor = Color.black.opacity(0.92)
-private let redactionFallbackCGColor = NSColor.black.withAlphaComponent(0.92).cgColor
-private let redactionPreviewMaxDimension: CGFloat = 420
-private let redactionCIContext = CIContext(options: nil)
-
-private func makePixelatedRedactionImage(
-    from sourceCGImage: CGImage,
-    annotationRect: CGRect,
-    preset: RedactionBlurPreset,
-    maxOutputDimension: CGFloat? = nil
-) -> CGImage? {
-    let imageSize = CGSize(width: sourceCGImage.width, height: sourceCGImage.height)
-    guard let sourceRect = redactionSourceRect(for: annotationRect, imageSize: imageSize) else {
-        return nil
-    }
-
-    guard let croppedImage = sourceCGImage.cropping(to: sourceRect) else {
-        return nil
-    }
-
-    let outputSize = scaledRedactionOutputSize(for: sourceRect.size, maxDimension: maxOutputDimension)
-    let outputWidth = max(1, Int(outputSize.width.rounded(.up)))
-    let outputHeight = max(1, Int(outputSize.height.rounded(.up)))
-    let scale = min(CGFloat(outputWidth) / sourceRect.width, CGFloat(outputHeight) / sourceRect.height)
-
-    let targetRect = CGRect(x: 0, y: 0, width: sourceRect.width * scale, height: sourceRect.height * scale)
-    let adjustedPixelScale = max(4, preset.pixelScale * scale)
-    let scaledImage = CIImage(cgImage: croppedImage)
-        .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-    let pixelatedImage = scaledImage
-        .applyingFilter(
-            "CIPixellate",
-            parameters: [
-                kCIInputScaleKey: adjustedPixelScale,
-                kCIInputCenterKey: CIVector(x: targetRect.midX, y: targetRect.midY),
-            ]
-        )
-        .cropped(to: targetRect)
-
-    return redactionCIContext.createCGImage(pixelatedImage, from: targetRect)
+private func redactionBrightness(for row: Int, column: Int, preset: RedactionBlurPreset) -> Double {
+    let phase = Double((row + column) % preset.cycleLength)
+    return min(0.82, preset.baseBrightness + phase * preset.contrastStep)
 }
 
-private func redactionSourceRect(for annotationRect: CGRect, imageSize: CGSize) -> CGRect? {
-    let clampedRect = annotationRect.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
-    guard !clampedRect.isNull, clampedRect.width > 0, clampedRect.height > 0 else {
-        return nil
+private func drawCheckerboardRedaction(in context: GraphicsContext, rect: CGRect, preset: RedactionBlurPreset) {
+    let blockSize = preset.previewBlockSize
+    let cols = max(1, Int(ceil(rect.width / blockSize)))
+    let rows = max(1, Int(ceil(rect.height / blockSize)))
+
+    for row in 0..<rows {
+        for col in 0..<cols {
+            let blockRect = CGRect(
+                x: rect.minX + CGFloat(col) * blockSize,
+                y: rect.minY + CGFloat(row) * blockSize,
+                width: min(blockSize, rect.maxX - (rect.minX + CGFloat(col) * blockSize)),
+                height: min(blockSize, rect.maxY - (rect.minY + CGFloat(row) * blockSize))
+            )
+            guard blockRect.width > 0, blockRect.height > 0 else { continue }
+            let brightness = redactionBrightness(for: row, column: col, preset: preset)
+            context.fill(Path(blockRect), with: .color(Color(white: brightness, opacity: 1.0)))
+        }
     }
-
-    let imageWidth = Int(imageSize.width)
-    let imageHeight = Int(imageSize.height)
-    guard imageWidth > 0, imageHeight > 0 else { return nil }
-
-    let minX = max(0, min(imageWidth - 1, Int(floor(clampedRect.minX * imageSize.width))))
-    let maxX = max(minX + 1, min(imageWidth, Int(ceil(clampedRect.maxX * imageSize.width))))
-    let minY = max(0, min(imageHeight - 1, Int(floor((1.0 - clampedRect.maxY) * imageSize.height))))
-    let maxY = max(minY + 1, min(imageHeight, Int(ceil((1.0 - clampedRect.minY) * imageSize.height))))
-
-    return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
 }
 
-private func scaledRedactionOutputSize(for sourceSize: CGSize, maxDimension: CGFloat?) -> CGSize {
-    guard let maxDimension, maxDimension > 0 else {
-        return sourceSize
-    }
+private func drawCheckerboardRedaction(in context: CGContext, rect: CGRect, preset: RedactionBlurPreset) {
+    let blockSize = preset.exportBlockSize
+    let cols = max(1, Int(ceil(rect.width / blockSize)))
+    let rows = max(1, Int(ceil(rect.height / blockSize)))
 
-    let largestDimension = max(sourceSize.width, sourceSize.height)
-    guard largestDimension > maxDimension else {
-        return sourceSize
+    for row in 0..<rows {
+        for col in 0..<cols {
+            let blockRect = CGRect(
+                x: rect.minX + CGFloat(col) * blockSize,
+                y: rect.minY + CGFloat(row) * blockSize,
+                width: min(blockSize, rect.maxX - (rect.minX + CGFloat(col) * blockSize)),
+                height: min(blockSize, rect.maxY - (rect.minY + CGFloat(row) * blockSize))
+            )
+            guard blockRect.width > 0, blockRect.height > 0 else { continue }
+            let brightness = redactionBrightness(for: row, column: col, preset: preset)
+            context.setFillColor(CGColor(gray: brightness, alpha: 1.0))
+            context.fill(blockRect)
+        }
     }
-
-    let scale = maxDimension / largestDimension
-    return CGSize(
-        width: max(1, floor(sourceSize.width * scale)),
-        height: max(1, floor(sourceSize.height * scale))
-    )
 }
 
 // MARK: - Editor View
@@ -787,31 +787,7 @@ private struct CanvasView: View {
             }
 
         case .blur:
-            var didRenderBlur = false
-            if let nsImage = sourceImage,
-               let cgSrc = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-                let previewLimit = min(
-                    redactionPreviewMaxDimension,
-                    max(scaledRect.width, scaledRect.height) * (NSScreen.main?.backingScaleFactor ?? 2.0)
-                )
-                if let blurredImage = makePixelatedRedactionImage(
-                    from: cgSrc,
-                    annotationRect: annotation.rect,
-                    preset: annotation.redactionBlurPreset,
-                    maxOutputDimension: previewLimit
-                ) {
-                    let previewImage = NSImage(
-                        cgImage: blurredImage,
-                        size: NSSize(width: blurredImage.width, height: blurredImage.height)
-                    )
-                    let resolved = context.resolve(Image(nsImage: previewImage))
-                    context.draw(resolved, in: scaledRect)
-                    didRenderBlur = true
-                }
-            }
-            if !didRenderBlur {
-                context.fill(Path(scaledRect), with: .color(redactionFallbackColor))
-            }
+            drawCheckerboardRedaction(in: context, rect: scaledRect, preset: annotation.redactionBlurPreset)
 
         case .number:
             // Draw filled circle
@@ -1630,20 +1606,7 @@ private class EditorViewModel: ObservableObject {
             }
 
         case .blur:
-            if let cgSrc = sourceCGImage,
-               let blurredImage = makePixelatedRedactionImage(
-                from: cgSrc,
-                annotationRect: annotation.rect,
-                preset: annotation.redactionBlurPreset
-               ) {
-                ctx.saveGState()
-                ctx.interpolationQuality = .none
-                ctx.draw(blurredImage, in: pixelRect)
-                ctx.restoreGState()
-            } else {
-                ctx.setFillColor(redactionFallbackCGColor)
-                ctx.fill(pixelRect)
-            }
+            drawCheckerboardRedaction(in: ctx, rect: pixelRect, preset: annotation.redactionBlurPreset)
 
         case .number:
             // Draw filled circle
