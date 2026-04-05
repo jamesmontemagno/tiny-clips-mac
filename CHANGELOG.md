@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.3.3 - 2026-04-05
+
+### Added
+- Guidelines for capture-time window and panel conventions in documentation.
+- Redaction blur presets and blur strength control in ScreenshotEditorView.
+- Dynamic color and size controls for annotations in ScreenshotEditorView.
+- Enhanced number text color controls in ScreenshotEditorView.
+
+### Improved
+- Project guidelines for clarity and consistency in architecture and conventions.
+- Purchase restoration alert display.
+- Shortcut display in GuideWindow.
+
+### Fixed
+- Missing comma in points array for arrow and line tools in EditorViewModel.
+
 ## v1.3.2 - 2026-04-04
 
 ### Added
