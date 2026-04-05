@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.3.4 - 2026-04-05
+
+### Improved
+- Redaction blur handling and performance optimizations.
+- Rename of blur-related properties and methods for pixelation functionality clarity.
+
 ## v1.3.3 - 2026-04-05
 
 ### Added
