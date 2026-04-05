@@ -1222,7 +1222,7 @@ private class EditorViewModel: ObservableObject {
                 fillColor: selectedFillColor,
                 lineWidth: lineWidth,
                 text: "",
-                points: (selectedTool == .arrow || selectedTool == .line) ? [start, current] : []
+                points: (selectedTool == .arrow || selectedTool == .line) ? [start, current] : [],
                 redactionBlurPreset: redactionBlurPreset
             )
         }
@@ -1268,7 +1268,7 @@ private class EditorViewModel: ObservableObject {
                     fillColor: selectedFillColor,
                     lineWidth: lineWidth,
                     text: "",
-                    points: (selectedTool == .arrow || selectedTool == .line) ? [start, end] : []
+                    points: (selectedTool == .arrow || selectedTool == .line) ? [start, end] : [],
                     redactionBlurPreset: redactionBlurPreset
                 ))
             }
