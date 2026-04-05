@@ -10,7 +10,7 @@ class ScreenshotEditorWindow: NSWindow, NSWindowDelegate {
 
     convenience init(imageURL: URL, onComplete: @escaping (URL?) -> Void) {
         self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: 580),
+            contentRect: NSRect(x: 0, y: 0, width: 840, height: 580),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -79,6 +79,7 @@ private struct Annotation: Identifiable {
     let tool: EditTool
     var rect: CGRect
     var color: Color
+    var textColor: Color = .white
     var fillColor: Color = .clear
     var lineWidth: CGFloat
     var text: String
@@ -103,8 +104,12 @@ private struct ScreenshotEditorView: View {
         _viewModel = StateObject(wrappedValue: EditorViewModel(url: imageURL))
     }
 
+    private var inspectorTool: EditTool {
+        viewModel.inspectorTool
+    }
+
     private var primaryColorLabel: String? {
-        switch viewModel.selectedTool {
+        switch inspectorTool {
         case .rectangle, .circle:
             return "Border"
         case .arrow, .line, .pencil, .text:
@@ -117,7 +122,37 @@ private struct ScreenshotEditorView: View {
     }
 
     private var showsFillColorPicker: Bool {
-        viewModel.selectedTool == .rectangle || viewModel.selectedTool == .circle
+        inspectorTool == .rectangle || inspectorTool == .circle
+    }
+
+    private var showsNumberTextColorPicker: Bool {
+        inspectorTool == .number
+    }
+
+    private var primaryColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                viewModel.selectedNumberBadgeColor() ?? viewModel.selectedColor
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedNumberBadgeColor(newValue) {
+                    viewModel.selectedColor = newValue
+                }
+            }
+        )
+    }
+
+    private var numberTextColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                viewModel.selectedNumberTextColor() ?? viewModel.numberTextColor
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedNumberTextColor(newValue) {
+                    viewModel.numberTextColor = newValue
+                }
+            }
+        )
     }
 
     private var numberSizeBinding: Binding<CGFloat> {
@@ -189,9 +224,9 @@ private struct ScreenshotEditorView: View {
             Spacer()
 
             if let primaryColorLabel {
-                HStack(spacing: 14) {
+                HStack(spacing: 16) {
                     VStack(spacing: 1) {
-                        ColorPicker("", selection: $viewModel.selectedColor, supportsOpacity: true)
+                        ColorPicker("", selection: primaryColorBinding, supportsOpacity: true)
                             .labelsHidden()
                             .frame(width: 28)
                             .accessibilityLabel("\(primaryColorLabel) color")
@@ -210,6 +245,20 @@ private struct ScreenshotEditorView: View {
                                 .accessibilityLabel("Fill color")
                                 .accessibilityHint("Selects the fill color for rectangle and circle shapes. Use transparent for no fill.")
                             Text("Fill")
+                                .font(.system(size: 8))
+                                .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
+                        }
+                    }
+
+                    if showsNumberTextColorPicker {
+                        VStack(spacing: 1) {
+                            ColorPicker("", selection: numberTextColorBinding, supportsOpacity: true)
+                                .labelsHidden()
+                                .frame(width: 28)
+                                .accessibilityLabel("Text color")
+                                .accessibilityHint("Sets the numeral color inside the number badge.")
+                            Text("Text")
                                 .font(.system(size: 8))
                                 .foregroundStyle(.secondary)
                                 .accessibilityHidden(true)
@@ -656,7 +705,7 @@ private struct CanvasView: View {
             let fontSize = scaledRect.width * numberCircleFontRatio
             let numberText = Text(annotation.text)
                 .font(.system(size: fontSize, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundColor(annotation.textColor)
             context.draw(numberText, at: CGPoint(x: scaledRect.midX, y: scaledRect.midY), anchor: .center)
 
         case .text, .crop, .move:
@@ -695,6 +744,7 @@ private class EditorViewModel: ObservableObject {
 
     @Published var nextNumberLabel: Int = 1
     @Published var numberSizeMultiplier: CGFloat = 1.0
+    @Published var numberTextColor: Color = .white
 
     private var pencilPoints: [CGPoint] = []
     private var imagePixelSize: CGSize = .zero
@@ -848,7 +898,7 @@ private class EditorViewModel: ObservableObject {
     }
 
     var showsLineWidthControl: Bool {
-        switch selectedTool {
+        switch inspectorTool {
         case .rectangle, .circle, .arrow, .line, .pencil:
             return true
         default:
@@ -857,7 +907,16 @@ private class EditorViewModel: ObservableObject {
     }
 
     var showsNumberSizeControl: Bool {
-        selectedTool == .number || (selectedTool == .move && selectedAnnotationIsNumber)
+        inspectorTool == .number
+    }
+
+    var inspectorTool: EditTool {
+        if selectedTool == .move,
+           let index = selectedAnnotationIndex,
+           annotations.indices.contains(index) {
+            return annotations[index].tool
+        }
+        return selectedTool
     }
 
     func handleDrag(start: CGPoint, current: CGPoint) {
@@ -952,6 +1011,7 @@ private class EditorViewModel: ObservableObject {
                 tool: selectedTool,
                 rect: rect,
                 color: selectedColor,
+                textColor: numberTextColor,
                 fillColor: selectedFillColor,
                 lineWidth: lineWidth,
                 text: "",
@@ -996,6 +1056,7 @@ private class EditorViewModel: ObservableObject {
                     tool: selectedTool,
                     rect: rect,
                     color: selectedColor,
+                    textColor: numberTextColor,
                     fillColor: selectedFillColor,
                     lineWidth: lineWidth,
                     text: "",
@@ -1164,6 +1225,7 @@ private class EditorViewModel: ObservableObject {
             tool: .text,
             rect: rect,
             color: selectedColor,
+            textColor: numberTextColor,
             lineWidth: lineWidth,
             text: textEditValue,
             points: [],
@@ -1195,11 +1257,22 @@ private class EditorViewModel: ObservableObject {
             tool: .number,
             rect: rect,
             color: selectedColor,
+            textColor: numberTextColor,
             lineWidth: lineWidth,
             text: "\(nextNumberLabel)",
             points: []
         ))
         nextNumberLabel += 1
+    }
+
+    func selectedNumberBadgeColor() -> Color? {
+        guard selectedAnnotationIsNumber, let index = selectedAnnotationIndex else { return nil }
+        return annotations[index].color
+    }
+
+    func selectedNumberTextColor() -> Color? {
+        guard selectedAnnotationIsNumber, let index = selectedAnnotationIndex else { return nil }
+        return annotations[index].textColor
     }
 
     func selectedNumberSizeMultiplier() -> CGFloat? {
@@ -1231,6 +1304,26 @@ private class EditorViewModel: ObservableObject {
             height: normH
         )
         annotations[index] = annotation
+        return true
+    }
+
+    @discardableResult
+    func updateSelectedNumberBadgeColor(_ color: Color) -> Bool {
+        guard selectedAnnotationIsNumber, let index = selectedAnnotationIndex else {
+            return false
+        }
+
+        annotations[index].color = color
+        return true
+    }
+
+    @discardableResult
+    func updateSelectedNumberTextColor(_ color: Color) -> Bool {
+        guard selectedAnnotationIsNumber, let index = selectedAnnotationIndex else {
+            return false
+        }
+
+        annotations[index].textColor = color
         return true
     }
 
@@ -1467,7 +1560,7 @@ private class EditorViewModel: ObservableObject {
             }
             let numAttrs: [NSAttributedString.Key: Any] = [
                 .font: numFont,
-                .foregroundColor: NSColor.white,
+                .foregroundColor: NSColor(annotation.textColor),
             ]
             let numTextSize = numberStr.size(withAttributes: numAttrs)
             ctx.saveGState()
