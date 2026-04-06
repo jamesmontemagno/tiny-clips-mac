@@ -11,24 +11,24 @@
         <item>
             
             
-            <title>1.3.3</title>
+            <title>1.3.4</title>
             
             
-            <pubDate>Sun, 05 Apr 2026 18:45:15 +0000</pubDate>
+            <pubDate>Sun, 05 Apr 2026 19:55:25 +0000</pubDate>
             
             
-            <sparkle:version>30</sparkle:version>
+            <sparkle:version>31</sparkle:version>
             
             
-            <sparkle:shortVersionString>1.3.3</sparkle:shortVersionString>
+            <sparkle:shortVersionString>1.3.4</sparkle:shortVersionString>
             
             
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             
             
-            <description><![CDATA[<h3>What's Changed</h3><ul><li>chore: update changelog for v1.3.3 release</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v1.3.2...v1.3.3">Full Changelog</a></p>]]></description>
-            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v1.3.3</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.3.3/TinyClips-v1.3.3.zip" length="2947587" type="application/octet-stream" sparkle:edSignature="zIxPtugMXQTxCsP8lxzyr0ZnlECGFltUhkcRb7NiAzy2PnDVe+IMQyesvkTj8PC69d1HYoK0GQ+mxhHagBhGDQ=="/>
+            <description><![CDATA[<h3>What's Changed</h3><ul><li>refactor: streamline redaction blur handling and improve performance</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v1.3.3...v1.3.4">Full Changelog</a></p>]]></description>
+            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v1.3.4</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.3.4/TinyClips-v1.3.4.zip" length="2943910" type="application/octet-stream" sparkle:edSignature="b9oMfwQDiBvPRjCLSWJlXNOKtWhXUmJJsdi+bO70fMMW9lP6q/1QI745ou2KGytPbcg6TGhYvQf8keAx5FFxDA=="/>
             
         
         </item>
