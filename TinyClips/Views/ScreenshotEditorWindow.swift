@@ -401,8 +401,12 @@ private struct ScreenshotEditorView: View {
 
             if viewModel.showsNumberSizeControl {
                 Picker("", selection: numberSizeBinding) {
+                    Text("20%").tag(CGFloat(0.2))
+                    Text("30%").tag(CGFloat(0.3))
+                    Text("40%").tag(CGFloat(0.4))
                     Text("50%").tag(CGFloat(0.5))
-                    Text("75%").tag(CGFloat(0.75))
+                    Text("60%").tag(CGFloat(0.6))
+                    Text("70%").tag(CGFloat(0.7))
                     Text("80%").tag(CGFloat(0.8))
                     Text("90%").tag(CGFloat(0.9))
                     Text("100%").tag(CGFloat(1.0))
