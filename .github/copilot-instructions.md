@@ -48,9 +48,7 @@ xcodebuild build -project TinyClips.xcodeproj -scheme TinyClipsMAS -configuratio
 ### Windows
 - **SwiftUI `Window` scenes** for long-lived windows (`clips-manager`, `settings-window`). **AppKit subclasses** for capture-time panels.
 - Open scene windows via `openWindow(id:)`, then activate + bring to front with dual-pass (immediate + 0.1s delay to escape menu tracking timing).
-- Callback-driven AppKit windows: keep a completion closure, guard with `didComplete`/`didClose` to prevent double-callbacks, set `isReleasedWhenClosed = false`, nil out callbacks after firing. `nil` payload = cancelled.
-- `CaptureManager` holds strong refs to capture-time windows; defers `nil` releases with `DispatchQueue.main.async` to avoid deallocation mid-callback.
-- Floating panels use borderless non-activating style at `.floating` level. See existing panels for the recipe.
+- For capture-time window/panel conventions (callback guards, floating panel recipe, SwiftUI hosting, keyboard interactivity, lifecycle), see `.github/instructions/capture-windows.instructions.md` — auto-applied to `TinyClips/Views/*Panel.swift` and `*Window.swift`.
 
 ### Capture Flows
 Three capture types (screenshot, video, GIF) follow: permission → optional picker → optional region/screen selection → capture/record → optional editor/trimmer → save. Editor/trimmer windows open **after** recording resources are released. See `CONTRIBUTING.md` for detailed flow diagrams.
