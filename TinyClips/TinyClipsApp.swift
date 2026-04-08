@@ -594,6 +594,7 @@ class CaptureManager: ObservableObject {
                     self.recordingMicrophoneEnabled = recorder.isMicrophoneCaptureActive
                     self.showStopPanel()
                 } catch {
+                    _ = self.stopMouseClickMonitoring()
                     self.resetRecordingAudioStatus()
                     self.isRecording = false
                     self.activeRecordingRegion = nil
@@ -649,6 +650,7 @@ class CaptureManager: ObservableObject {
                     try await writer.start(region: region)
                     self.showStopPanel()
                 } catch {
+                    _ = self.stopMouseClickMonitoring()
                     self.isRecording = false
                     self.activeRecordingRegion = nil
                     self.dismissRegionIndicator()

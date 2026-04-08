@@ -60,10 +60,6 @@ final class MouseClickMonitor {
     }
 
     private func record(_ event: NSEvent) {
-        guard event.type == .leftMouseDown || event.type == .rightMouseDown || event.type == .otherMouseDown else {
-            return
-        }
-
         let offset = max(0, event.timestamp - startTimestamp)
         let location = NSEvent.mouseLocation
         events.append(MouseClickEvent(timeOffset: offset, globalLocation: location))
@@ -77,10 +73,6 @@ enum MouseClickOverlayProcessor {
         events: [MouseClickEvent],
         outputURL: URL
     ) async throws -> URL {
-        guard CaptureSettings.shared.showMouseClickVisualsInVideo else {
-            return sourceURL
-        }
-
         let mappedEvents = mapMouseClickEvents(events, for: region)
         guard !mappedEvents.isEmpty else {
             return sourceURL
@@ -186,7 +178,9 @@ enum MouseClickOverlayProcessor {
             }
         }
 
-        try? FileManager.default.removeItem(at: sourceURL)
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try? FileManager.default.removeItem(at: sourceURL)
+        }
         return outputURL
     }
 
@@ -229,10 +223,6 @@ enum MouseClickOverlayProcessor {
         region: CaptureRegion,
         events: [MouseClickEvent]
     ) -> GifCaptureData {
-        guard CaptureSettings.shared.showMouseClickVisualsInGif else {
-            return gifData
-        }
-
         let mappedEvents = mapMouseClickEvents(events, for: region)
         guard !mappedEvents.isEmpty else {
             return gifData
