@@ -685,6 +685,9 @@ class CaptureManager: ObservableObject {
             stoppedRecordingType = nil
         }
 
+        // Dismiss stop panel immediately so the user gets instant feedback
+        dismissStopPanel()
+
         var savedVideoURL: URL?
 
         if let recorder = videoRecorder {

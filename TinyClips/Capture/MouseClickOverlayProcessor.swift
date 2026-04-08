@@ -102,7 +102,8 @@ enum MouseClickOverlayProcessor {
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.renderSize = renderSize
-        videoComposition.frameDuration = CMTime(value: 1, timescale: 60)
+        let sourceTimescale = max(30, Int32(videoTrack.nominalFrameRate.rounded(.up)))
+        videoComposition.frameDuration = CMTime(value: 1, timescale: sourceTimescale)
 
         let instruction = AVMutableVideoCompositionInstruction()
         instruction.timeRange = CMTimeRange(start: .zero, duration: asset.duration)
@@ -136,7 +137,8 @@ enum MouseClickOverlayProcessor {
             let pulse = CAAnimationGroup()
             pulse.beginTime = AVCoreAnimationBeginTimeAtZero + event.timeOffset
             pulse.duration = MouseClickPulse.duration
-            pulse.isRemovedOnCompletion = true
+            pulse.isRemovedOnCompletion = false
+            pulse.fillMode = .both
 
             let opacity = CAKeyframeAnimation(keyPath: "opacity")
             opacity.values = [0, 0.85, 0]
