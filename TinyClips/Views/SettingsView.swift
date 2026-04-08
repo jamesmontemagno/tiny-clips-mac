@@ -299,6 +299,9 @@ struct SettingsView: View {
             .help("Choose which microphone to use for recordings.")
             Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
                 .help("Show a visible border around the selected capture area while recording.")
+            Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInVideo)
+                .help("Adds a subtle pulse at click positions in saved video recordings.")
+                .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved video recordings.")
         }
 
         Section("After Capture") {
@@ -369,6 +372,9 @@ struct SettingsView: View {
             .help("Limit GIF output width to reduce file size.")
             Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
                 .help("Show a visible border around the selected capture area while recording.")
+            Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInGif)
+                .help("Adds a subtle pulse at click positions in saved GIF recordings.")
+                .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved GIF recordings.")
         }
 
         Section("After Capture") {

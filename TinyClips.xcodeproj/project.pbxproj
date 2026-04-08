@@ -37,6 +37,7 @@
 		B1000000000000000000001D /* LaunchAtLoginManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* LaunchAtLoginManager.swift */; };
 		B1000000000000000000001E /* HotKeyBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000021 /* HotKeyBinding.swift */; };
 		B1000000000000000000001F /* ShortcutRecorderField.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000022 /* ShortcutRecorderField.swift */; };
+		B10000000000000000000020 /* MouseClickOverlayProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000023 /* MouseClickOverlayProcessor.swift */; };
 		B20000000000000000000001 /* TinyClipsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000001 /* TinyClipsApp.swift */; };
 		B20000000000000000000002 /* CaptureSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000002 /* CaptureSettings.swift */; };
 		B20000000000000000000003 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000003 /* SettingsView.swift */; };
@@ -67,6 +68,7 @@
 		B2000000000000000000001D /* LaunchAtLoginManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* LaunchAtLoginManager.swift */; };
 		B2000000000000000000001E /* HotKeyBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000021 /* HotKeyBinding.swift */; };
 		B2000000000000000000001F /* ShortcutRecorderField.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000022 /* ShortcutRecorderField.swift */; };
+		B20000000000000000000020 /* MouseClickOverlayProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000023 /* MouseClickOverlayProcessor.swift */; };
 		B3EB92CF2F3FCA0B002723CD /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B3EB92CE2F3FCA0B002723CD /* Sparkle */; };
 /* End PBXBuildFile section */
 
@@ -104,6 +106,7 @@
 		A10000000000000000000020 /* LaunchAtLoginManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginManager.swift; sourceTree = "<group>"; };
 		A10000000000000000000021 /* HotKeyBinding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyBinding.swift; sourceTree = "<group>"; };
 		A10000000000000000000022 /* ShortcutRecorderField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorderField.swift; sourceTree = "<group>"; };
+		A10000000000000000000023 /* MouseClickOverlayProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MouseClickOverlayProcessor.swift; sourceTree = "<group>"; };
 		A2000000000000000000000C /* Info-MAS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-MAS.plist"; sourceTree = "<group>"; };
 		A2000000000000000000000D /* TinyClipsMAS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TinyClipsMAS.entitlements; sourceTree = "<group>"; };
 		A2000000000000000000000E /* TinyClipsMAS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TinyClipsMAS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -191,6 +194,7 @@
 				A10000000000000000000006 /* ScreenshotCapture.swift */,
 				A10000000000000000000007 /* VideoRecorder.swift */,
 				A10000000000000000000008 /* GifWriter.swift */,
+				A10000000000000000000023 /* MouseClickOverlayProcessor.swift */,
 				A1000000000000000000001E /* WindowSelector.swift */,
 			);
 			path = Capture;
@@ -348,6 +352,7 @@
 				B1000000000000000000001D /* LaunchAtLoginManager.swift in Sources */,
 				B1000000000000000000001E /* HotKeyBinding.swift in Sources */,
 				B1000000000000000000001F /* ShortcutRecorderField.swift in Sources */,
+				B10000000000000000000020 /* MouseClickOverlayProcessor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -384,6 +389,7 @@
 				B2000000000000000000001D /* LaunchAtLoginManager.swift in Sources */,
 				B2000000000000000000001E /* HotKeyBinding.swift in Sources */,
 				B2000000000000000000001F /* ShortcutRecorderField.swift in Sources */,
+				B20000000000000000000020 /* MouseClickOverlayProcessor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -161,6 +161,8 @@ class CaptureSettings: ObservableObject {
     @AppStorage("gifFrameRate") var gifFrameRate: Double = 10
     @AppStorage("gifMaxWidth") var gifMaxWidth: Int = 640
     @AppStorage("videoFrameRate") var videoFrameRate: Int = 30
+    @AppStorage("showMouseClickVisualsInVideo") var showMouseClickVisualsInVideo: Bool = false
+    @AppStorage("showMouseClickVisualsInGif") var showMouseClickVisualsInGif: Bool = false
     @AppStorage("showTrimmer") var showTrimmer: Bool = true
     @AppStorage("recordAudio") var recordAudio: Bool = false
     @AppStorage("recordMicrophone") var recordMicrophone: Bool = false
@@ -244,7 +246,7 @@ class CaptureSettings: ObservableObject {
             "clipsManagerAutoUploadAfterSave", "clipsManagerAutoCopyUploadLink",
             "clipsManagerLastViewMode", "clipsManagerLastSortOption", "clipsManagerLastFilterType", "clipsManagerLastDateFilter",
             "clipsManagerLastSmartCollection", "clipsManagerLastSearchText", "clipsManagerLastSelectedTag", "clipsManagerLastSelectedCollection",
-            "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showTrimmer",
+            "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showMouseClickVisualsInVideo", "showMouseClickVisualsInGif", "showTrimmer",
             "recordAudio", "recordMicrophone", "selectedMicrophoneID", "showScreenshotEditor", "showGifTrimmer",
             "saveImmediatelyScreenshot", "saveImmediatelyVideo", "saveImmediatelyGif",
             "showScreenshotCapturePicker", "showVideoCapturePicker", "showGifCapturePicker",

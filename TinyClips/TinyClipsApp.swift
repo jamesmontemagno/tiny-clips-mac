@@ -257,6 +257,9 @@ class CaptureManager: ObservableObject {
     private var onboardingWindow: OnboardingWizardWindow?
     private var guideWindow: GuideWindow?
     private var screenPickerWindow: ScreenPickerWindow?
+    private var mouseClickMonitor: MouseClickMonitor?
+    private var activeMouseClickRegion: CaptureRegion?
+    private var activeMouseClickCaptureType: CaptureType?
     private let hotKeyManager = HotKeyManager()
     private var hotKeySettingsCancellable: AnyCancellable?
 
@@ -575,6 +578,7 @@ class CaptureManager: ObservableObject {
                     self.videoRecorder = recorder
                     self.activeRecordingRegion = region
                     self.isRecording = true
+                    self.startMouseClickMonitoringIfNeeded(for: .video, region: region)
                     self.recordingMicrophoneEnabled = false
                     self.microphoneWarningMessage = nil
                     self.microphoneLevel = 0
@@ -590,6 +594,7 @@ class CaptureManager: ObservableObject {
                     self.recordingMicrophoneEnabled = recorder.isMicrophoneCaptureActive
                     self.showStopPanel()
                 } catch {
+                    _ = self.stopMouseClickMonitoring()
                     self.resetRecordingAudioStatus()
                     self.isRecording = false
                     self.activeRecordingRegion = nil
@@ -640,10 +645,12 @@ class CaptureManager: ObservableObject {
                     self.gifWriter = writer
                     self.activeRecordingRegion = region
                     self.isRecording = true
+                    self.startMouseClickMonitoringIfNeeded(for: .gif, region: region)
 
                     try await writer.start(region: region)
                     self.showStopPanel()
                 } catch {
+                    _ = self.stopMouseClickMonitoring()
                     self.isRecording = false
                     self.activeRecordingRegion = nil
                     self.dismissRegionIndicator()
@@ -667,6 +674,8 @@ class CaptureManager: ObservableObject {
     }
 
     private func stopRecordingFlow() async {
+        let capturedMouseClickData = stopMouseClickMonitoring()
+
         let stoppedRecordingType: CaptureType?
         if videoRecorder != nil {
             stoppedRecordingType = .video
@@ -676,11 +685,26 @@ class CaptureManager: ObservableObject {
             stoppedRecordingType = nil
         }
 
+        // Dismiss stop panel immediately so the user gets instant feedback
+        dismissStopPanel()
+
         var savedVideoURL: URL?
 
         if let recorder = videoRecorder {
             do {
                 savedVideoURL = try await recorder.stop()
+
+                if let currentURL = savedVideoURL,
+                   let capturedMouseClickData,
+                   capturedMouseClickData.type == .video,
+                   !capturedMouseClickData.events.isEmpty {
+                    savedVideoURL = try await MouseClickOverlayProcessor.overlayOnVideo(
+                        sourceURL: currentURL,
+                        region: capturedMouseClickData.region,
+                        events: capturedMouseClickData.events,
+                        outputURL: temporaryURL(fileExtension: "mp4")
+                    )
+                }
             } catch {
                 SaveService.shared.showError("Video save failed: \(error.localizedDescription)")
             }
@@ -694,7 +718,17 @@ class CaptureManager: ObservableObject {
                 let shouldSaveImmediately = !settings.showGifTrimmer || settings.saveImmediatelyGif
 
                 if settings.showGifTrimmer {
-                    let gifData = try await writer.stopAndReturnData()
+                    var gifData = try await writer.stopAndReturnData()
+
+                    if let capturedMouseClickData,
+                       capturedMouseClickData.type == .gif,
+                       !capturedMouseClickData.events.isEmpty {
+                        gifData = MouseClickOverlayProcessor.overlayOnGif(
+                            gifData: gifData,
+                            region: capturedMouseClickData.region,
+                            events: capturedMouseClickData.events
+                        )
+                    }
 
                     if shouldSaveImmediately {
                         try GifWriter.writeGIF(
@@ -709,6 +743,25 @@ class CaptureManager: ObservableObject {
                     showGifTrimmer(gifData: gifData, outputURL: url)
                 } else {
                     try await writer.stop(outputURL: url)
+
+                    if let capturedMouseClickData,
+                       capturedMouseClickData.type == .gif,
+                       !capturedMouseClickData.events.isEmpty {
+                        let gifData = try MouseClickOverlayProcessor.loadGifCaptureData(from: url)
+                        let processedGifData = MouseClickOverlayProcessor.overlayOnGif(
+                            gifData: gifData,
+                            region: capturedMouseClickData.region,
+                            events: capturedMouseClickData.events
+                        )
+                        try FileManager.default.removeItem(at: url)
+                        try GifWriter.writeGIF(
+                            frames: processedGifData.frames,
+                            frameDelay: processedGifData.frameDelay,
+                            maxWidth: processedGifData.maxWidth,
+                            to: url
+                        )
+                    }
+
                     SaveService.shared.handleSavedFile(url: url, type: .gif)
                 }
             } catch {
@@ -759,6 +812,8 @@ class CaptureManager: ObservableObject {
 
         pendingRecordingRegion = nil
         pendingRecordingType = nil
+
+        _ = stopMouseClickMonitoring()
 
         if videoRecorder != nil || gifWriter != nil || isRecording {
             await stopRecordingFlow()
@@ -1147,6 +1202,45 @@ class CaptureManager: ObservableObject {
     private func screenUnderMouseCursor() -> NSScreen? {
         let mouseLocation = NSEvent.mouseLocation
         return NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) })
+    }
+
+    private func startMouseClickMonitoringIfNeeded(for type: CaptureType, region: CaptureRegion) {
+        guard shouldCaptureMouseClicks(for: type) else {
+            _ = stopMouseClickMonitoring()
+            return
+        }
+
+        _ = stopMouseClickMonitoring()
+
+        let monitor = MouseClickMonitor()
+        monitor.start()
+        mouseClickMonitor = monitor
+        activeMouseClickRegion = region
+        activeMouseClickCaptureType = type
+    }
+
+    private func stopMouseClickMonitoring() -> (type: CaptureType, region: CaptureRegion, events: [MouseClickEvent])? {
+        guard let mouseClickMonitor, let activeMouseClickRegion, let activeMouseClickCaptureType else {
+            return nil
+        }
+
+        let events = mouseClickMonitor.stop()
+        self.mouseClickMonitor = nil
+        self.activeMouseClickRegion = nil
+        self.activeMouseClickCaptureType = nil
+
+        return (activeMouseClickCaptureType, activeMouseClickRegion, events)
+    }
+
+    private func shouldCaptureMouseClicks(for type: CaptureType) -> Bool {
+        switch type {
+        case .video:
+            return CaptureSettings.shared.showMouseClickVisualsInVideo
+        case .gif:
+            return CaptureSettings.shared.showMouseClickVisualsInGif
+        case .screenshot:
+            return false
+        }
     }
 
     private func temporaryURL(fileExtension: String) -> URL {
