@@ -334,6 +334,14 @@ struct SettingsView: View {
                 .help("Set the countdown duration in seconds.")
             }
         }
+
+        Section("Keyboard Overlay") {
+            keyboardOverlaySection(
+                isOn: $settings.showKeyboardOverlayInVideo,
+                helpText: "Overlay recently pressed keys onto the video recording.",
+                accessibilityLabel: "Show key presses in video recording"
+            )
+        }
     }
 
     // MARK: - GIF
@@ -403,6 +411,41 @@ struct SettingsView: View {
                 }
                 .help("Set the countdown duration in seconds.")
             }
+        }
+
+        Section("Keyboard Overlay") {
+            keyboardOverlaySection(
+                isOn: $settings.showKeyboardOverlayInGif,
+                helpText: "Overlay recently pressed keys onto the GIF recording.",
+                accessibilityLabel: "Show key presses in GIF recording"
+            )
+        }
+    }
+
+    // MARK: - Keyboard Overlay (shared)
+
+    @ViewBuilder
+    private func keyboardOverlaySection(isOn: Binding<Bool>, helpText: String, accessibilityLabel: String) -> some View {
+        Toggle("Show key presses in recording", isOn: isOn)
+            .help(helpText)
+            .accessibilityLabel(accessibilityLabel)
+        if isOn.wrappedValue {
+            Picker("Show keys:", selection: $settings.keyboardOverlayMode) {
+                ForEach(KeyboardOverlayMode.allCases, id: \.rawValue) { mode in
+                    Text(mode.label).tag(mode.rawValue)
+                }
+            }
+            .help("Choose which key presses to display.")
+            .accessibilityLabel("Keyboard overlay key filter")
+            .accessibilityValue(Text(settings.overlayMode.label))
+            Picker("Position:", selection: $settings.keyboardOverlayPosition) {
+                ForEach(KeyboardOverlayPosition.allCases, id: \.rawValue) { pos in
+                    Text(pos.label).tag(pos.rawValue)
+                }
+            }
+            .help("Choose where the key overlay appears in the frame.")
+            .accessibilityLabel("Keyboard overlay position")
+            .accessibilityValue(Text(settings.overlayPosition.label))
         }
     }
 
