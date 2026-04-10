@@ -113,9 +113,11 @@ class KeyboardOverlayRenderer: @unchecked Sendable {
                 self.flagsMonitor = nil
             }
         }
-        queue.sync {
-            activeKeys.removeAll()
-            lastModifierText = ""
+        // Use async (not sync) to avoid deadlock if stopMonitoring is ever
+        // called from within a block already executing on `queue`.
+        queue.async { [weak self] in
+            self?.activeKeys.removeAll()
+            self?.lastModifierText = ""
         }
     }
 
@@ -196,6 +198,7 @@ class KeyboardOverlayRenderer: @unchecked Sendable {
 
     // MARK: - Active Keys Snapshot (must be called on `queue`)
 
+    /// Returns (text, alpha) pairs for all non-expired key records, and prunes expired entries as a side effect.
     private func currentKeys() -> [(text: String, alpha: Double)] {
         let now = CACurrentMediaTime()
         activeKeys = activeKeys.filter { now - $0.timestamp < displayDuration }
@@ -282,7 +285,8 @@ class KeyboardOverlayRenderer: @unchecked Sendable {
         let spacing = 6.0 * scale
         let margin = 16.0 * scale
 
-        let font = CTFontCreateWithName(".AppleSystemUIFont" as CFString, fontSize, nil)
+        let font = CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, fontSize, nil)
+            ?? CTFontCreateWithName("Helvetica Neue" as CFString, fontSize, nil)
 
         // Measure each badge
         let badges: [(text: String, size: CGSize, alpha: Double)] = keys.map { key in

@@ -12,6 +12,7 @@ class GifWriter: NSObject, @unchecked Sendable {
     private let ciContext = CIContext()
     private var keyboardRenderer: KeyboardOverlayRenderer?
     private var captureScaleFactor: Double = 1.0
+    private var captureOverlayPosition: KeyboardOverlayPosition = .bottomCenter
 
     func start(region: CaptureRegion) async throws {
         let filter = try await region.makeFilter()
@@ -38,6 +39,7 @@ class GifWriter: NSObject, @unchecked Sendable {
             let renderer = KeyboardOverlayRenderer()
             renderer.startMonitoring(mode: settings.overlayMode)
             self.keyboardRenderer = renderer
+            self.captureOverlayPosition = settings.overlayPosition
         }
     }
 
@@ -143,7 +145,7 @@ extension GifWriter: SCStreamOutput {
 
         let finalImage: CGImage
         if let renderer = keyboardRenderer,
-           let composited = renderer.renderOnto(image: cgImage, scaleFactor: captureScaleFactor, position: CaptureSettings.shared.overlayPosition) {
+           let composited = renderer.renderOnto(image: cgImage, scaleFactor: captureScaleFactor, position: captureOverlayPosition) {
             finalImage = composited
         } else {
             finalImage = cgImage

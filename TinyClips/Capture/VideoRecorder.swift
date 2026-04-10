@@ -47,6 +47,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     private let microphoneQueue = DispatchQueue(label: "com.tinyclips.microphone-capture")
     private var keyboardRenderer: KeyboardOverlayRenderer?
     private var captureScaleFactor: Double = 1.0
+    private var captureOverlayPosition: KeyboardOverlayPosition = .bottomCenter
     var onMicrophoneLevel: ((Double) -> Void)?
     var onMicrophoneWarning: ((String?) -> Void)?
     var onMicrophoneDeviceName: ((String) -> Void)?
@@ -138,6 +139,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
                 let renderer = KeyboardOverlayRenderer()
                 renderer.startMonitoring(mode: settings.overlayMode)
                 self.keyboardRenderer = renderer
+                self.captureOverlayPosition = settings.overlayPosition
             }
 
             if recordMicrophone {
@@ -423,11 +425,10 @@ extension VideoRecorder: SCStreamOutput {
             if videoInput.isReadyForMoreMediaData {
                 if let renderer = keyboardRenderer,
                    let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
-                    let settings = CaptureSettings.shared
                     renderer.renderOnto(
                         pixelBuffer: pixelBuffer,
                         scaleFactor: captureScaleFactor,
-                        position: settings.overlayPosition
+                        position: captureOverlayPosition
                     )
                 }
                 videoInput.append(sampleBuffer)
