@@ -286,7 +286,7 @@ class KeyboardOverlayRenderer: @unchecked Sendable {
         let margin = 16.0 * scale
 
         let font = CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, fontSize, nil)
-            ?? CTFontCreateWithName("Helvetica Neue" as CFString, fontSize, nil)
+            ?? CTFontCreateWithName(".AppleSystemUIFont" as CFString, fontSize, nil)
 
         // Measure each badge
         let badges: [(text: String, size: CGSize, alpha: Double)] = keys.map { key in
