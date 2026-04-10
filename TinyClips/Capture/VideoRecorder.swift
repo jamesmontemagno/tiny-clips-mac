@@ -299,8 +299,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
 
     func stop() async throws -> URL {
         // Stop keyboard overlay
-        keyboardRenderer?.stopMonitoring()
-        keyboardRenderer = nil
+        cleanupKeyboardRenderer()
 
         // Stop mic capture first
         stopMicrophoneCapture()
@@ -337,6 +336,11 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         }
     }
 
+    private func cleanupKeyboardRenderer() {
+        keyboardRenderer?.stopMonitoring()
+        keyboardRenderer = nil
+    }
+
     private func stopMicrophoneCapture() {
         if let session = microphoneSession {
             if session.isRunning {
@@ -352,8 +356,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     }
 
     private func resetAfterFailedStart(removeOutputFile: Bool) async {
-        keyboardRenderer?.stopMonitoring()
-        keyboardRenderer = nil
+        cleanupKeyboardRenderer()
         stopMicrophoneCapture()
         if let stream {
             try? await stream.stopCapture()

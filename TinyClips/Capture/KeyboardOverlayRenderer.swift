@@ -50,6 +50,14 @@ struct KeyPressRecord {
 
 /// Monitors global key events and composites a key-press history badge row
 /// onto captured frames (CVPixelBuffer for video, CGImage for GIF).
+///
+/// Thread-safety strategy:
+/// - `eventMonitor`/`flagsMonitor` are registered and removed exclusively on the main thread
+///   (via DispatchQueue.main.async) since NSEvent monitors must be managed on the main thread.
+/// - `activeKeys`, `lastModifierText`, and `mode` are protected by the serial `queue`.
+///   Event handlers are called on the main thread and dispatch to `queue` for mutations.
+/// - `renderOnto` is called from background queues (writingQueue / processingQueue) and
+///   reads state via `queue.sync { ... }`, which is safe since those queues differ from `queue`.
 class KeyboardOverlayRenderer: @unchecked Sendable {
     // MARK: - Configuration
 
@@ -274,7 +282,7 @@ class KeyboardOverlayRenderer: @unchecked Sendable {
         let spacing = 6.0 * scale
         let margin = 16.0 * scale
 
-        let font = CTFontCreateWithName("Helvetica Neue" as CFString, fontSize, nil)
+        let font = CTFontCreateWithName(".AppleSystemUIFont" as CFString, fontSize, nil)
 
         // Measure each badge
         let badges: [(text: String, size: CGSize, alpha: Double)] = keys.map { key in

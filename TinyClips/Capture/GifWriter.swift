@@ -42,8 +42,7 @@ class GifWriter: NSObject, @unchecked Sendable {
     }
 
     func stop(outputURL: URL) async throws {
-        keyboardRenderer?.stopMonitoring()
-        keyboardRenderer = nil
+        cleanupKeyboardRenderer()
 
         try await stream?.stopCapture()
         stream = nil
@@ -57,8 +56,7 @@ class GifWriter: NSObject, @unchecked Sendable {
     }
 
     func stopAndReturnData() async throws -> GifCaptureData {
-        keyboardRenderer?.stopMonitoring()
-        keyboardRenderer = nil
+        cleanupKeyboardRenderer()
 
         try await stream?.stopCapture()
         stream = nil
@@ -127,6 +125,11 @@ class GifWriter: NSObject, @unchecked Sendable {
         context.interpolationQuality = .high
         context.draw(image, in: CGRect(origin: .zero, size: size))
         return context.makeImage()
+    }
+
+    private func cleanupKeyboardRenderer() {
+        keyboardRenderer?.stopMonitoring()
+        keyboardRenderer = nil
     }
 }
 
