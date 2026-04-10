@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+- Keyboard key visualization overlay for video and GIF recordings. When enabled in Settings → Video or GIF → Keyboard Overlay, recently pressed keys are composited as semi-transparent pill badges directly onto each captured frame. Supports filtering (All Keys / Non-Modifiers Only / Modifiers Only) and five placement positions (Bottom Center, Bottom Left, Bottom Right, Top Left, Top Right).
+
 ## v1.3.4 - 2026-04-05
 
 ### Improved

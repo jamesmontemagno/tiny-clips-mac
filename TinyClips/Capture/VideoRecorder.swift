@@ -45,6 +45,8 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     private var outputURL: URL?
     private let writingQueue = DispatchQueue(label: "com.tinyclips.video-writing")
     private let microphoneQueue = DispatchQueue(label: "com.tinyclips.microphone-capture")
+    private var keyboardRenderer: KeyboardOverlayRenderer?
+    private var captureScaleFactor: Double = 1.0
     var onMicrophoneLevel: ((Double) -> Void)?
     var onMicrophoneWarning: ((String?) -> Void)?
     var onMicrophoneDeviceName: ((String) -> Void)?
@@ -84,6 +86,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
 
         let pixelWidth = region.pixelWidth
         let pixelHeight = region.pixelHeight
+        self.captureScaleFactor = Double(region.scaleFactor)
 
         let writer = try AVAssetWriter(url: outputURL, fileType: .mp4)
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: [
@@ -130,6 +133,12 @@ class VideoRecorder: NSObject, @unchecked Sendable {
             }
             try await stream.startCapture()
             self.stream = stream
+
+            if settings.showKeyboardOverlayInVideo {
+                let renderer = KeyboardOverlayRenderer()
+                renderer.startMonitoring(mode: settings.overlayMode)
+                self.keyboardRenderer = renderer
+            }
 
             if recordMicrophone {
                 let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
@@ -289,6 +298,10 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     }
 
     func stop() async throws -> URL {
+        // Stop keyboard overlay
+        keyboardRenderer?.stopMonitoring()
+        keyboardRenderer = nil
+
         // Stop mic capture first
         stopMicrophoneCapture()
 
@@ -339,6 +352,8 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     }
 
     private func resetAfterFailedStart(removeOutputFile: Bool) async {
+        keyboardRenderer?.stopMonitoring()
+        keyboardRenderer = nil
         stopMicrophoneCapture()
         if let stream {
             try? await stream.stopCapture()
@@ -403,6 +418,15 @@ extension VideoRecorder: SCStreamOutput {
             }
 
             if videoInput.isReadyForMoreMediaData {
+                if let renderer = keyboardRenderer,
+                   let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+                    let settings = CaptureSettings.shared
+                    renderer.renderOnto(
+                        pixelBuffer: pixelBuffer,
+                        scaleFactor: captureScaleFactor,
+                        position: settings.overlayPosition
+                    )
+                }
                 videoInput.append(sampleBuffer)
             }
 

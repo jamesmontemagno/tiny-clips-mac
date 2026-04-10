@@ -10,6 +10,8 @@ class GifWriter: NSObject, @unchecked Sendable {
     private var maxWidth: CGFloat = 640
     private let processingQueue = DispatchQueue(label: "com.tinyclips.gif-processing")
     private let ciContext = CIContext()
+    private var keyboardRenderer: KeyboardOverlayRenderer?
+    private var captureScaleFactor: Double = 1.0
 
     func start(region: CaptureRegion) async throws {
         let filter = try await region.makeFilter()
@@ -25,14 +27,24 @@ class GifWriter: NSObject, @unchecked Sendable {
         config.queueDepth = 5
 
         frames = []
+        captureScaleFactor = Double(region.scaleFactor)
 
         let stream = SCStream(filter: filter, configuration: config, delegate: nil)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: processingQueue)
         try await stream.startCapture()
         self.stream = stream
+
+        if settings.showKeyboardOverlayInGif {
+            let renderer = KeyboardOverlayRenderer()
+            renderer.startMonitoring(mode: settings.overlayMode)
+            self.keyboardRenderer = renderer
+        }
     }
 
     func stop(outputURL: URL) async throws {
+        keyboardRenderer?.stopMonitoring()
+        keyboardRenderer = nil
+
         try await stream?.stopCapture()
         stream = nil
 
@@ -45,6 +57,9 @@ class GifWriter: NSObject, @unchecked Sendable {
     }
 
     func stopAndReturnData() async throws -> GifCaptureData {
+        keyboardRenderer?.stopMonitoring()
+        keyboardRenderer = nil
+
         try await stream?.stopCapture()
         stream = nil
 
@@ -123,6 +138,14 @@ extension GifWriter: SCStreamOutput {
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
         guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent) else { return }
 
-        frames.append(cgImage)
+        let finalImage: CGImage
+        if let renderer = keyboardRenderer,
+           let composited = renderer.renderOnto(image: cgImage, scaleFactor: captureScaleFactor, position: CaptureSettings.shared.overlayPosition) {
+            finalImage = composited
+        } else {
+            finalImage = cgImage
+        }
+
+        frames.append(finalImage)
     }
 }

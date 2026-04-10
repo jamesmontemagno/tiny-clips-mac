@@ -195,6 +195,10 @@ class CaptureSettings: ObservableObject {
     @AppStorage("videoHotKeyModifiers") var videoHotKeyModifiers: Int = 6400
     @AppStorage("gifHotKeyCode") var gifHotKeyCode: Int = 26                    // kVK_ANSI_7
     @AppStorage("gifHotKeyModifiers") var gifHotKeyModifiers: Int = 6400
+    @AppStorage("showKeyboardOverlayInVideo") var showKeyboardOverlayInVideo: Bool = false
+    @AppStorage("showKeyboardOverlayInGif") var showKeyboardOverlayInGif: Bool = false
+    @AppStorage("keyboardOverlayMode") var keyboardOverlayMode: String = KeyboardOverlayMode.all.rawValue
+    @AppStorage("keyboardOverlayPosition") var keyboardOverlayPosition: String = KeyboardOverlayPosition.bottomCenter.rawValue
 
 #if APPSTORE
     var hasCustomSaveDirectory: Bool {
@@ -205,6 +209,16 @@ class CaptureSettings: ObservableObject {
     var imageFormat: ImageFormat {
         get { ImageFormat(rawValue: screenshotFormat) ?? .jpeg }
         set { screenshotFormat = newValue.rawValue }
+    }
+
+    var overlayMode: KeyboardOverlayMode {
+        get { KeyboardOverlayMode(rawValue: keyboardOverlayMode) ?? .all }
+        set { keyboardOverlayMode = newValue.rawValue }
+    }
+
+    var overlayPosition: KeyboardOverlayPosition {
+        get { KeyboardOverlayPosition(rawValue: keyboardOverlayPosition) ?? .bottomCenter }
+        set { keyboardOverlayPosition = newValue.rawValue }
     }
 
     func shouldCopyToClipboard(for type: CaptureType) -> Bool {
@@ -257,6 +271,8 @@ class CaptureSettings: ObservableObject {
             "screenshotHotKeyCode", "screenshotHotKeyModifiers",
             "videoHotKeyCode", "videoHotKeyModifiers",
             "gifHotKeyCode", "gifHotKeyModifiers",
+            "showKeyboardOverlayInVideo", "showKeyboardOverlayInGif",
+            "keyboardOverlayMode", "keyboardOverlayPosition",
             "appStoreClipCountForReview", "appStoreReviewRequested"
         ]
 #if APPSTORE
