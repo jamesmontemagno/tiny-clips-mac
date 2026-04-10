@@ -285,8 +285,12 @@ class KeyboardOverlayRenderer: @unchecked Sendable {
         let spacing = 6.0 * scale
         let margin = 16.0 * scale
 
-        let font = CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, fontSize, nil)
-            ?? CTFontCreateWithName(".AppleSystemUIFont" as CFString, fontSize, nil)
+        let font: CTFont
+        if let systemFont = CTFontCreateUIFontForLanguage(kCTFontUIFontSystem, fontSize, nil) {
+            font = systemFont
+        } else {
+            font = NSFont.systemFont(ofSize: fontSize) as CTFont
+        }
 
         // Measure each badge
         let badges: [(text: String, size: CGSize, alpha: Double)] = keys.map { key in

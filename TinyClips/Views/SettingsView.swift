@@ -437,6 +437,7 @@ struct SettingsView: View {
             }
             .help("Choose which key presses to display.")
             .accessibilityLabel("Keyboard overlay key filter")
+            .accessibilityValue(Text(settings.overlayMode.label))
             Picker("Position:", selection: $settings.keyboardOverlayPosition) {
                 ForEach(KeyboardOverlayPosition.allCases, id: \.rawValue) { pos in
                     Text(pos.label).tag(pos.rawValue)
@@ -444,6 +445,7 @@ struct SettingsView: View {
             }
             .help("Choose where the key overlay appears in the frame.")
             .accessibilityLabel("Keyboard overlay position")
+            .accessibilityValue(Text(settings.overlayPosition.label))
         }
     }
 
