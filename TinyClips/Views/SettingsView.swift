@@ -50,6 +50,9 @@ struct SettingsView: View {
     @ObservedObject private var settings = CaptureSettings.shared
     @ObservedObject private var sparkleController = SparkleController.shared
     @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
+#if APPSTORE
+    @ObservedObject private var storeService = StoreService.shared
+#endif
     @Environment(\.openWindow) private var openWindow
     @State private var selectedTab: SettingsTab? = .general
     @State private var splitVisibility: NavigationSplitViewVisibility = .all
@@ -59,8 +62,19 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $splitVisibility) {
             List(SettingsTab.displayCases, id: \.self, selection: $selectedTab) { tab in
+#if APPSTORE
+                if tab == .mouseClicks && !storeService.isPro {
+                    Label(tab.rawValue, systemImage: tab.icon)
+                        .badge("PRO")
+                        .tag(tab as SettingsTab?)
+                } else {
+                    Label(tab.rawValue, systemImage: tab.icon)
+                        .tag(tab as SettingsTab?)
+                }
+#else
                 Label(tab.rawValue, systemImage: tab.icon)
                     .tag(tab as SettingsTab?)
+#endif
             }
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
@@ -305,6 +319,24 @@ struct SettingsView: View {
             Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
                 .help("Show a visible border around the selected capture area while recording.")
             VStack(alignment: .leading, spacing: 6) {
+#if APPSTORE
+                if storeService.isPro {
+                    Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInVideo)
+                        .help("Adds a subtle pulse at click positions in saved video recordings.")
+                        .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved video recordings.")
+
+                    Button("Customize mouse click effect…") {
+                        selectedTab = .mouseClicks
+                    }
+                    .buttonStyle(.link)
+                } else {
+                    proLockedMouseClickToggle
+                    Button("Unlock with Pro…") {
+                        selectedTab = .mouseClicks
+                    }
+                    .buttonStyle(.link)
+                }
+#else
                 Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInVideo)
                     .help("Adds a subtle pulse at click positions in saved video recordings.")
                     .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved video recordings.")
@@ -313,6 +345,7 @@ struct SettingsView: View {
                     selectedTab = .mouseClicks
                 }
                 .buttonStyle(.link)
+#endif
             }
         }
 
@@ -385,6 +418,24 @@ struct SettingsView: View {
             Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
                 .help("Show a visible border around the selected capture area while recording.")
             VStack(alignment: .leading, spacing: 6) {
+#if APPSTORE
+                if storeService.isPro {
+                    Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInGif)
+                        .help("Adds a subtle pulse at click positions in saved GIF recordings.")
+                        .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved GIF recordings.")
+
+                    Button("Customize mouse click effect…") {
+                        selectedTab = .mouseClicks
+                    }
+                    .buttonStyle(.link)
+                } else {
+                    proLockedMouseClickToggle
+                    Button("Unlock with Pro…") {
+                        selectedTab = .mouseClicks
+                    }
+                    .buttonStyle(.link)
+                }
+#else
                 Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInGif)
                     .help("Adds a subtle pulse at click positions in saved GIF recordings.")
                     .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved GIF recordings.")
@@ -393,6 +444,7 @@ struct SettingsView: View {
                     selectedTab = .mouseClicks
                 }
                 .buttonStyle(.link)
+#endif
             }
         }
 
@@ -435,6 +487,19 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var mouseClicksSection: some View {
+#if APPSTORE
+        if storeService.isPro {
+            mouseClicksControls
+        } else {
+            ProSubscriptionView()
+        }
+#else
+        mouseClicksControls
+#endif
+    }
+
+    @ViewBuilder
+    private var mouseClicksControls: some View {
         Section {
             Text("Tune the saved click pulse separately for video and GIF exports.")
                 .font(.caption)
@@ -461,6 +526,24 @@ struct SettingsView: View {
             )
         }
     }
+
+#if APPSTORE
+    private var proLockedMouseClickToggle: some View {
+        Toggle(isOn: .constant(false)) {
+            HStack(spacing: 8) {
+                Text("Show mouse clicks in recording")
+                Text("PRO")
+                    .font(.system(size: 9, weight: .bold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.orange.opacity(0.15), in: Capsule())
+                    .foregroundStyle(.orange)
+            }
+        }
+        .disabled(true)
+        .help("Requires TinyClips Pro.")
+    }
+#endif
 
     // MARK: - Shortcuts
 
@@ -786,7 +869,7 @@ private struct MouseClickOverlayControls: View {
             mouseClickSlider(
                 title: "Size",
                 value: size,
-                range: 12...72,
+                range: 12...100,
                 step: 1,
                 valueText: { "\(Int($0)) px" }
             )

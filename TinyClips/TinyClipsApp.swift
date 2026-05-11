@@ -226,7 +226,7 @@ private struct MenuBarLabelView: View {
 private final class ProcessingIndicatorWindow: NSPanel {
     convenience init(message: String = "Processing…") {
         self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 220, height: 140),
+            contentRect: NSRect(x: 0, y: 0, width: 220, height: 56),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -244,9 +244,10 @@ private final class ProcessingIndicatorWindow: NSPanel {
 
     func show() {
         if let screen = NSScreen.main {
+            // Toast-style: bottom-center above the Dock
             setFrameOrigin(NSPoint(
                 x: screen.frame.midX - frame.width / 2,
-                y: screen.frame.midY - frame.height / 2
+                y: screen.visibleFrame.minY + 24
             ))
         }
         orderFrontRegardless()
@@ -255,25 +256,44 @@ private final class ProcessingIndicatorWindow: NSPanel {
 
 private struct ProcessingIndicatorView: View {
     let message: String
+    @State private var spinnerRotation: Double = 0
 
     var body: some View {
-        VStack(spacing: 14) {
-            ProgressView()
-                .controlSize(.large)
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.18), lineWidth: 2.5)
+                    .frame(width: 20, height: 20)
+
+                Circle()
+                    .trim(from: 0, to: 0.65)
+                    .stroke(
+                        Color.white,
+                        style: StrokeStyle(lineWidth: 2.5, lineCap: .round)
+                    )
+                    .frame(width: 20, height: 20)
+                    .rotationEffect(.degrees(spinnerRotation))
+            }
 
             Text(message)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.primary)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
         }
-        .frame(width: 220, height: 140)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
         .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.regularMaterial)
+            Capsule(style: .continuous)
+                .fill(Color(white: 0.1, opacity: 0.92))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(.primary.opacity(0.12), lineWidth: 1)
+                    Capsule(style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
                 }
-                .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 8)
+        }
+        .shadow(color: .black.opacity(0.45), radius: 20, x: 0, y: 6)
+        .onAppear {
+            withAnimation(.linear(duration: 0.85).repeatForever(autoreverses: false)) {
+                spinnerRotation = 360
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(message)
@@ -747,6 +767,13 @@ class CaptureManager: ObservableObject {
         dismissStopPanel()
         showProcessingIndicator()
 
+        // Snapshot video settings before any suspension so that overlay output URL
+        // selection and downstream trimmer/save decisions stay consistent even if
+        // the user changes preferences while export is in progress.
+        let videoShowTrimmer = CaptureSettings.shared.showTrimmer
+        let videoShouldSaveImmediately = !videoShowTrimmer || CaptureSettings.shared.saveImmediatelyVideo
+        let videoOverlayStyle = CaptureSettings.shared.mouseClickOverlayStyle(for: .video)
+
         var savedVideoURL: URL?
 
         if let recorder = videoRecorder {
@@ -761,12 +788,18 @@ class CaptureManager: ObservableObject {
                capturedMouseClickData.type == .video,
                !capturedMouseClickData.events.isEmpty {
                 do {
+                    // Use the final save URL as the overlay output when saving immediately,
+                    // so the processed file lands in the user's save directory rather than
+                    // a temp location that the OS can delete.
+                    let overlayOutputURL = videoShouldSaveImmediately
+                        ? SaveService.shared.generateURL(for: .video)
+                        : temporaryURL(fileExtension: "mp4")
                     savedVideoURL = try await MouseClickOverlayProcessor.overlayOnVideo(
                         sourceURL: currentURL,
                         region: capturedMouseClickData.region,
                         events: capturedMouseClickData.events,
-                        outputURL: temporaryURL(fileExtension: "mp4"),
-                        style: CaptureSettings.shared.mouseClickOverlayStyle(for: .video)
+                        outputURL: overlayOutputURL,
+                        style: videoOverlayStyle
                     )
                 } catch {
                     SaveService.shared.showError("Mouse click overlay failed for video: \(error.localizedDescription)")
@@ -863,17 +896,14 @@ class CaptureManager: ObservableObject {
         // and UI state is cleaned up, so AVPlayer doesn't contend with
         // AVAssetWriter for the same file.
         if let savedVideoURL {
-            let settings = CaptureSettings.shared
-            let shouldSaveImmediately = !settings.showTrimmer || settings.saveImmediatelyVideo
-
-            if settings.showTrimmer {
-                if shouldSaveImmediately {
+            if videoShowTrimmer {
+                if videoShouldSaveImmediately {
                     SaveService.shared.handleSavedFile(url: savedVideoURL, type: .video)
                 }
 
                 showTrimmer(
                     for: savedVideoURL,
-                    saveImmediately: shouldSaveImmediately
+                    saveImmediately: videoShouldSaveImmediately
                 )
             } else {
                 SaveService.shared.handleSavedFile(url: savedVideoURL, type: .video)
@@ -1326,6 +1356,9 @@ class CaptureManager: ObservableObject {
     }
 
     private func shouldCaptureMouseClicks(for type: CaptureType) -> Bool {
+#if APPSTORE
+        guard StoreService.shared.isPro else { return false }
+#endif
         switch type {
         case .video:
             return CaptureSettings.shared.showMouseClickVisualsInVideo
