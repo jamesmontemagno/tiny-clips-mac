@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## v1.3.4 - 2026-04-05
 
+### Fixed
+- Window video and GIF recording now captures the selected window directly instead of converting it to a display region.
+
 ### Improved
 - Redaction blur handling and performance optimizations.
 - Rename of blur-related properties and methods for pixelation functionality clarity.

@@ -55,14 +55,15 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     }
 
     func start(
-        region: CaptureRegion,
+        target: CaptureTarget,
         outputURL: URL,
         recordSystemAudio: Bool,
         recordMicrophone: Bool,
         selectedMicrophoneID: String
     ) async throws {
-        let filter = try await region.makeFilter()
-        let config = region.makeStreamConfig()
+        let preparedTarget = try await target.prepare()
+        let filter = preparedTarget.filter
+        let config = preparedTarget.config
 
         let settings = CaptureSettings.shared
         config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(settings.videoFrameRate))
@@ -82,14 +83,11 @@ class VideoRecorder: NSObject, @unchecked Sendable {
 
         self.outputURL = outputURL
 
-        let pixelWidth = region.pixelWidth
-        let pixelHeight = region.pixelHeight
-
         let writer = try AVAssetWriter(url: outputURL, fileType: .mp4)
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoWidthKey: pixelWidth,
-            AVVideoHeightKey: pixelHeight,
+            AVVideoWidthKey: preparedTarget.pixelWidth,
+            AVVideoHeightKey: preparedTarget.pixelHeight,
         ])
         videoInput.expectsMediaDataInRealTime = true
         writer.add(videoInput)

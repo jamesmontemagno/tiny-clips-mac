@@ -55,6 +55,61 @@ struct CaptureRegion: Sendable {
     }
 }
 
+enum CaptureTarget {
+    case region(CaptureRegion)
+    case window(SCWindow)
+
+    var region: CaptureRegion? {
+        if case let .region(region) = self {
+            return region
+        }
+        return nil
+    }
+
+    func prepare() async throws -> PreparedCaptureTarget {
+        switch self {
+        case let .region(region):
+            return PreparedCaptureTarget(
+                filter: try await region.makeFilter(),
+                config: region.makeStreamConfig(),
+                pixelWidth: region.pixelWidth,
+                pixelHeight: region.pixelHeight
+            )
+        case let .window(window):
+            let filter = SCContentFilter(desktopIndependentWindow: window)
+            let pixelSize = Self.pixelSize(for: filter)
+            let config = SCStreamConfiguration()
+            config.width = pixelSize.width
+            config.height = pixelSize.height
+            config.scalesToFit = false
+            config.showsCursor = true
+            config.includeChildWindows = true
+
+            return PreparedCaptureTarget(
+                filter: filter,
+                config: config,
+                pixelWidth: pixelSize.width,
+                pixelHeight: pixelSize.height
+            )
+        }
+    }
+
+    private static func pixelSize(for filter: SCContentFilter) -> (width: Int, height: Int) {
+        let scale = CGFloat(filter.pointPixelScale)
+        return (
+            width: max(1, Int((filter.contentRect.width * scale).rounded())),
+            height: max(1, Int((filter.contentRect.height * scale).rounded()))
+        )
+    }
+}
+
+struct PreparedCaptureTarget {
+    let filter: SCContentFilter
+    let config: SCStreamConfiguration
+    let pixelWidth: Int
+    let pixelHeight: Int
+}
+
 // MARK: - Capture Type
 
 enum CaptureType: String {
