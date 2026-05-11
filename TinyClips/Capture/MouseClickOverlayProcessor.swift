@@ -14,14 +14,6 @@ private struct MappedMouseClickEvent: Sendable {
     let point: CGPoint
 }
 
-private enum MouseClickPulse {
-    static let duration: TimeInterval = 0.45
-    static let baseRadius: CGFloat = 12
-    static let expansion: CGFloat = 14
-    static let lineWidth: CGFloat = 3
-    static let maxOpacity: CGFloat = 0.8
-}
-
 @MainActor
 final class MouseClickMonitor {
     private var globalMonitor: Any?
@@ -71,7 +63,8 @@ enum MouseClickOverlayProcessor {
         sourceURL: URL,
         region: CaptureRegion,
         events: [MouseClickEvent],
-        outputURL: URL
+        outputURL: URL,
+        style: MouseClickOverlayStyle
     ) async throws -> URL {
         let mappedEvents = mapMouseClickEvents(events, for: region)
         guard !mappedEvents.isEmpty else {
@@ -121,27 +114,28 @@ enum MouseClickOverlayProcessor {
         videoLayer.frame = CGRect(origin: .zero, size: renderSize)
         parentLayer.addSublayer(videoLayer)
 
-        let clickColor = NSColor.white.withAlphaComponent(0.9).cgColor
+        let clickColor = style.color.cgColor
 
         for event in mappedEvents where event.timeOffset <= asset.duration.seconds {
             let ringLayer = CAShapeLayer()
-            let diameter: CGFloat = 32
+            let diameter = style.size
             ringLayer.path = CGPath(ellipseIn: CGRect(x: 0, y: 0, width: diameter, height: diameter), transform: nil)
             ringLayer.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
             ringLayer.position = event.point
             ringLayer.fillColor = NSColor.clear.cgColor
             ringLayer.strokeColor = clickColor
-            ringLayer.lineWidth = 3
+            ringLayer.lineWidth = style.strokeWidth
             ringLayer.opacity = 0
 
             let pulse = CAAnimationGroup()
             pulse.beginTime = AVCoreAnimationBeginTimeAtZero + event.timeOffset
-            pulse.duration = MouseClickPulse.duration
+            pulse.duration = style.duration
             pulse.isRemovedOnCompletion = false
             pulse.fillMode = .both
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
 
             let opacity = CAKeyframeAnimation(keyPath: "opacity")
-            opacity.values = [0, 0.85, 0]
+            opacity.values = [0, style.opacity, 0]
             opacity.keyTimes = [0, 0.2, 1]
 
             let scale = CAKeyframeAnimation(keyPath: "transform.scale")
@@ -223,7 +217,8 @@ enum MouseClickOverlayProcessor {
     static func overlayOnGif(
         gifData: GifCaptureData,
         region: CaptureRegion,
-        events: [MouseClickEvent]
+        events: [MouseClickEvent],
+        style: MouseClickOverlayStyle
     ) -> GifCaptureData {
         let mappedEvents = mapMouseClickEvents(events, for: region)
         guard !mappedEvents.isEmpty else {
@@ -235,7 +230,7 @@ enum MouseClickOverlayProcessor {
 
         for (index, frame) in gifData.frames.enumerated() {
             let frameTime = Double(index) * gifData.frameDelay
-            processedFrames.append(drawMouseClickPulseOverlay(on: frame, at: frameTime, events: mappedEvents))
+            processedFrames.append(drawMouseClickPulseOverlay(on: frame, at: frameTime, events: mappedEvents, style: style))
         }
 
         return GifCaptureData(frames: processedFrames, frameDelay: gifData.frameDelay, maxWidth: gifData.maxWidth)
@@ -244,7 +239,8 @@ enum MouseClickOverlayProcessor {
     private static func drawMouseClickPulseOverlay(
         on image: CGImage,
         at frameTime: TimeInterval,
-        events: [MappedMouseClickEvent]
+        events: [MappedMouseClickEvent],
+        style: MouseClickOverlayStyle
     ) -> CGImage {
         guard let context = CGContext(
             data: nil,
@@ -263,14 +259,14 @@ enum MouseClickOverlayProcessor {
 
         for event in events {
             let elapsed = frameTime - event.timeOffset
-            guard elapsed >= 0, elapsed <= MouseClickPulse.duration else { continue }
+            guard elapsed >= 0, elapsed <= style.duration else { continue }
 
-            let progress = elapsed / MouseClickPulse.duration
-            let alpha = max(0, (1 - progress) * MouseClickPulse.maxOpacity)
-            let radius = MouseClickPulse.baseRadius + (MouseClickPulse.expansion * progress)
+            let progress = elapsed / style.duration
+            let alpha = max(0, (1 - progress) * style.opacity)
+            let radius = (style.size / 2.0) + (style.size * 0.58 * progress)
 
-            context.setStrokeColor(NSColor.white.withAlphaComponent(alpha).cgColor)
-            context.setLineWidth(MouseClickPulse.lineWidth)
+            context.setStrokeColor(style.color.withAlphaComponent(alpha).cgColor)
+            context.setLineWidth(style.strokeWidth)
 
             let centerY = CGFloat(image.height) - event.point.y
             let circleRect = CGRect(

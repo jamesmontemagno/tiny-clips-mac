@@ -223,6 +223,63 @@ private struct MenuBarLabelView: View {
     }
 }
 
+private final class ProcessingIndicatorWindow: NSPanel {
+    convenience init(message: String = "Processing…") {
+        self.init(
+            contentRect: NSRect(x: 0, y: 0, width: 220, height: 140),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        isReleasedWhenClosed = false
+        level = .floating
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = true
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        isMovableByWindowBackground = false
+        hidesOnDeactivate = false
+        contentView = NSHostingView(rootView: ProcessingIndicatorView(message: message))
+    }
+
+    func show() {
+        if let screen = NSScreen.main {
+            setFrameOrigin(NSPoint(
+                x: screen.frame.midX - frame.width / 2,
+                y: screen.frame.midY - frame.height / 2
+            ))
+        }
+        orderFrontRegardless()
+    }
+}
+
+private struct ProcessingIndicatorView: View {
+    let message: String
+
+    var body: some View {
+        VStack(spacing: 14) {
+            ProgressView()
+                .controlSize(.large)
+
+            Text(message)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.primary)
+        }
+        .frame(width: 220, height: 140)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.regularMaterial)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(.primary.opacity(0.12), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 8)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(message)
+    }
+}
+
 @MainActor
 class CaptureManager: ObservableObject {
     @Published var isRecording = false {
@@ -254,6 +311,7 @@ class CaptureManager: ObservableObject {
     private var gifTrimmerWindow: GifTrimmerWindow?
     private var screenshotEditorWindow: ScreenshotEditorWindow?
     private var countdownWindow: CountdownWindow?
+    private var processingIndicatorWindow: ProcessingIndicatorWindow?
     private var onboardingWindow: OnboardingWizardWindow?
     private var guideWindow: GuideWindow?
     private var screenPickerWindow: ScreenPickerWindow?
@@ -687,26 +745,32 @@ class CaptureManager: ObservableObject {
 
         // Dismiss stop panel immediately so the user gets instant feedback
         dismissStopPanel()
+        showProcessingIndicator()
 
         var savedVideoURL: URL?
 
         if let recorder = videoRecorder {
             do {
                 savedVideoURL = try await recorder.stop()
+            } catch {
+                SaveService.shared.showError("Video save failed: \(error.localizedDescription)")
+            }
 
-                if let currentURL = savedVideoURL,
-                   let capturedMouseClickData,
-                   capturedMouseClickData.type == .video,
-                   !capturedMouseClickData.events.isEmpty {
+            if let currentURL = savedVideoURL,
+               let capturedMouseClickData,
+               capturedMouseClickData.type == .video,
+               !capturedMouseClickData.events.isEmpty {
+                do {
                     savedVideoURL = try await MouseClickOverlayProcessor.overlayOnVideo(
                         sourceURL: currentURL,
                         region: capturedMouseClickData.region,
                         events: capturedMouseClickData.events,
-                        outputURL: temporaryURL(fileExtension: "mp4")
+                        outputURL: temporaryURL(fileExtension: "mp4"),
+                        style: CaptureSettings.shared.mouseClickOverlayStyle(for: .video)
                     )
+                } catch {
+                    SaveService.shared.showError("Mouse click overlay failed for video: \(error.localizedDescription)")
                 }
-            } catch {
-                SaveService.shared.showError("Video save failed: \(error.localizedDescription)")
             }
             videoRecorder = nil
         }
@@ -726,7 +790,8 @@ class CaptureManager: ObservableObject {
                         gifData = MouseClickOverlayProcessor.overlayOnGif(
                             gifData: gifData,
                             region: capturedMouseClickData.region,
-                            events: capturedMouseClickData.events
+                            events: capturedMouseClickData.events,
+                            style: settings.mouseClickOverlayStyle(for: .gif)
                         )
                     }
 
@@ -740,26 +805,38 @@ class CaptureManager: ObservableObject {
                         SaveService.shared.handleSavedFile(url: url, type: .gif)
                     }
 
-                    showGifTrimmer(gifData: gifData, outputURL: url)
+                    showGifTrimmer(gifData: gifData, outputURL: url, saveImmediately: shouldSaveImmediately)
                 } else {
                     try await writer.stop(outputURL: url)
 
                     if let capturedMouseClickData,
                        capturedMouseClickData.type == .gif,
                        !capturedMouseClickData.events.isEmpty {
-                        let gifData = try MouseClickOverlayProcessor.loadGifCaptureData(from: url)
-                        let processedGifData = MouseClickOverlayProcessor.overlayOnGif(
-                            gifData: gifData,
-                            region: capturedMouseClickData.region,
-                            events: capturedMouseClickData.events
-                        )
-                        try FileManager.default.removeItem(at: url)
-                        try GifWriter.writeGIF(
-                            frames: processedGifData.frames,
-                            frameDelay: processedGifData.frameDelay,
-                            maxWidth: processedGifData.maxWidth,
-                            to: url
-                        )
+                        do {
+                            let gifData = try MouseClickOverlayProcessor.loadGifCaptureData(from: url)
+                            let processedGifData = MouseClickOverlayProcessor.overlayOnGif(
+                                gifData: gifData,
+                                region: capturedMouseClickData.region,
+                                events: capturedMouseClickData.events,
+                                style: settings.mouseClickOverlayStyle(for: .gif)
+                            )
+
+                            let tempURL = temporaryURL(fileExtension: "gif")
+                            defer { try? FileManager.default.removeItem(at: tempURL) }
+
+                            try GifWriter.writeGIF(
+                                frames: processedGifData.frames,
+                                frameDelay: processedGifData.frameDelay,
+                                maxWidth: processedGifData.maxWidth,
+                                to: tempURL
+                            )
+
+                            if FileManager.default.fileExists(atPath: tempURL.path) {
+                                _ = try FileManager.default.replaceItemAt(url, withItemAt: tempURL)
+                            }
+                        } catch {
+                            SaveService.shared.showError("Mouse click overlay failed for GIF: \(error.localizedDescription)")
+                        }
                     }
 
                     SaveService.shared.handleSavedFile(url: url, type: .gif)
@@ -769,6 +846,8 @@ class CaptureManager: ObservableObject {
             }
             gifWriter = nil
         }
+
+        dismissProcessingIndicator()
 
         isRecording = false
         activeRecordingRegion = nil
@@ -875,11 +954,13 @@ class CaptureManager: ObservableObject {
         }
     }
 
-    private func showGifTrimmer(gifData: GifCaptureData, outputURL: URL) {
+    private func showGifTrimmer(gifData: GifCaptureData, outputURL: URL, saveImmediately: Bool) {
         let window = GifTrimmerWindow(gifData: gifData, outputURL: outputURL) { [weak self] resultURL in
             guard let self else { return }
             if let resultURL {
-                SaveService.shared.handleSavedFile(url: resultURL, type: .gif)
+                if !saveImmediately {
+                    SaveService.shared.handleSavedFile(url: resultURL, type: .gif)
+                }
             }
             DispatchQueue.main.async {
                 self.gifTrimmerWindow = nil
@@ -959,6 +1040,18 @@ class CaptureManager: ObservableObject {
         stopPanel?.close()
         stopPanel = nil
         recordPanelPosition = nil
+    }
+
+    private func showProcessingIndicator() {
+        guard processingIndicatorWindow == nil else { return }
+        let window = ProcessingIndicatorWindow()
+        processingIndicatorWindow = window
+        window.show()
+    }
+
+    private func dismissProcessingIndicator() {
+        processingIndicatorWindow?.close()
+        processingIndicatorWindow = nil
     }
 
     private func dismissRegionIndicator() {

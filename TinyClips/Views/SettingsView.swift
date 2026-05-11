@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AVFoundation
 import Combine
 
@@ -18,6 +19,7 @@ enum SettingsTab: String, CaseIterable {
     case screenshot = "Screenshot"
     case video = "Video"
     case gif = "GIF"
+    case mouseClicks = "Mouse Clicks"
     case shortcuts = "Shortcuts"
     case pro = "Pro"
     case about = "About"
@@ -28,6 +30,7 @@ enum SettingsTab: String, CaseIterable {
         case .screenshot: return "camera"
         case .video: return "video"
         case .gif: return "photo.on.rectangle"
+        case .mouseClicks: return "cursorarrow.rays"
         case .shortcuts: return "command"
         case .pro: return "star"
         case .about: return "info.circle"
@@ -72,6 +75,8 @@ struct SettingsView: View {
                     videoSection
                 case .gif:
                     gifSection
+                case .mouseClicks:
+                    mouseClicksSection
                 case .shortcuts:
                     shortcutsSection
                 case .pro:
@@ -299,9 +304,16 @@ struct SettingsView: View {
             .help("Choose which microphone to use for recordings.")
             Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
                 .help("Show a visible border around the selected capture area while recording.")
-            Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInVideo)
-                .help("Adds a subtle pulse at click positions in saved video recordings.")
-                .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved video recordings.")
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInVideo)
+                    .help("Adds a subtle pulse at click positions in saved video recordings.")
+                    .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved video recordings.")
+
+                Button("Customize mouse click effect…") {
+                    selectedTab = .mouseClicks
+                }
+                .buttonStyle(.link)
+            }
         }
 
         Section("After Capture") {
@@ -372,9 +384,16 @@ struct SettingsView: View {
             .help("Limit GIF output width to reduce file size.")
             Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
                 .help("Show a visible border around the selected capture area while recording.")
-            Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInGif)
-                .help("Adds a subtle pulse at click positions in saved GIF recordings.")
-                .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved GIF recordings.")
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInGif)
+                    .help("Adds a subtle pulse at click positions in saved GIF recordings.")
+                    .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved GIF recordings.")
+
+                Button("Customize mouse click effect…") {
+                    selectedTab = .mouseClicks
+                }
+                .buttonStyle(.link)
+            }
         }
 
         Section("After Capture") {
@@ -409,6 +428,37 @@ struct SettingsView: View {
                 }
                 .help("Set the countdown duration in seconds.")
             }
+        }
+    }
+
+    // MARK: - Mouse Clicks
+
+    @ViewBuilder
+    private var mouseClicksSection: some View {
+        Section {
+            Text("Tune the saved click pulse separately for video and GIF exports.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+
+        Section("Video") {
+            MouseClickOverlayControls(
+                color: videoMouseClickColorBinding,
+                size: $settings.videoMouseClickSize,
+                strokeWidth: $settings.videoMouseClickStrokeWidth,
+                opacity: $settings.videoMouseClickOpacity,
+                duration: $settings.videoMouseClickDuration
+            )
+        }
+
+        Section("GIF") {
+            MouseClickOverlayControls(
+                color: gifMouseClickColorBinding,
+                size: $settings.gifMouseClickSize,
+                strokeWidth: $settings.gifMouseClickStrokeWidth,
+                opacity: $settings.gifMouseClickOpacity,
+                duration: $settings.gifMouseClickDuration
+            )
         }
     }
 
@@ -650,6 +700,20 @@ struct SettingsView: View {
         }
         settings.selectedMicrophoneID = ""
     }
+
+    private var videoMouseClickColorBinding: Binding<NSColor> {
+        Binding(
+            get: { settings.videoMouseClickColor },
+            set: { settings.videoMouseClickColor = $0 }
+        )
+    }
+
+    private var gifMouseClickColorBinding: Binding<NSColor> {
+        Binding(
+            get: { settings.gifMouseClickColor },
+            set: { settings.gifMouseClickColor = $0 }
+        )
+    }
 }
 
 // MARK: - Pro Settings Section (APPSTORE only)
@@ -701,3 +765,110 @@ private struct ProSettingsSection: View {
     }
 }
 #endif
+
+private struct MouseClickOverlayControls: View {
+    let color: Binding<NSColor>
+    let size: Binding<Double>
+    let strokeWidth: Binding<Double>
+    let opacity: Binding<Double>
+    let duration: Binding<Double>
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Color")
+                Spacer()
+                MouseClickColorWell(color: color)
+                    .frame(width: 48, height: 24)
+                    .accessibilityLabel("Mouse click color")
+            }
+
+            mouseClickSlider(
+                title: "Size",
+                value: size,
+                range: 12...72,
+                step: 1,
+                valueText: { "\(Int($0)) px" }
+            )
+
+            mouseClickSlider(
+                title: "Stroke width",
+                value: strokeWidth,
+                range: 1...10,
+                step: 1,
+                valueText: { "\(Int($0)) px" }
+            )
+
+            mouseClickSlider(
+                title: "Opacity",
+                value: opacity,
+                range: 0.1...1.0,
+                step: 0.05,
+                valueText: { "\(Int(($0 * 100).rounded()))%" }
+            )
+
+            mouseClickSlider(
+                title: "Duration",
+                value: duration,
+                range: 0.15...1.0,
+                step: 0.05,
+                valueText: { String(format: "%.2f s", $0) }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func mouseClickSlider(
+        title: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        step: Double,
+        valueText: @escaping (Double) -> String
+    ) -> some View {
+        HStack {
+            Text(title)
+                .frame(width: 110, alignment: .leading)
+
+            Slider(value: value, in: range, step: step)
+
+            Text(valueText(value.wrappedValue))
+                .monospacedDigit()
+                .frame(width: 64, alignment: .trailing)
+        }
+    }
+}
+
+private struct MouseClickColorWell: NSViewRepresentable {
+    @Binding var color: NSColor
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(color: $color)
+    }
+
+    func makeNSView(context: Context) -> NSColorWell {
+        let well = NSColorWell()
+        well.target = context.coordinator
+        well.action = #selector(Coordinator.colorDidChange(_:))
+        well.isBordered = true
+        well.color = color
+        return well
+    }
+
+    func updateNSView(_ nsView: NSColorWell, context: Context) {
+        if !nsView.color.isEqual(color) {
+            nsView.color = color
+        }
+    }
+
+    final class Coordinator: NSObject {
+        private let color: Binding<NSColor>
+
+        init(color: Binding<NSColor>) {
+            self.color = color
+        }
+
+        @objc func colorDidChange(_ sender: NSColorWell) {
+            color.wrappedValue = sender.color
+        }
+    }
+}
