@@ -69,6 +69,12 @@
 		B2000000000000000000001E /* HotKeyBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000021 /* HotKeyBinding.swift */; };
 		B2000000000000000000001F /* ShortcutRecorderField.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000022 /* ShortcutRecorderField.swift */; };
 		B20000000000000000000020 /* MouseClickOverlayProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000023 /* MouseClickOverlayProcessor.swift */; };
+		B10000000000000000000021 /* CaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* CaptureManager.swift */; };
+		B10000000000000000000022 /* MenuBarViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000025 /* MenuBarViews.swift */; };
+		B10000000000000000000023 /* ProcessingIndicatorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* ProcessingIndicatorWindow.swift */; };
+		B20000000000000000000021 /* CaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* CaptureManager.swift */; };
+		B20000000000000000000022 /* MenuBarViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000025 /* MenuBarViews.swift */; };
+		B20000000000000000000023 /* ProcessingIndicatorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* ProcessingIndicatorWindow.swift */; };
 		B3EB92CF2F3FCA0B002723CD /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B3EB92CE2F3FCA0B002723CD /* Sparkle */; };
 /* End PBXBuildFile section */
 
@@ -107,6 +113,9 @@
 		A10000000000000000000021 /* HotKeyBinding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyBinding.swift; sourceTree = "<group>"; };
 		A10000000000000000000022 /* ShortcutRecorderField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutRecorderField.swift; sourceTree = "<group>"; };
 		A10000000000000000000023 /* MouseClickOverlayProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MouseClickOverlayProcessor.swift; sourceTree = "<group>"; };
+		A10000000000000000000024 /* CaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureManager.swift; sourceTree = "<group>"; };
+		A10000000000000000000025 /* MenuBarViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarViews.swift; sourceTree = "<group>"; };
+		A10000000000000000000026 /* ProcessingIndicatorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessingIndicatorWindow.swift; sourceTree = "<group>"; };
 		A2000000000000000000000C /* Info-MAS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-MAS.plist"; sourceTree = "<group>"; };
 		A2000000000000000000000D /* TinyClipsMAS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TinyClipsMAS.entitlements; sourceTree = "<group>"; };
 		A2000000000000000000000E /* TinyClipsMAS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TinyClipsMAS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -143,6 +152,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000001 /* TinyClipsApp.swift */,
+				A10000000000000000000024 /* CaptureManager.swift */,
 				C10000000000000000000003 /* Models */,
 				C10000000000000000000004 /* Views */,
 				C10000000000000000000005 /* Capture */,
@@ -183,6 +193,8 @@
 				A1000000000000000000001C /* SubscriptionView.swift */,
 				A1000000000000000000001F /* CapturePickerPanel.swift */,
 				A10000000000000000000022 /* ShortcutRecorderField.swift */,
+				A10000000000000000000025 /* MenuBarViews.swift */,
+				A10000000000000000000026 /* ProcessingIndicatorWindow.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -353,6 +365,9 @@
 				B1000000000000000000001E /* HotKeyBinding.swift in Sources */,
 				B1000000000000000000001F /* ShortcutRecorderField.swift in Sources */,
 				B10000000000000000000020 /* MouseClickOverlayProcessor.swift in Sources */,
+				B10000000000000000000021 /* CaptureManager.swift in Sources */,
+				B10000000000000000000022 /* MenuBarViews.swift in Sources */,
+				B10000000000000000000023 /* ProcessingIndicatorWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -390,6 +405,9 @@
 				B2000000000000000000001E /* HotKeyBinding.swift in Sources */,
 				B2000000000000000000001F /* ShortcutRecorderField.swift in Sources */,
 				B20000000000000000000020 /* MouseClickOverlayProcessor.swift in Sources */,
+				B20000000000000000000021 /* CaptureManager.swift in Sources */,
+				B20000000000000000000022 /* MenuBarViews.swift in Sources */,
+				B20000000000000000000023 /* ProcessingIndicatorWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

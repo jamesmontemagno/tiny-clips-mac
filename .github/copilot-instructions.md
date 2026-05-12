@@ -12,7 +12,7 @@ See `CONTRIBUTING.md` for full setup, project structure, and contribution workfl
 
 - **Menu bar app** — SwiftUI `MenuBarExtra` + SwiftUI `Window` scenes (`"clips-manager"`, `"settings-window"`). No Dock icon by default (`LSUIElement = true`).
 - **Mixed SwiftUI + AppKit** — SwiftUI for menu bar, settings, Clips Manager; AppKit `NSWindow`/`NSPanel` subclasses for capture-time windows. AppKit windows host SwiftUI views via `NSHostingView`.
-- **`CaptureManager`** in `TinyClipsApp.swift` is the central coordinator owning recorders, writers, and all capture-time window lifecycles.
+- **`CaptureManager`** in `CaptureManager.swift` is the central coordinator owning recorders, writers, and all capture-time window lifecycles.
 - **Singleton services**: `CaptureSettings.shared`, `SaveService.shared`, `PermissionManager.shared`, `SparkleController.shared`, `StoreService.shared` (MAS only).
 - **Pro features** (MAS): gate on `StoreService.shared.isPro`. `StoreService` uses StoreKit 2 with `ProPlan` enum (monthly/yearly/lifetime). Guard pro UI with `#if APPSTORE`.
 
