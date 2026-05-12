@@ -1481,10 +1481,14 @@ private class EditorViewModel: ObservableObject {
             bytesPerRow: 0,
             bitsPerPixel: 0
         ),
-        let context = NSGraphicsContext(bitmapImageRep: result)?.cgContext else {
+        let nsContext = NSGraphicsContext(bitmapImageRep: result) else {
             return nil
         }
         result.size = NSSize(width: outputW, height: outputH)
+        let context = nsContext.cgContext
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = nsContext
+        defer { NSGraphicsContext.restoreGraphicsState() }
 
         // Draw the original image (cropped)
         let drawRect = CGRect(x: 0, y: 0, width: outputW, height: outputH)
@@ -1651,17 +1655,20 @@ private class EditorViewModel: ObservableObject {
                 .font: NSFont.systemFont(ofSize: fontSize),
                 .foregroundColor: nsColor,
             ]
-            // NSString.draw uses flipped coords, so flip context temporarily
+            // NSString.draw uses flipped coords, so flip context temporarily.
+            // Use draw(at:) centered on the annotation midpoint to match the SwiftUI
+            // preview and avoid rect-height clipping on large/Retina images.
             ctx.saveGState()
             ctx.translateBy(x: 0, y: outputSize.height)
             ctx.scaleBy(x: 1, y: -1)
-            let flippedRect = CGRect(
-                x: pixelRect.origin.x,
-                y: outputSize.height - pixelRect.origin.y - pixelRect.height,
-                width: pixelRect.width,
-                height: pixelRect.height
+            let textSize = str.size(withAttributes: attrs)
+            let centerX = pixelRect.midX
+            let centerY_screen = outputSize.height - pixelRect.midY // CG midY → screen Y
+            let drawPoint = CGPoint(
+                x: centerX - textSize.width / 2,
+                y: centerY_screen - textSize.height / 2
             )
-            str.draw(in: flippedRect, withAttributes: attrs)
+            str.draw(at: drawPoint, withAttributes: attrs)
             ctx.restoreGState()
 
         case .crop, .move:
