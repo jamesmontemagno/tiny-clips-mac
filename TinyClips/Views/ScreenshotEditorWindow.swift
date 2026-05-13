@@ -818,6 +818,7 @@ private let numberCircleSizeRatio: CGFloat = 0.05
 private let numberCircleFontRatio: CGFloat = 0.55
 private let numberCircleMinimumDisplayPixels: CGFloat = 16
 
+@MainActor
 private class EditorViewModel: ObservableObject {
     let sourceURL: URL
     @Published var originalImage: NSImage?
@@ -1447,6 +1448,8 @@ private class EditorViewModel: ObservableObject {
     }
 
     private func renderFinalImage() -> NSBitmapImageRep? {
+        precondition(Thread.isMainThread, "Screenshot export rendering must run on the main thread.")
+
         guard let original = originalImage, imagePixelSize.width > 0 else { return nil }
 
         let pixelW = imagePixelSize.width

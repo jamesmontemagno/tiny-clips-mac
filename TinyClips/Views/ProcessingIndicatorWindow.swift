@@ -22,14 +22,22 @@ final class ProcessingIndicatorWindow: NSPanel {
     }
 
     func show() {
-        if let screen = NSScreen.main {
+        let mouseLocation = NSEvent.mouseLocation
+        let targetScreen = NSScreen.screens.first(where: { screen in
+            NSMouseInRect(mouseLocation, screen.frame, false)
+        }) ?? NSScreen.main ?? NSScreen.screens.first
+
+        if let screen = targetScreen {
             // Toast-style: bottom-center above the Dock
             setFrameOrigin(NSPoint(
-                x: screen.frame.midX - frame.width / 2,
+                x: screen.visibleFrame.midX - frame.width / 2,
                 y: screen.visibleFrame.minY + 32
             ))
         }
+
+        collectionBehavior.insert(.moveToActiveSpace)
         alphaValue = 0
+        NSApp.activate()
         orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.18

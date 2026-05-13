@@ -34,6 +34,7 @@ class CaptureManager: ObservableObject {
     private var screenshotEditorWindow: ScreenshotEditorWindow?
     private var countdownWindow: CountdownWindow?
     private var processingIndicatorWindow: ProcessingIndicatorWindow?
+    private var processingIndicatorShownAt: Date?
     private var onboardingWindow: OnboardingWizardWindow?
     private var guideWindow: GuideWindow?
     private var screenPickerWindow: ScreenPickerWindow?
@@ -780,12 +781,31 @@ class CaptureManager: ObservableObject {
         guard processingIndicatorWindow == nil else { return }
         let window = ProcessingIndicatorWindow()
         processingIndicatorWindow = window
+        processingIndicatorShownAt = Date()
         window.show()
     }
 
     private func dismissProcessingIndicator() {
-        processingIndicatorWindow?.close()
-        processingIndicatorWindow = nil
+        guard let window = processingIndicatorWindow else { return }
+
+        let minimumVisibleDuration: TimeInterval = 0.35
+        let elapsed = Date().timeIntervalSince(processingIndicatorShownAt ?? .distantPast)
+        let remaining = max(0, minimumVisibleDuration - elapsed)
+
+        func dismissNow() {
+            window.close()
+            processingIndicatorWindow = nil
+            processingIndicatorShownAt = nil
+        }
+
+        if remaining > 0 {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+                dismissNow()
+            }
+        } else {
+            dismissNow()
+        }
     }
 
     private func dismissRegionIndicator() {
