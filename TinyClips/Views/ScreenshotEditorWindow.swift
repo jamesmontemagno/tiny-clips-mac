@@ -1636,17 +1636,13 @@ private class EditorViewModel: ObservableObject {
                 .foregroundColor: NSColor(annotation.textColor),
             ]
             let numTextSize = numberStr.size(withAttributes: numAttrs)
-            ctx.saveGState()
-            ctx.translateBy(x: 0, y: outputSize.height)
-            ctx.scaleBy(x: 1, y: -1)
             let numTextRect = CGRect(
                 x: pixelRect.midX - numTextSize.width / 2,
-                y: outputSize.height - pixelRect.midY - numTextSize.height / 2,
+                y: pixelRect.midY - numTextSize.height / 2,
                 width: numTextSize.width,
                 height: numTextSize.height
             )
             numberStr.draw(in: numTextRect, withAttributes: numAttrs)
-            ctx.restoreGState()
 
         case .text:
             let str = annotation.text as NSString
@@ -1655,21 +1651,15 @@ private class EditorViewModel: ObservableObject {
                 .font: NSFont.systemFont(ofSize: fontSize),
                 .foregroundColor: nsColor,
             ]
-            // NSString.draw uses flipped coords, so flip context temporarily.
-            // Use draw(at:) centered on the annotation midpoint to match the SwiftUI
-            // preview and avoid rect-height clipping on large/Retina images.
-            ctx.saveGState()
-            ctx.translateBy(x: 0, y: outputSize.height)
-            ctx.scaleBy(x: 1, y: -1)
+            // NSGraphicsContext.current is set to the unflipped bitmap context,
+            // so NSString.draw uses CG (bottom-left) coordinates directly.
+            // pixelRect is already in CG space, so no manual flip is needed.
             let textSize = str.size(withAttributes: attrs)
-            let centerX = pixelRect.midX
-            let centerY_screen = outputSize.height - pixelRect.midY // CG midY → screen Y
             let drawPoint = CGPoint(
-                x: centerX - textSize.width / 2,
-                y: centerY_screen - textSize.height / 2
+                x: pixelRect.midX - textSize.width / 2,
+                y: pixelRect.midY - textSize.height / 2
             )
             str.draw(at: drawPoint, withAttributes: attrs)
-            ctx.restoreGState()
 
         case .crop, .move:
             break
