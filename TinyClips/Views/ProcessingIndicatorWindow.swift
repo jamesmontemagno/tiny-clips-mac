@@ -2,10 +2,21 @@ import SwiftUI
 
 // MARK: - Processing Indicator Window
 
+
+
 final class ProcessingIndicatorWindow: NSPanel {
-    convenience init(message: String = "Processing…") {
-        self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 260, height: 72),
+    private var hostingView: NSHostingView<ProcessingIndicatorView>!
+    private var viewModel: ProcessingIndicatorViewModel
+
+    convenience init(message: String = "Processing…", status: String? = nil, progress: Double? = nil) {
+        let viewModel = ProcessingIndicatorViewModel(message: message, status: status, progress: progress)
+        self.init(viewModel: viewModel)
+    }
+
+    init(viewModel: ProcessingIndicatorViewModel) {
+        self.viewModel = viewModel
+        super.init(
+            contentRect: NSRect(x: 0, y: 0, width: 280, height: 80),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -18,7 +29,23 @@ final class ProcessingIndicatorWindow: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         isMovableByWindowBackground = false
         hidesOnDeactivate = false
-        contentView = NSHostingView(rootView: ProcessingIndicatorView(message: message))
+        let hostingView = NSHostingView(rootView: ProcessingIndicatorView(viewModel: viewModel))
+        let fittingSize = hostingView.fittingSize
+        self.setContentSize(fittingSize)
+        contentView = hostingView
+        self.hostingView = hostingView
+    }
+
+    func updateStatus(_ status: String?) {
+        viewModel.status = status
+    }
+
+    func updateProgress(_ progress: Double?) {
+        viewModel.progress = progress
+    }
+
+    func updateMessage(_ message: String) {
+        viewModel.message = message
     }
 
     func show() {
@@ -47,33 +74,81 @@ final class ProcessingIndicatorWindow: NSPanel {
     }
 }
 
+
+// MARK: - Processing Indicator ViewModel
+
+@MainActor
+final class ProcessingIndicatorViewModel: ObservableObject {
+    @Published var message: String
+    @Published var status: String?
+    @Published var progress: Double?
+
+    init(message: String, status: String? = nil, progress: Double? = nil) {
+        self.message = message
+        self.status = status
+        self.progress = progress
+    }
+}
+
 // MARK: - Processing Indicator View
 
 private struct ProcessingIndicatorView: View {
-    let message: String
+    @ObservedObject var viewModel: ProcessingIndicatorViewModel
+    @Environment(\.colorScheme) private var colorScheme
     @State private var appeared = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            ProgressView()
-                .controlSize(.regular)
-                .tint(.white)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                if let progress = viewModel.progress {
+                    ProgressView(value: progress)
+                        .controlSize(.regular)
+                        .tint(colorScheme == .dark ? .white : .blue)
+                        .frame(width: 22)
+                } else {
+                    ProgressView()
+                        .controlSize(.regular)
+                        .tint(colorScheme == .dark ? .white : .blue)
+                        .frame(width: 22)
+                }
 
-            Text(message)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white)
+                Text(viewModel.message)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(colorScheme == .dark ? .white : .primary)
+            }
+            if let status = viewModel.status, !status.isEmpty {
+                Text(status)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 32)
+            }
+            if let progress = viewModel.progress {
+                HStack(spacing: 6) {
+                    ProgressView(value: progress)
+                        .tint(colorScheme == .dark ? .white : .blue)
+                        .frame(height: 6)
+                        .scaleEffect(x: 1, y: 1.2, anchor: .center)
+                    Text("\(Int(progress * 100))%")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 36, alignment: .trailing)
+                }
+                .padding(.top, 2)
+                .padding(.leading, 32)
+            }
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 16)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
         .background {
-            Capsule(style: .continuous)
-                .fill(Color(white: 0.1, opacity: 0.92))
+            RoundedRectangle(cornerRadius: 10)
+                .fill(colorScheme == .dark ? Color.black.opacity(0.8) : Color.white.opacity(0.93))
+                .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 2)
                 .overlay {
-                    Capsule(style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(.primary.opacity(0.15), lineWidth: 0.5)
                 }
         }
-        .scaleEffect(appeared ? 1 : 0.88)
+        .scaleEffect(appeared ? 1 : 0.95)
         .opacity(appeared ? 1 : 0)
         .onAppear {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -81,6 +156,6 @@ private struct ProcessingIndicatorView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(message)
+        .accessibilityLabel(viewModel.status == nil ? viewModel.message : "\(viewModel.message), \(viewModel.status!)")
     }
 }

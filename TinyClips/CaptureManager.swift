@@ -469,6 +469,8 @@ class CaptureManager: ObservableObject {
         // Dismiss stop panel immediately so the user gets instant feedback
         dismissStopPanel()
         showProcessingIndicator()
+        updateProcessingMessage("Processing...")
+        updateProcessingProgress(0.05, status: "Preparing export...")
 
         // Snapshot video settings before any suspension so that overlay output URL
         // selection and downstream trimmer/save decisions stay consistent even if
@@ -481,7 +483,9 @@ class CaptureManager: ObservableObject {
 
         if let recorder = videoRecorder {
             do {
+                updateProcessingProgress(0.15, status: "Exporting video...")
                 savedVideoURL = try await recorder.stop()
+                updateProcessingProgress(0.55, status: "Applying overlays...")
             } catch {
                 SaveService.shared.showError("Video save failed: \(error.localizedDescription)")
             }
@@ -504,10 +508,12 @@ class CaptureManager: ObservableObject {
                         outputURL: overlayOutputURL,
                         style: videoOverlayStyle
                     )
+                    updateProcessingProgress(0.85, status: "Finalizing...")
                 } catch {
                     SaveService.shared.showError("Mouse click overlay failed for video: \(error.localizedDescription)")
                 }
             }
+            updateProcessingProgress(1.0, status: "Done")
             videoRecorder = nil
         }
 
@@ -517,8 +523,11 @@ class CaptureManager: ObservableObject {
                 let settings = CaptureSettings.shared
                 let shouldSaveImmediately = !settings.showGifTrimmer || settings.saveImmediatelyGif
 
+                updateProcessingProgress(0.1, status: "Exporting GIF…")
+
                 if settings.showGifTrimmer {
                     var gifData = try await writer.stopAndReturnData()
+                    updateProcessingProgress(0.5, status: "Applying overlays…")
 
                     if let capturedMouseClickData,
                        capturedMouseClickData.type == .gif,
@@ -531,6 +540,8 @@ class CaptureManager: ObservableObject {
                         )
                     }
 
+                    updateProcessingProgress(0.8, status: shouldSaveImmediately ? "Saving…" : "Opening trimmer…")
+
                     if shouldSaveImmediately {
                         try GifWriter.writeGIF(
                             frames: gifData.frames,
@@ -541,9 +552,11 @@ class CaptureManager: ObservableObject {
                         SaveService.shared.handleSavedFile(url: url, type: .gif)
                     }
 
+                    updateProcessingProgress(1.0, status: "Done")
                     showGifTrimmer(gifData: gifData, outputURL: url, saveImmediately: shouldSaveImmediately)
                 } else {
                     try await writer.stop(outputURL: url)
+                    updateProcessingProgress(0.5, status: "Applying overlays…")
 
                     if let capturedMouseClickData,
                        capturedMouseClickData.type == .gif,
@@ -575,7 +588,9 @@ class CaptureManager: ObservableObject {
                         }
                     }
 
+                    updateProcessingProgress(0.9, status: "Finalizing…")
                     SaveService.shared.handleSavedFile(url: url, type: .gif)
+                    updateProcessingProgress(1.0, status: "Done")
                 }
             } catch {
                 SaveService.shared.showError("GIF save failed: \(error.localizedDescription)")
@@ -779,10 +794,23 @@ class CaptureManager: ObservableObject {
 
     private func showProcessingIndicator() {
         guard processingIndicatorWindow == nil else { return }
-        let window = ProcessingIndicatorWindow()
+        let window = ProcessingIndicatorWindow(message: "Processing...", status: "Preparing export...", progress: 0.0)
         processingIndicatorWindow = window
         processingIndicatorShownAt = Date()
         window.show()
+    }
+
+    private func updateProcessingProgress(_ progress: Double, status: String? = nil) {
+        guard let window = processingIndicatorWindow else { return }
+        let clampedProgress = min(max(progress, 0), 1)
+        window.updateProgress(clampedProgress)
+        if let status {
+            window.updateStatus(status)
+        }
+    }
+
+    private func updateProcessingMessage(_ message: String) {
+        processingIndicatorWindow?.updateMessage(message)
     }
 
     private func dismissProcessingIndicator() {

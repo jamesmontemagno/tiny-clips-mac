@@ -3,17 +3,6 @@ import AppKit
 import AVFoundation
 import Combine
 
-// MARK: - Binding Helpers
-
-private extension Binding where Value == Int {
-    var doubleValue: Binding<Double> {
-        Binding<Double>(
-            get: { Double(wrappedValue) },
-            set: { wrappedValue = Int($0) }
-        )
-    }
-}
-
 enum SettingsTab: String, CaseIterable {
     case general = "General"
     case screenshot = "Screenshot"
@@ -58,6 +47,7 @@ struct SettingsView: View {
     @State private var splitVisibility: NavigationSplitViewVisibility = .all
     @State private var showDisableDockWarning = false
     @State private var availableMicrophones: [MicrophoneDeviceOption] = []
+
     var body: some View {
         NavigationSplitView(columnVisibility: $splitVisibility) {
             List(SettingsTab.displayCases, id: \.self, selection: $selectedTab) { tab in
@@ -84,10 +74,8 @@ struct SettingsView: View {
                     GeneralSettingsSection(
                         settings: settings,
                         launchAtLogin: launchAtLogin,
-                        sparkleController: sparkleController,
-                        openWindow: openWindow,
-                        showDisableDockWarning: $showDisableDockWarning,
                         chooseSaveDirectory: chooseSaveDirectory,
+                        resetSaveDirectory: resetSaveDirectory,
                         resetAllSettings: resetAllSettings,
                         showInDockBinding: showInDockBinding
                     )
@@ -96,32 +84,21 @@ struct SettingsView: View {
                 case .video:
                     VideoSettingsSection(
                         settings: settings,
-#if APPSTORE
-                        storeService: storeService,
-#else
-                        storeService: nil,
-#endif
+                        availableMicrophones: availableMicrophones,
+                        isPro: isAppStorePro,
                         selectedTab: $selectedTab
                     )
                 case .gif:
                     GifSettingsSection(
                         settings: settings,
-#if APPSTORE
-                        storeService: storeService,
-#else
-                        storeService: nil,
-#endif
+                        isPro: isAppStorePro,
                         selectedTab: $selectedTab,
                         gifMouseClickToggleBinding: gifMouseClickToggleBinding
                     )
                 case .mouseClicks:
                     MouseClicksSettingsSection(
                         settings: settings,
-#if APPSTORE
-                        storeService: storeService
-#else
-                        storeService: nil
-#endif
+                        isPro: isAppStorePro
                     )
                 case .shortcuts:
                     ShortcutsSettingsSection(settings: settings)
@@ -161,146 +138,6 @@ struct SettingsView: View {
             refreshMicrophones()
         }
     }
-    }
-
-    // MARK: - General
-
-    @ViewBuilder
-    private var generalSection: some View {
-        Section("Output") {
-#if APPSTORE
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Default locations: Screenshots/GIFs → Pictures/TinyClips, Videos → Movies/TinyClips")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                HStack {
-                    Text(settings.saveDirectoryDisplayPath.isEmpty ? "Using default folders" : settings.saveDirectoryDisplayPath)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-
-                    Spacer()
-
-                    Button("Browse…") {
-                        chooseSaveDirectory()
-                    }
-
-                    if settings.hasCustomSaveDirectory {
-                        Button("Reset") {
-                            resetSaveDirectory()
-                        }
-                    }
-                }
-            }
-#else
-            HStack {
-                TextField("Save to", text: $settings.saveDirectory)
-                    .textFieldStyle(.roundedBorder)
-                Button("Browse…") {
-                    chooseSaveDirectory()
-                }
-            // Section views are now in separate files under Views/Settings/
-                carbonModifiers: $settings.videoHotKeyModifiers,
-                defaultBinding: .defaultVideo
-            )
-            .accessibilityLabel("Record Video keyboard shortcut")
-
-            ShortcutRecorderField(
-                label: "Record GIF",
-                keyCode: $settings.gifHotKeyCode,
-                carbonModifiers: $settings.gifHotKeyModifiers,
-                defaultBinding: .defaultGif
-            )
-            .accessibilityLabel("Record GIF keyboard shortcut")
-        }
-
-        Section("Fixed Shortcuts") {
-            Text("The following shortcuts are fixed and cannot be changed.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            fixedShortcutRow(label: "Stop Recording", keys: "⌘.")
-            fixedShortcutRow(label: "Settings", keys: "⌘,")
-            fixedShortcutRow(label: "Quit", keys: "⌘Q")
-        }
-    }
-
-    private func fixedShortcutRow(label: String, keys: String) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            Text(keys)
-                .font(.system(.body, design: .monospaced))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: - Pro
-
-    @ViewBuilder
-    private var proSection: some View {
-#if APPSTORE
-        ProSettingsSection()
-#endif
-    }
-
-    // MARK: - About
-
-    @ViewBuilder
-    private var aboutSection: some View {
-        Section {
-            HStack {
-                Spacer()
-                VStack(spacing: 8) {
-                    if let appIcon = NSImage(named: "AppIcon") {
-                        Image(nsImage: appIcon)
-                            .resizable()
-                            .frame(width: 64, height: 64)
-                            .cornerRadius(14)
-                    }
-                    Text("TinyClips")
-                        .font(.headline)
-                    Text("v\(appVersion) (\(appBuild))")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            .padding(.vertical, 4)
-        }
-
-        Section {
-            Link("GitHub Repository", destination: URL(string: "https://github.com/jamesmontemagno/tiny-clips-mac")!)
-                .accessibilityHint("Opens the TinyClips GitHub repository in your browser.")
-            Link("Report an Issue", destination: reportIssueURL)
-                .accessibilityHint("Opens the issue reporter in your browser.")
-            if let privacyURL = URL(string: "https://tinyclips.app/privacy.html") {
-                Link("Privacy Policy", destination: privacyURL)
-                    .accessibilityHint("Opens Privacy Policy in your browser.")
-            }
-            if let termsURL = URL(string: "https://tinyclips.app/terms.html") {
-                Link("Terms of Use", destination: termsURL)
-                    .accessibilityHint("Opens Terms of Use in your browser.")
-            }
-        }
-
-#if !APPSTORE
-        Section {
-            Toggle("Automatically check for updates", isOn: Binding(
-                get: { sparkleController.automaticallyChecksForUpdates },
-                set: { sparkleController.automaticallyChecksForUpdates = $0 }
-            ))
-            .help("When enabled, TinyClips periodically checks for updates and Sparkle presents the standard update alert when one is available.")
-
-            Button("Check for Updates\u{2026}") {
-                sparkleController.checkForUpdates()
-            }
-            .help("Manually check for updates now.")
-        }
-#endif
-    }
 
     // MARK: - Helpers
 
@@ -334,6 +171,8 @@ struct SettingsView: View {
         settings.saveDirectoryBookmark = Data()
         settings.saveDirectoryDisplayPath = ""
     }
+#else
+    private func resetSaveDirectory() {}
 #endif
 
     private func resetAllSettings() {
@@ -419,29 +258,18 @@ struct SettingsView: View {
         settings.selectedMicrophoneID = ""
     }
 
-    private var videoMouseClickColorBinding: Binding<NSColor> {
-        Binding(
-            get: { settings.videoMouseClickColor },
-            set: { settings.videoMouseClickColor = $0 }
-        )
-    }
-
-    private var gifMouseClickColorBinding: Binding<NSColor> {
-        Binding(
-            get: { settings.gifMouseClickColor },
-            set: { settings.gifMouseClickColor = $0 }
-        )
-    }
-
     private var gifMouseClickToggleBinding: Binding<Bool> {
         Binding(
             get: { settings.shouldShowMouseClickVisuals(for: .gif) },
             set: { settings.setShowMouseClickVisuals($0, for: .gif) }
         )
     }
-}
 
-// MARK: - Pro Settings Section (APPSTORE only)
-
+    private var isAppStorePro: Bool {
 #if APPSTORE
-
+        return storeService.isPro
+#else
+        return true
+#endif
+    }
+}

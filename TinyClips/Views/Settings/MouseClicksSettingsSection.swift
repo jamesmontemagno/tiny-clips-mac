@@ -2,11 +2,11 @@ import SwiftUI
 
 struct MouseClicksSettingsSection: View {
     @ObservedObject var settings: CaptureSettings
-    @ObservedObject var storeService: StoreService?
+    let isPro: Bool
 
     var body: some View {
 #if APPSTORE
-        if let storeService, storeService.isPro {
+        if isPro {
             mouseClicksControls
         } else {
             ProSubscriptionView()
@@ -19,7 +19,7 @@ struct MouseClicksSettingsSection: View {
     @ViewBuilder
     private var mouseClicksControls: some View {
         Section {
-            Text("Tune the saved click pulse for recordings. GIF can mirror Video settings when desired.")
+            Text("Tune the saved click pulse for recordings. GIF can mirror Video settings when desired. Adding click effects will add more processing time at the end of recording.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -28,12 +28,12 @@ struct MouseClicksSettingsSection: View {
             MouseClickOverlayControls(
                 color: videoMouseClickColorBinding,
                 size: Binding(
-                    get: { Double(settings.videoMouseClickSize) },
-                    set: { settings.videoMouseClickSize = Int($0) }
+                    get: { settings.videoMouseClickSize },
+                    set: { settings.videoMouseClickSize = $0 }
                 ),
                 strokeWidth: Binding(
-                    get: { Double(settings.videoMouseClickStrokeWidth) },
-                    set: { settings.videoMouseClickStrokeWidth = Int($0) }
+                    get: { settings.videoMouseClickStrokeWidth },
+                    set: { settings.videoMouseClickStrokeWidth = $0 }
                 ),
                 opacity: Binding(
                     get: { settings.videoMouseClickOpacity },
@@ -60,12 +60,12 @@ struct MouseClicksSettingsSection: View {
                 MouseClickOverlayControls(
                     color: gifMouseClickColorBinding,
                     size: Binding(
-                        get: { Double(settings.gifMouseClickSize) },
-                        set: { settings.gifMouseClickSize = Int($0) }
+                        get: { settings.gifMouseClickSize },
+                        set: { settings.gifMouseClickSize = $0 }
                     ),
                     strokeWidth: Binding(
-                        get: { Double(settings.gifMouseClickStrokeWidth) },
-                        set: { settings.gifMouseClickStrokeWidth = Int($0) }
+                        get: { settings.gifMouseClickStrokeWidth },
+                        set: { settings.gifMouseClickStrokeWidth = $0 }
                     ),
                     opacity: Binding(
                         get: { settings.gifMouseClickOpacity },

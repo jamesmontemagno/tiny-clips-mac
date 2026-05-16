@@ -72,9 +72,29 @@
 		B10000000000000000000021 /* CaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* CaptureManager.swift */; };
 		B10000000000000000000022 /* MenuBarViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000025 /* MenuBarViews.swift */; };
 		B10000000000000000000023 /* ProcessingIndicatorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* ProcessingIndicatorWindow.swift */; };
+		B10000000000000000000024 /* GeneralSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000027 /* GeneralSettingsSection.swift */; };
+		B10000000000000000000025 /* ScreenshotSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ScreenshotSettingsSection.swift */; };
+		B10000000000000000000026 /* VideoSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000029 /* VideoSettingsSection.swift */; };
+		B10000000000000000000027 /* GifSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* GifSettingsSection.swift */; };
+		B10000000000000000000028 /* ShortcutsSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002B /* ShortcutsSettingsSection.swift */; };
+		B10000000000000000000029 /* AboutSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002C /* AboutSettingsSection.swift */; };
+		B1000000000000000000002A /* ProSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002D /* ProSettingsSection.swift */; };
+		B1000000000000000000002B /* MouseClickOverlayControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002E /* MouseClickOverlayControls.swift */; };
+		B1000000000000000000002C /* MouseClicksSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002F /* MouseClicksSettingsSection.swift */; };
+		B1000000000000000000002D /* SettingsViewHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000030 /* SettingsViewHelpers.swift */; };
 		B20000000000000000000021 /* CaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* CaptureManager.swift */; };
 		B20000000000000000000022 /* MenuBarViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000025 /* MenuBarViews.swift */; };
 		B20000000000000000000023 /* ProcessingIndicatorWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* ProcessingIndicatorWindow.swift */; };
+		B20000000000000000000024 /* GeneralSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000027 /* GeneralSettingsSection.swift */; };
+		B20000000000000000000025 /* ScreenshotSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ScreenshotSettingsSection.swift */; };
+		B20000000000000000000026 /* VideoSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000029 /* VideoSettingsSection.swift */; };
+		B20000000000000000000027 /* GifSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* GifSettingsSection.swift */; };
+		B20000000000000000000028 /* ShortcutsSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002B /* ShortcutsSettingsSection.swift */; };
+		B20000000000000000000029 /* AboutSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002C /* AboutSettingsSection.swift */; };
+		B2000000000000000000002A /* ProSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002D /* ProSettingsSection.swift */; };
+		B2000000000000000000002B /* MouseClickOverlayControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002E /* MouseClickOverlayControls.swift */; };
+		B2000000000000000000002C /* MouseClicksSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002F /* MouseClicksSettingsSection.swift */; };
+		B2000000000000000000002D /* SettingsViewHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000030 /* SettingsViewHelpers.swift */; };
 		B3EB92CF2F3FCA0B002723CD /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = B3EB92CE2F3FCA0B002723CD /* Sparkle */; };
 /* End PBXBuildFile section */
 
@@ -116,6 +136,16 @@
 		A10000000000000000000024 /* CaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureManager.swift; sourceTree = "<group>"; };
 		A10000000000000000000025 /* MenuBarViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarViews.swift; sourceTree = "<group>"; };
 		A10000000000000000000026 /* ProcessingIndicatorWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessingIndicatorWindow.swift; sourceTree = "<group>"; };
+		A10000000000000000000027 /* GeneralSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsSection.swift; sourceTree = "<group>"; };
+		A10000000000000000000028 /* ScreenshotSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotSettingsSection.swift; sourceTree = "<group>"; };
+		A10000000000000000000029 /* VideoSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSettingsSection.swift; sourceTree = "<group>"; };
+		A1000000000000000000002A /* GifSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GifSettingsSection.swift; sourceTree = "<group>"; };
+		A1000000000000000000002B /* ShortcutsSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutsSettingsSection.swift; sourceTree = "<group>"; };
+		A1000000000000000000002C /* AboutSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSettingsSection.swift; sourceTree = "<group>"; };
+		A1000000000000000000002D /* ProSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProSettingsSection.swift; sourceTree = "<group>"; };
+		A1000000000000000000002E /* MouseClickOverlayControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MouseClickOverlayControls.swift; sourceTree = "<group>"; };
+		A1000000000000000000002F /* MouseClicksSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MouseClicksSettingsSection.swift; sourceTree = "<group>"; };
+		A10000000000000000000030 /* SettingsViewHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewHelpers.swift; sourceTree = "<group>"; };
 		A2000000000000000000000C /* Info-MAS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-MAS.plist"; sourceTree = "<group>"; };
 		A2000000000000000000000D /* TinyClipsMAS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TinyClipsMAS.entitlements; sourceTree = "<group>"; };
 		A2000000000000000000000E /* TinyClipsMAS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TinyClipsMAS.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -178,6 +208,7 @@
 		C10000000000000000000004 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				C10000000000000000000008 /* Settings */,
 				A10000000000000000000003 /* SettingsView.swift */,
 				A10000000000000000000004 /* StopRecordingPanel.swift */,
 				A10000000000000000000010 /* VideoTrimmerWindow.swift */,
@@ -197,6 +228,23 @@
 				A10000000000000000000026 /* ProcessingIndicatorWindow.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		C10000000000000000000008 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000002C /* AboutSettingsSection.swift */,
+				A10000000000000000000027 /* GeneralSettingsSection.swift */,
+				A1000000000000000000002A /* GifSettingsSection.swift */,
+				A1000000000000000000002E /* MouseClickOverlayControls.swift */,
+				A1000000000000000000002F /* MouseClicksSettingsSection.swift */,
+				A1000000000000000000002D /* ProSettingsSection.swift */,
+				A10000000000000000000028 /* ScreenshotSettingsSection.swift */,
+				A10000000000000000000030 /* SettingsViewHelpers.swift */,
+				A1000000000000000000002B /* ShortcutsSettingsSection.swift */,
+				A10000000000000000000029 /* VideoSettingsSection.swift */,
+			);
+			path = Settings;
 			sourceTree = "<group>";
 		};
 		C10000000000000000000005 /* Capture */ = {
@@ -368,6 +416,16 @@
 				B10000000000000000000021 /* CaptureManager.swift in Sources */,
 				B10000000000000000000022 /* MenuBarViews.swift in Sources */,
 				B10000000000000000000023 /* ProcessingIndicatorWindow.swift in Sources */,
+				B10000000000000000000024 /* GeneralSettingsSection.swift in Sources */,
+				B10000000000000000000025 /* ScreenshotSettingsSection.swift in Sources */,
+				B10000000000000000000026 /* VideoSettingsSection.swift in Sources */,
+				B10000000000000000000027 /* GifSettingsSection.swift in Sources */,
+				B10000000000000000000028 /* ShortcutsSettingsSection.swift in Sources */,
+				B10000000000000000000029 /* AboutSettingsSection.swift in Sources */,
+				B1000000000000000000002A /* ProSettingsSection.swift in Sources */,
+				B1000000000000000000002B /* MouseClickOverlayControls.swift in Sources */,
+				B1000000000000000000002C /* MouseClicksSettingsSection.swift in Sources */,
+				B1000000000000000000002D /* SettingsViewHelpers.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -408,6 +466,16 @@
 				B20000000000000000000021 /* CaptureManager.swift in Sources */,
 				B20000000000000000000022 /* MenuBarViews.swift in Sources */,
 				B20000000000000000000023 /* ProcessingIndicatorWindow.swift in Sources */,
+				B20000000000000000000024 /* GeneralSettingsSection.swift in Sources */,
+				B20000000000000000000025 /* ScreenshotSettingsSection.swift in Sources */,
+				B20000000000000000000026 /* VideoSettingsSection.swift in Sources */,
+				B20000000000000000000027 /* GifSettingsSection.swift in Sources */,
+				B20000000000000000000028 /* ShortcutsSettingsSection.swift in Sources */,
+				B20000000000000000000029 /* AboutSettingsSection.swift in Sources */,
+				B2000000000000000000002A /* ProSettingsSection.swift in Sources */,
+				B2000000000000000000002B /* MouseClickOverlayControls.swift in Sources */,
+				B2000000000000000000002C /* MouseClicksSettingsSection.swift in Sources */,
+				B2000000000000000000002D /* SettingsViewHelpers.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

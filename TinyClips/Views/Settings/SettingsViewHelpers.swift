@@ -2,4 +2,11 @@ import Foundation
 import SwiftUI
 import AppKit
 
-// Place shared helpers, bindings, and utility functions here for SettingsView and its subviews.
+extension Binding where Value == Int {
+	var doubleValue: Binding<Double> {
+		Binding<Double>(
+			get: { Double(wrappedValue) },
+			set: { wrappedValue = Int($0) }
+		)
+	}
+}

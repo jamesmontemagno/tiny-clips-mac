@@ -10,24 +10,33 @@ struct ShortcutsSettingsSection: View {
                 .foregroundStyle(.secondary)
 
             ShortcutRecorderField(
-                // Configure for screenshot shortcut
+                label: "Screenshot",
+                keyCode: $settings.screenshotHotKeyCode,
+                carbonModifiers: $settings.screenshotHotKeyModifiers,
+                defaultBinding: .defaultScreenshot
             )
             .accessibilityLabel("Screenshot keyboard shortcut")
 
             ShortcutRecorderField(
-                // Configure for video shortcut
+                label: "Record Video",
+                keyCode: $settings.videoHotKeyCode,
+                carbonModifiers: $settings.videoHotKeyModifiers,
+                defaultBinding: .defaultVideo
             )
             .accessibilityLabel("Record Video keyboard shortcut")
 
             ShortcutRecorderField(
-                // Configure for GIF shortcut
+                label: "Record GIF",
+                keyCode: $settings.gifHotKeyCode,
+                carbonModifiers: $settings.gifHotKeyModifiers,
+                defaultBinding: .defaultGif
             )
             .accessibilityLabel("Record GIF keyboard shortcut")
         }
 
         Section("Fixed Shortcuts") {
             Text("The following shortcuts are fixed and cannot be changed.")
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
 
             fixedShortcutRow(label: "Stop Recording", keys: "⌘.")
@@ -42,6 +51,9 @@ struct ShortcutsSettingsSection: View {
             Spacer()
             Text(keys)
                 .font(.system(.body, design: .monospaced))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
                 .foregroundStyle(.secondary)
         }
     }

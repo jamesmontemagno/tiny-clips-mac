@@ -10,16 +10,18 @@ struct AboutSettingsSection: View {
     var body: some View {
         Section {
             HStack {
-                // App icon, name, version, build, distribution channel
-                VStack(alignment: .leading) {
+                Spacer()
+                VStack(spacing: 8) {
+                    if let appIcon = NSImage(named: "AppIcon") {
+                        Image(nsImage: appIcon)
+                            .resizable()
+                            .frame(width: 64, height: 64)
+                            .cornerRadius(14)
+                    }
                     Text("TinyClips")
-                        .font(.title2)
-                        .bold()
-                    Text("Version \(appVersion) (\(appBuild))")
+                        .font(.headline)
+                    Text("v\(appVersion) (\(appBuild))")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(distributionChannel)
-                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -34,9 +36,11 @@ struct AboutSettingsSection: View {
                 .accessibilityHint("Opens the issue reporter in your browser.")
             if let privacyURL = URL(string: "https://tinyclips.app/privacy.html") {
                 Link("Privacy Policy", destination: privacyURL)
+                    .accessibilityHint("Opens Privacy Policy in your browser.")
             }
             if let termsURL = URL(string: "https://tinyclips.app/terms.html") {
-                Link("Terms of Service", destination: termsURL)
+                Link("Terms of Use", destination: termsURL)
+                    .accessibilityHint("Opens Terms of Use in your browser.")
             }
         }
 

@@ -3,10 +3,8 @@ import SwiftUI
 struct GeneralSettingsSection: View {
     @ObservedObject var settings: CaptureSettings
     @ObservedObject var launchAtLogin: LaunchAtLoginManager
-    let sparkleController: SparkleController
-    let openWindow: OpenWindowAction
-    let showDisableDockWarning: Binding<Bool>
     let chooseSaveDirectory: () -> Void
+    let resetSaveDirectory: () -> Void
     let resetAllSettings: () -> Void
     let showInDockBinding: Binding<Bool>
 
@@ -31,7 +29,7 @@ struct GeneralSettingsSection: View {
 
                     if settings.hasCustomSaveDirectory {
                         Button("Reset") {
-                            // Reset handled in parent
+                            resetSaveDirectory()
                         }
                     }
                 }

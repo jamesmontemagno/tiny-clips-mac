@@ -10,14 +10,18 @@ struct ScreenshotSettingsSection: View {
 
             Picker("Default format:", selection: $settings.screenshotFormat) {
                 ForEach(ImageFormat.allCases, id: \.rawValue) { format in
-                    Text(format.rawValue.capitalized).tag(format)
+                    Text(format.label).tag(format.rawValue)
                 }
             }
             .help("Choose the default file format for screenshots.")
 
             if settings.imageFormat == .jpeg {
                 HStack {
-                    // Add JPEG quality slider or picker here if needed
+                    Text("JPEG quality:")
+                    Slider(value: $settings.jpegQuality, in: 0.1...1.0, step: 0.05)
+                    Text("\(Int(settings.jpegQuality * 100))%")
+                        .monospacedDigit()
+                        .frame(width: 40, alignment: .trailing)
                 }
                 .help("Adjust JPEG compression quality. Higher values keep more detail but create larger files.")
             }
@@ -34,9 +38,18 @@ struct ScreenshotSettingsSection: View {
         Section("After Capture") {
             Toggle("Open editor after capture", isOn: $settings.showScreenshotEditor)
                 .help("Open the screenshot editor after capture so you can annotate or crop.")
+                .onChange(of: settings.showScreenshotEditor) { _, isEnabled in
+                    if !isEnabled {
+                        settings.saveImmediatelyScreenshot = true
+                    }
+                }
+
             Toggle("Save immediately", isOn: $settings.saveImmediatelyScreenshot)
                 .help("Save immediately instead of waiting for actions in the editor.")
+                .disabled(!settings.showScreenshotEditor)
+
             Toggle("Copy to clipboard", isOn: $settings.copyScreenshotToClipboard)
+                .help("Copy saved screenshots to the clipboard as an image.")
         }
 
         Section("Countdown") {
@@ -44,7 +57,15 @@ struct ScreenshotSettingsSection: View {
                 .help("Wait before capturing so you can prepare the screen.")
             if settings.screenshotCountdownEnabled {
                 HStack {
-                    // Add countdown duration picker/slider here if needed
+                    Text("Duration:")
+                    Slider(
+                        value: $settings.screenshotCountdownDuration.doubleValue,
+                        in: 1...10,
+                        step: 1
+                    )
+                    Text("\(settings.screenshotCountdownDuration)s")
+                        .monospacedDigit()
+                        .frame(width: 30, alignment: .trailing)
                 }
                 .help("Set the countdown duration in seconds.")
             }
