@@ -12,7 +12,7 @@ See `CONTRIBUTING.md` for full setup, project structure, and contribution workfl
 
 - **Menu bar app** — SwiftUI `MenuBarExtra` + SwiftUI `Window` scenes (`"clips-manager"`, `"settings-window"`). No Dock icon by default (`LSUIElement = true`).
 - **Mixed SwiftUI + AppKit** — SwiftUI for menu bar, settings, Clips Manager; AppKit `NSWindow`/`NSPanel` subclasses for capture-time windows. AppKit windows host SwiftUI views via `NSHostingView`.
-- **`CaptureManager`** in `TinyClipsApp.swift` is the central coordinator owning recorders, writers, and all capture-time window lifecycles.
+- **`CaptureManager`** in `CaptureManager.swift` is the central coordinator owning recorders, writers, and all capture-time window lifecycles.
 - **Singleton services**: `CaptureSettings.shared`, `SaveService.shared`, `PermissionManager.shared`, `SparkleController.shared`, `StoreService.shared` (MAS only).
 - **Pro features** (MAS): gate on `StoreService.shared.isPro`. `StoreService` uses StoreKit 2 with `ProPlan` enum (monthly/yearly/lifetime). Guard pro UI with `#if APPSTORE`.
 
@@ -48,12 +48,17 @@ xcodebuild build -project TinyClips.xcodeproj -scheme TinyClipsMAS -configuratio
 ### Windows
 - **SwiftUI `Window` scenes** for long-lived windows (`clips-manager`, `settings-window`). **AppKit subclasses** for capture-time panels.
 - Open scene windows via `openWindow(id:)`, then activate + bring to front with dual-pass (immediate + 0.1s delay to escape menu tracking timing).
-- Callback-driven AppKit windows: keep a completion closure, guard with `didComplete`/`didClose` to prevent double-callbacks, set `isReleasedWhenClosed = false`, nil out callbacks after firing. `nil` payload = cancelled.
-- `CaptureManager` holds strong refs to capture-time windows; defers `nil` releases with `DispatchQueue.main.async` to avoid deallocation mid-callback.
-- Floating panels use borderless non-activating style at `.floating` level. See existing panels for the recipe.
+- For capture-time window/panel conventions (callback guards, floating panel recipe, SwiftUI hosting, keyboard interactivity, lifecycle), see `.github/instructions/capture-windows.instructions.md` — auto-applied to `TinyClips/Views/*Panel.swift` and `*Window.swift`.
+- For `ProcessingIndicatorWindow` and similar floating panels:
+  - Do not combine `NSWindowCollectionBehaviorCanJoinAllSpaces` with `NSWindowCollectionBehaviorMoveToActiveSpace` (AppKit asserts and crashes).
+  - Avoid calling `layoutSubtreeIfNeeded()` from `show()` or while AppKit/SwiftUI is already in a layout pass; this can trigger layout recursion warnings and future breakage.
 
 ### Capture Flows
 Three capture types (screenshot, video, GIF) follow: permission → optional picker → optional region/screen selection → capture/record → optional editor/trimmer → save. Editor/trimmer windows open **after** recording resources are released. See `CONTRIBUTING.md` for detailed flow diagrams.
+
+- Start recording controls (`StartRecordingPanel`):
+  - Show the mouse-click visuals toggle only when the user has Pro access.
+  - For non-Pro users, hide the toggle entirely (do not show a disabled control in this panel).
 
 ### Accessibility
 Treat accessibility as a release gate. Add `.accessibilityLabel`/`.accessibilityHint`/`.accessibilityValue` for icon-only buttons, custom controls, and stateful UI. Ensure keyboard alternatives. Validate on both schemes with VoiceOver. See `CONTRIBUTING.md` for full guidelines.

@@ -2,10 +2,10 @@ import AppKit
 import SwiftUI
 
 class StartRecordingPanel: NSPanel {
-    private var onStart: ((Bool, Bool, String) -> Void)?
+    private var onStart: ((Bool, Bool, String, Bool) -> Void)?
     private var onCancel: (() -> Void)?
 
-    convenience init(onStart: @escaping (Bool, Bool, String) -> Void, onCancel: @escaping () -> Void) {
+    convenience init(captureType: CaptureType, onStart: @escaping (Bool, Bool, String, Bool) -> Void, onCancel: @escaping () -> Void) {
         self.init(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -23,12 +23,23 @@ class StartRecordingPanel: NSPanel {
         self.isMovableByWindowBackground = true
 
         let settings = CaptureSettings.shared
+        let allowsMouseClickToggle: Bool
+    #if APPSTORE
+        allowsMouseClickToggle = StoreService.shared.isPro
+    #else
+        allowsMouseClickToggle = true
+    #endif
+        let defaultMouseClicksEnabled = allowsMouseClickToggle
+            ? settings.shouldShowMouseClickVisuals(for: captureType)
+            : false
         let hostingView = NSHostingView(rootView: StartRecordingView(
             systemAudio: settings.recordAudio,
             microphone: settings.recordMicrophone,
             selectedMicrophoneID: settings.selectedMicrophoneID,
-            onStart: { [weak self] systemAudio, mic in
-                self?.onStart?(systemAudio, mic.enabled, mic.deviceID)
+            mouseClicksEnabled: defaultMouseClicksEnabled,
+            allowsMouseClickToggle: allowsMouseClickToggle,
+            onStart: { [weak self] systemAudio, mic, mouseClicksEnabled in
+            self?.onStart?(systemAudio, mic.enabled, mic.deviceID, mouseClicksEnabled)
                 self?.onStart = nil
                 self?.onCancel = nil
             },
@@ -70,8 +81,10 @@ private struct StartRecordingView: View {
     @State var systemAudio: Bool
     @State var microphone: Bool
     @State var selectedMicrophoneID: String
+    @State var mouseClicksEnabled: Bool
+    let allowsMouseClickToggle: Bool
     private let microphones = MicrophoneDeviceCatalog.availableOptions()
-    let onStart: (Bool, MicrophoneState) -> Void
+    let onStart: (Bool, MicrophoneState, Bool) -> Void
     let onCancel: () -> Void
 
     var body: some View {
@@ -110,6 +123,25 @@ private struct StartRecordingView: View {
             .accessibilityValue(microphone ? "On" : "Off")
             .accessibilityHint("Toggles microphone recording.")
 
+            if allowsMouseClickToggle {
+                // Mouse click visuals toggle (Pro only)
+                Button {
+                    mouseClicksEnabled.toggle()
+                } label: {
+                    Image(systemName: "cursorarrow.rays")
+                        .font(.system(size: 13))
+                        .foregroundStyle(mouseClicksEnabled ? .white : .primary.opacity(0.5))
+                        .frame(width: 28, height: 28)
+                        .background(mouseClicksEnabled ? .blue : .primary.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .help(mouseClicksEnabled ? "Mouse clicks in recording: ON" : "Mouse clicks in recording: OFF")
+                .accessibilityLabel("Mouse click visuals")
+                .accessibilityValue(mouseClicksEnabled ? "On" : "Off")
+                .accessibilityHint("Toggles mouse click visuals for this recording.")
+            }
+
             if microphone {
                 Picker("Mic", selection: $selectedMicrophoneID) {
                     Text("System Default").tag("")
@@ -128,7 +160,7 @@ private struct StartRecordingView: View {
 
             // Start button
             Button {
-                onStart(systemAudio, .init(enabled: microphone, deviceID: selectedMicrophoneID))
+                onStart(systemAudio, .init(enabled: microphone, deviceID: selectedMicrophoneID), mouseClicksEnabled)
             } label: {
                 HStack(spacing: 5) {
                     Circle()
