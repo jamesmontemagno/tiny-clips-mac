@@ -532,23 +532,32 @@ class CaptureManager: ObservableObject {
                     if let capturedMouseClickData,
                        capturedMouseClickData.type == .gif,
                        !capturedMouseClickData.events.isEmpty {
-                        gifData = MouseClickOverlayProcessor.overlayOnGif(
-                            gifData: gifData,
-                            region: capturedMouseClickData.region,
-                            events: capturedMouseClickData.events,
-                            style: settings.mouseClickOverlayStyle(for: .gif)
-                        )
+                        let inputGifData = gifData
+                        let overlayStyle = settings.mouseClickOverlayStyle(for: .gif)
+                        let region = capturedMouseClickData.region
+                        let events = capturedMouseClickData.events
+                        gifData = await Self.runOffMain {
+                            MouseClickOverlayProcessor.overlayOnGif(
+                                gifData: inputGifData,
+                                region: region,
+                                events: events,
+                                style: overlayStyle
+                            )
+                        }
                     }
 
                     updateProcessingProgress(0.8, status: shouldSaveImmediately ? "Saving…" : "Opening trimmer…")
 
                     if shouldSaveImmediately {
-                        try GifWriter.writeGIF(
-                            frames: gifData.frames,
-                            frameDelay: gifData.frameDelay,
-                            maxWidth: gifData.maxWidth,
-                            to: url
-                        )
+                        let dataToWrite = gifData
+                        try await Self.runOffMainThrowing {
+                            try GifWriter.writeGIF(
+                                frames: dataToWrite.frames,
+                                frameDelay: dataToWrite.frameDelay,
+                                maxWidth: dataToWrite.maxWidth,
+                                to: url
+                            )
+                        }
                         SaveService.shared.handleSavedFile(url: url, type: .gif)
                     }
 
@@ -562,23 +571,27 @@ class CaptureManager: ObservableObject {
                        capturedMouseClickData.type == .gif,
                        !capturedMouseClickData.events.isEmpty {
                         do {
-                            let gifData = try MouseClickOverlayProcessor.loadGifCaptureData(from: url)
-                            let processedGifData = MouseClickOverlayProcessor.overlayOnGif(
-                                gifData: gifData,
-                                region: capturedMouseClickData.region,
-                                events: capturedMouseClickData.events,
-                                style: settings.mouseClickOverlayStyle(for: .gif)
-                            )
-
+                            let overlayStyle = settings.mouseClickOverlayStyle(for: .gif)
+                            let region = capturedMouseClickData.region
+                            let events = capturedMouseClickData.events
                             let tempURL = temporaryURL(fileExtension: "gif")
                             defer { try? FileManager.default.removeItem(at: tempURL) }
 
-                            try GifWriter.writeGIF(
-                                frames: processedGifData.frames,
-                                frameDelay: processedGifData.frameDelay,
-                                maxWidth: processedGifData.maxWidth,
-                                to: tempURL
-                            )
+                            try await Self.runOffMainThrowing {
+                                let gifData = try MouseClickOverlayProcessor.loadGifCaptureData(from: url)
+                                let processedGifData = MouseClickOverlayProcessor.overlayOnGif(
+                                    gifData: gifData,
+                                    region: region,
+                                    events: events,
+                                    style: overlayStyle
+                                )
+                                try GifWriter.writeGIF(
+                                    frames: processedGifData.frames,
+                                    frameDelay: processedGifData.frameDelay,
+                                    maxWidth: processedGifData.maxWidth,
+                                    to: tempURL
+                                )
+                            }
 
                             if FileManager.default.fileExists(atPath: tempURL.path) {
                                 _ = try FileManager.default.replaceItemAt(url, withItemAt: tempURL)
@@ -1118,5 +1131,27 @@ class CaptureManager: ObservableObject {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("TinyClips-\(UUID().uuidString)")
             .appendingPathExtension(fileExtension)
+    }
+
+    // Bridges synchronous CPU-heavy work to a background queue so it does not
+    // block the @MainActor run loop (which would freeze the processing indicator).
+    nonisolated private static func runOffMain<T>(_ work: @escaping () -> T) async -> T {
+        await withCheckedContinuation { (continuation: CheckedContinuation<T, Never>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(returning: work())
+            }
+        }
+    }
+
+    nonisolated private static func runOffMainThrowing<T>(_ work: @escaping () throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    continuation.resume(returning: try work())
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 }
