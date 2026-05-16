@@ -35,12 +35,14 @@ class CaptureManager: ObservableObject {
     private var countdownWindow: CountdownWindow?
     private var processingIndicatorWindow: ProcessingIndicatorWindow?
     private var processingIndicatorShownAt: Date?
+    private var isStoppingRecording = false
     private var onboardingWindow: OnboardingWizardWindow?
     private var guideWindow: GuideWindow?
     private var screenPickerWindow: ScreenPickerWindow?
     private var mouseClickMonitor: MouseClickMonitor?
     private var activeMouseClickRegion: CaptureRegion?
     private var activeMouseClickCaptureType: CaptureType?
+    private var activeMouseClickCaptureEnabledOverride: Bool?
     private let hotKeyManager = HotKeyManager()
     private var hotKeySettingsCancellable: AnyCancellable?
 
@@ -316,6 +318,7 @@ class CaptureManager: ObservableObject {
         systemAudio: Bool,
         microphone: Bool,
         selectedMicrophoneID: String,
+        mouseClicksEnabled: Bool,
         countdownEnabled: Bool,
         countdownDuration: Int
     ) {
@@ -359,6 +362,7 @@ class CaptureManager: ObservableObject {
                     self.videoRecorder = recorder
                     self.activeRecordingRegion = region
                     self.isRecording = true
+                    self.activeMouseClickCaptureEnabledOverride = mouseClicksEnabled
                     self.startMouseClickMonitoringIfNeeded(for: .video, region: region)
                     self.recordingMicrophoneEnabled = false
                     self.microphoneWarningMessage = nil
@@ -376,6 +380,7 @@ class CaptureManager: ObservableObject {
                     self.showStopPanel()
                 } catch {
                     _ = self.stopMouseClickMonitoring()
+                    self.activeMouseClickCaptureEnabledOverride = nil
                     self.resetRecordingAudioStatus()
                     self.isRecording = false
                     self.activeRecordingRegion = nil
@@ -412,7 +417,7 @@ class CaptureManager: ObservableObject {
         }
     }
 
-    private func beginGifRecording(region: CaptureRegion, countdownEnabled: Bool, countdownDuration: Int) {
+    private func beginGifRecording(region: CaptureRegion, mouseClicksEnabled: Bool, countdownEnabled: Bool, countdownDuration: Int) {
         resetRecordingAudioStatus()
         let doRecord = { [weak self] in
             guard let self else { return }
@@ -426,12 +431,14 @@ class CaptureManager: ObservableObject {
                     self.gifWriter = writer
                     self.activeRecordingRegion = region
                     self.isRecording = true
+                    self.activeMouseClickCaptureEnabledOverride = mouseClicksEnabled
                     self.startMouseClickMonitoringIfNeeded(for: .gif, region: region)
 
                     try await writer.start(region: region)
                     self.showStopPanel()
                 } catch {
                     _ = self.stopMouseClickMonitoring()
+                    self.activeMouseClickCaptureEnabledOverride = nil
                     self.isRecording = false
                     self.activeRecordingRegion = nil
                     self.dismissRegionIndicator()
@@ -454,7 +461,10 @@ class CaptureManager: ObservableObject {
         // indicator disappear, stop hotkey unregisters) regardless of
         // whatever the async export flow does next. If the export later
         // hangs, the user can still interact with the app.
+        guard !isStoppingRecording else { return }
         guard isRecording || videoRecorder != nil || gifWriter != nil else { return }
+
+        isStoppingRecording = true
 
         dismissStopPanel()
         dismissRegionIndicator()
@@ -468,7 +478,11 @@ class CaptureManager: ObservableObject {
     }
 
     private func stopRecordingFlow() async {
+        defer { isStoppingRecording = false }
+        defer { activeMouseClickCaptureEnabledOverride = nil }
+
         let capturedMouseClickData = stopMouseClickMonitoring()
+        let shortVideoIndicatorBypassThreshold: TimeInterval = 120
 
         let stoppedRecordingType: CaptureType?
         if videoRecorder != nil {
@@ -479,9 +493,20 @@ class CaptureManager: ObservableObject {
             stoppedRecordingType = nil
         }
 
-        showProcessingIndicator()
-        updateProcessingMessage("Processing...")
-        updateProcessingProgress(0.05, status: "Preparing export...")
+        let shouldShowProcessingIndicator: Bool = {
+            guard let videoRecorder, gifWriter == nil else { return true }
+            let mouseClicksEnabled = shouldCaptureMouseClicks(for: .video)
+            if mouseClicksEnabled {
+                return true
+            }
+            return videoRecorder.currentRecordingDuration >= shortVideoIndicatorBypassThreshold
+        }()
+
+        if shouldShowProcessingIndicator {
+            showProcessingIndicator()
+            updateProcessingMessage("Processing...")
+            updateProcessingProgress(0.05, status: "Preparing export...")
+        }
 
         // Snapshot video settings before any suspension so that overlay output URL
         // selection and downstream trimmer/save decisions stay consistent even if
@@ -512,7 +537,20 @@ class CaptureManager: ObservableObject {
                     let overlayOutputURL = videoShouldSaveImmediately
                         ? SaveService.shared.generateURL(for: .video)
                         : temporaryURL(fileExtension: "mp4")
-                    savedVideoURL = try await MouseClickOverlayProcessor.overlayOnVideo(
+
+                    // Keep the progress bar moving while AVAssetExportSession
+                    // runs the click-overlay render pass.
+                    let overlayProgressTask = Task { @MainActor in
+                        var progress = 0.55
+                        while !Task.isCancelled {
+                            try? await Task.sleep(nanoseconds: 350_000_000)
+                            progress = min(progress + 0.015, 0.84)
+                            updateProcessingProgress(progress, status: "Applying overlays...")
+                        }
+                    }
+                    defer { overlayProgressTask.cancel() }
+
+                    savedVideoURL = try await Self.overlayVideoOffMain(
                         sourceURL: currentURL,
                         region: capturedMouseClickData.region,
                         events: capturedMouseClickData.events,
@@ -662,6 +700,10 @@ class CaptureManager: ObservableObject {
 
         _ = stopMouseClickMonitoring()
 
+        if isStoppingRecording {
+            return
+        }
+
         if videoRecorder != nil || gifWriter != nil || isRecording {
             await stopRecordingFlow()
         } else {
@@ -742,7 +784,8 @@ class CaptureManager: ObservableObject {
 
     private func showStartPanel() {
         let panel = StartRecordingPanel(
-            onStart: { [weak self] systemAudio, mic, selectedMicrophoneID in
+            captureType: pendingRecordingType ?? .video,
+            onStart: { [weak self] systemAudio, mic, selectedMicrophoneID, mouseClicksEnabled in
                 guard
                     let self,
                     let region = self.pendingRecordingRegion,
@@ -763,12 +806,14 @@ class CaptureManager: ObservableObject {
                         systemAudio: systemAudio,
                         microphone: mic,
                         selectedMicrophoneID: selectedMicrophoneID,
+                        mouseClicksEnabled: mouseClicksEnabled,
                         countdownEnabled: countdownEnabled,
                         countdownDuration: countdownDuration
                     )
                 case .gif:
                     self.beginGifRecording(
                         region: region,
+                        mouseClicksEnabled: mouseClicksEnabled,
                         countdownEnabled: countdownEnabled,
                         countdownDuration: countdownDuration
                     )
@@ -1129,6 +1174,9 @@ class CaptureManager: ObservableObject {
 #if APPSTORE
         guard StoreService.shared.isPro else { return false }
 #endif
+        if let activeMouseClickCaptureEnabledOverride {
+            return activeMouseClickCaptureEnabledOverride
+        }
         return CaptureSettings.shared.shouldShowMouseClickVisuals(for: type)
     }
 
@@ -1158,5 +1206,23 @@ class CaptureManager: ObservableObject {
                 }
             }
         }
+    }
+
+    nonisolated private static func overlayVideoOffMain(
+        sourceURL: URL,
+        region: CaptureRegion,
+        events: [MouseClickEvent],
+        outputURL: URL,
+        style: MouseClickOverlayStyle
+    ) async throws -> URL {
+        try await Task.detached(priority: .userInitiated) {
+            try await MouseClickOverlayProcessor.overlayOnVideo(
+                sourceURL: sourceURL,
+                region: region,
+                events: events,
+                outputURL: outputURL,
+                style: style
+            )
+        }.value
     }
 }

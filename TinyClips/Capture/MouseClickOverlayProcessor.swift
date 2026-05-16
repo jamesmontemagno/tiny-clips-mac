@@ -64,7 +64,8 @@ enum MouseClickOverlayProcessor {
         region: CaptureRegion,
         events: [MouseClickEvent],
         outputURL: URL,
-        style: MouseClickOverlayStyle
+        style: MouseClickOverlayStyle,
+        onProgress: ((Double) -> Void)? = nil
     ) async throws -> URL {
         let mappedEvents = mapMouseClickEvents(events, for: region)
         guard !mappedEvents.isEmpty else {
@@ -160,6 +161,32 @@ enum MouseClickOverlayProcessor {
         exportSession.outputFileType = .mp4
         exportSession.videoComposition = videoComposition
         exportSession.shouldOptimizeForNetworkUse = true
+
+        // Poll export progress so callers can keep UI feedback moving.
+        let progressTask = Task.detached(priority: .utility) {
+            while !Task.isCancelled {
+                let status = exportSession.status
+                if status == .completed || status == .failed || status == .cancelled {
+                    break
+                }
+                onProgress?(Double(exportSession.progress))
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
+        }
+
+        // Protect against export sessions that get stuck in waiting/exporting.
+        let timeoutSeconds = max(30.0, min(300.0, asset.duration.seconds * 2.0 + 10.0))
+        let timeoutTask = Task.detached(priority: .utility) {
+            try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+            if exportSession.status == .waiting || exportSession.status == .exporting {
+                exportSession.cancelExport()
+            }
+        }
+
+        defer {
+            progressTask.cancel()
+            timeoutTask.cancel()
+        }
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             exportSession.exportAsynchronously {

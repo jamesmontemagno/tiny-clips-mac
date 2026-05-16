@@ -60,9 +60,10 @@ final class ProcessingIndicatorWindow: NSPanel {
             ))
         }
 
-        collectionBehavior.insert(.moveToActiveSpace)
         alphaValue = 0
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
         orderFrontRegardless()
+        displayIfNeeded()
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.18
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)

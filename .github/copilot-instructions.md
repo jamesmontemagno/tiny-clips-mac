@@ -49,9 +49,16 @@ xcodebuild build -project TinyClips.xcodeproj -scheme TinyClipsMAS -configuratio
 - **SwiftUI `Window` scenes** for long-lived windows (`clips-manager`, `settings-window`). **AppKit subclasses** for capture-time panels.
 - Open scene windows via `openWindow(id:)`, then activate + bring to front with dual-pass (immediate + 0.1s delay to escape menu tracking timing).
 - For capture-time window/panel conventions (callback guards, floating panel recipe, SwiftUI hosting, keyboard interactivity, lifecycle), see `.github/instructions/capture-windows.instructions.md` — auto-applied to `TinyClips/Views/*Panel.swift` and `*Window.swift`.
+- For `ProcessingIndicatorWindow` and similar floating panels:
+  - Do not combine `NSWindowCollectionBehaviorCanJoinAllSpaces` with `NSWindowCollectionBehaviorMoveToActiveSpace` (AppKit asserts and crashes).
+  - Avoid calling `layoutSubtreeIfNeeded()` from `show()` or while AppKit/SwiftUI is already in a layout pass; this can trigger layout recursion warnings and future breakage.
 
 ### Capture Flows
 Three capture types (screenshot, video, GIF) follow: permission → optional picker → optional region/screen selection → capture/record → optional editor/trimmer → save. Editor/trimmer windows open **after** recording resources are released. See `CONTRIBUTING.md` for detailed flow diagrams.
+
+- Start recording controls (`StartRecordingPanel`):
+  - Show the mouse-click visuals toggle only when the user has Pro access.
+  - For non-Pro users, hide the toggle entirely (do not show a disabled control in this panel).
 
 ### Accessibility
 Treat accessibility as a release gate. Add `.accessibilityLabel`/`.accessibilityHint`/`.accessibilityValue` for icon-only buttons, custom controls, and stateful UI. Ensure keyboard alternatives. Validate on both schemes with VoiceOver. See `CONTRIBUTING.md` for full guidelines.
