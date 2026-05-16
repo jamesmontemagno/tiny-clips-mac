@@ -1083,14 +1083,7 @@ class CaptureManager: ObservableObject {
 #if APPSTORE
         guard StoreService.shared.isPro else { return false }
 #endif
-        switch type {
-        case .video:
-            return CaptureSettings.shared.showMouseClickVisualsInVideo
-        case .gif:
-            return CaptureSettings.shared.showMouseClickVisualsInGif
-        case .screenshot:
-            return false
-        }
+        return CaptureSettings.shared.shouldShowMouseClickVisuals(for: type)
     }
 
     private func temporaryURL(fileExtension: String) -> URL {

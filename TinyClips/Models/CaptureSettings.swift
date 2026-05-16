@@ -208,6 +208,7 @@ class CaptureSettings: ObservableObject {
     @AppStorage("videoFrameRate") var videoFrameRate: Int = 30
     @AppStorage("showMouseClickVisualsInVideo") var showMouseClickVisualsInVideo: Bool = false
     @AppStorage("showMouseClickVisualsInGif") var showMouseClickVisualsInGif: Bool = false
+    @AppStorage("gifMouseClicksUseVideoSettings") var gifMouseClicksUseVideoSettings: Bool = false
     @AppStorage("videoMouseClickColorHex") var videoMouseClickColorHex: String = "#FFFFFF"
     @AppStorage("videoMouseClickSize") var videoMouseClickSize: Double = 32
     @AppStorage("videoMouseClickStrokeWidth") var videoMouseClickStrokeWidth: Double = 3
@@ -297,6 +298,9 @@ class CaptureSettings: ObservableObject {
                 duration: videoMouseClickDuration
             )
         case .gif:
+            if gifMouseClicksUseVideoSettings {
+                return mouseClickOverlayStyle(for: .video)
+            }
             return MouseClickOverlayStyle(
                 colorHex: gifMouseClickColorHex,
                 size: CGFloat(gifMouseClickSize),
@@ -312,6 +316,32 @@ class CaptureSettings: ObservableObject {
                 opacity: 0.85,
                 duration: 0.45
             )
+        }
+    }
+
+    func shouldShowMouseClickVisuals(for type: CaptureType) -> Bool {
+        switch type {
+        case .video:
+            return showMouseClickVisualsInVideo
+        case .gif:
+            return gifMouseClicksUseVideoSettings ? showMouseClickVisualsInVideo : showMouseClickVisualsInGif
+        case .screenshot:
+            return false
+        }
+    }
+
+    func setShowMouseClickVisuals(_ isEnabled: Bool, for type: CaptureType) {
+        switch type {
+        case .video:
+            showMouseClickVisualsInVideo = isEnabled
+        case .gif:
+            if gifMouseClicksUseVideoSettings {
+                showMouseClickVisualsInVideo = isEnabled
+            } else {
+                showMouseClickVisualsInGif = isEnabled
+            }
+        case .screenshot:
+            break
         }
     }
 
@@ -341,6 +371,7 @@ class CaptureSettings: ObservableObject {
             "clipsManagerLastViewMode", "clipsManagerLastSortOption", "clipsManagerLastFilterType", "clipsManagerLastDateFilter",
             "clipsManagerLastSmartCollection", "clipsManagerLastSearchText", "clipsManagerLastSelectedTag", "clipsManagerLastSelectedCollection",
             "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showMouseClickVisualsInVideo", "showMouseClickVisualsInGif",
+            "gifMouseClicksUseVideoSettings",
             "videoMouseClickColorHex", "videoMouseClickSize", "videoMouseClickStrokeWidth", "videoMouseClickOpacity", "videoMouseClickDuration",
             "gifMouseClickColorHex", "gifMouseClickSize", "gifMouseClickStrokeWidth", "gifMouseClickOpacity", "gifMouseClickDuration",
             "showTrimmer",

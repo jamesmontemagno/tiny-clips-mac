@@ -420,9 +420,22 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 6) {
 #if APPSTORE
                 if storeService.isPro {
-                    Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInGif)
-                        .help("Adds a subtle pulse at click positions in saved GIF recordings.")
-                        .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved GIF recordings.")
+                    Toggle(
+                        settings.gifMouseClicksUseVideoSettings
+                            ? "Show mouse clicks in recording (mirrors Video)"
+                            : "Show mouse clicks in recording",
+                        isOn: gifMouseClickToggleBinding
+                    )
+                    .help(
+                        settings.gifMouseClicksUseVideoSettings
+                            ? "Uses the Video mouse click on/off setting for GIF recordings."
+                            : "Adds a subtle pulse at click positions in saved GIF recordings."
+                    )
+                    .accessibilityHint(
+                        settings.gifMouseClicksUseVideoSettings
+                            ? "When enabled, GIF recordings use the same mouse click visibility setting as Video recordings."
+                            : "When enabled, mouse clicks are shown as a pulse effect in saved GIF recordings."
+                    )
 
                     Button("Customize mouse click effect…") {
                         selectedTab = .mouseClicks
@@ -436,9 +449,22 @@ struct SettingsView: View {
                     .buttonStyle(.link)
                 }
 #else
-                Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInGif)
-                    .help("Adds a subtle pulse at click positions in saved GIF recordings.")
-                    .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved GIF recordings.")
+                Toggle(
+                    settings.gifMouseClicksUseVideoSettings
+                        ? "Show mouse clicks in recording (mirrors Video)"
+                        : "Show mouse clicks in recording",
+                    isOn: gifMouseClickToggleBinding
+                )
+                .help(
+                    settings.gifMouseClicksUseVideoSettings
+                        ? "Uses the Video mouse click on/off setting for GIF recordings."
+                        : "Adds a subtle pulse at click positions in saved GIF recordings."
+                )
+                .accessibilityHint(
+                    settings.gifMouseClicksUseVideoSettings
+                        ? "When enabled, GIF recordings use the same mouse click visibility setting as Video recordings."
+                        : "When enabled, mouse clicks are shown as a pulse effect in saved GIF recordings."
+                )
 
                 Button("Customize mouse click effect…") {
                     selectedTab = .mouseClicks
@@ -501,9 +527,14 @@ struct SettingsView: View {
     @ViewBuilder
     private var mouseClicksControls: some View {
         Section {
-            Text("Tune the saved click pulse separately for video and GIF exports.")
+            Text("Tune the saved click pulse for recordings. GIF can mirror Video settings when desired.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+
+        Section("Behavior") {
+            Toggle("Use Video click settings for GIF", isOn: $settings.gifMouseClicksUseVideoSettings)
+                .help("When enabled, GIF uses Video click visibility and style settings.")
         }
 
         Section("Video") {
@@ -517,13 +548,19 @@ struct SettingsView: View {
         }
 
         Section("GIF") {
-            MouseClickOverlayControls(
-                color: gifMouseClickColorBinding,
-                size: $settings.gifMouseClickSize,
-                strokeWidth: $settings.gifMouseClickStrokeWidth,
-                opacity: $settings.gifMouseClickOpacity,
-                duration: $settings.gifMouseClickDuration
-            )
+            if settings.gifMouseClicksUseVideoSettings {
+                Text("GIF click style is currently mirroring the Video settings above.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                MouseClickOverlayControls(
+                    color: gifMouseClickColorBinding,
+                    size: $settings.gifMouseClickSize,
+                    strokeWidth: $settings.gifMouseClickStrokeWidth,
+                    opacity: $settings.gifMouseClickOpacity,
+                    duration: $settings.gifMouseClickDuration
+                )
+            }
         }
     }
 
@@ -795,6 +832,13 @@ struct SettingsView: View {
         Binding(
             get: { settings.gifMouseClickColor },
             set: { settings.gifMouseClickColor = $0 }
+        )
+    }
+
+    private var gifMouseClickToggleBinding: Binding<Bool> {
+        Binding(
+            get: { settings.shouldShowMouseClickVisuals(for: .gif) },
+            set: { settings.setShowMouseClickVisuals($0, for: .gif) }
         )
     }
 }
