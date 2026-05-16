@@ -3,6 +3,14 @@
 		"github": {
 			"type": "http",
 			"url": "https://api.githubcopilot.com/mcp/"
+		},
+		"apple-docs": {
+			"command": "npx",
+			"args": [
+				"-y",
+				"@kimsungwhee/apple-docs-mcp"
+			],
+			"type": "stdio"
 		}
 	},
 	"inputs": [
