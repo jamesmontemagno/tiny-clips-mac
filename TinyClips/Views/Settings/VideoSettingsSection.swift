@@ -1,0 +1,87 @@
+import SwiftUI
+
+struct VideoSettingsSection: View {
+    @ObservedObject var settings: CaptureSettings
+    @ObservedObject var storeService: StoreService?
+    let selectedTab: Binding<SettingsTab?>
+
+    var body: some View {
+        Section("Capture Settings") {
+            Toggle("Show capture picker before recording", isOn: $settings.showVideoCapturePicker)
+            Picker("Frame rate:", selection: $settings.videoFrameRate) {
+                // Add frame rate options here
+            }
+            .help("Choose the target frame rate for video recordings.")
+
+            Toggle("Record output audio", isOn: $settings.recordAudio)
+                .help("Include the current system output mix in the recording.")
+            Text("Output audio records the current system mix. macOS does not provide a separate output-device picker here.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Toggle("Record microphone", isOn: $settings.recordMicrophone)
+                .help("Include microphone input in the recording.")
+            Picker("Microphone input:", selection: $settings.selectedMicrophoneID) {
+                // Add microphone options here
+            }
+            .help("Choose which microphone to use for recordings.")
+            Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
+                .help("Show a visible border around the selected capture area while recording.")
+            VStack(alignment: .leading, spacing: 6) {
+#if APPSTORE
+                if let storeService, storeService.isPro {
+                    Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInVideo)
+                        .help("Adds a subtle pulse at click positions in saved video recordings.")
+                        .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved video recordings.")
+                    Button("Customize mouse click effect…") {
+                        selectedTab.wrappedValue = .mouseClicks
+                    }
+                    .buttonStyle(.link)
+                } else {
+                    Toggle(isOn: .constant(false)) {
+                        HStack(spacing: 8) {
+                            Text("Show mouse clicks in recording")
+                            Image(systemName: "lock.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .disabled(true)
+                    .help("Requires TinyClips Pro.")
+                    Button("Unlock with Pro…") {
+                        selectedTab.wrappedValue = .mouseClicks
+                    }
+                    .buttonStyle(.link)
+                }
+#else
+                Toggle("Show mouse clicks in recording", isOn: $settings.showMouseClickVisualsInVideo)
+                    .help("Adds a subtle pulse at click positions in saved video recordings.")
+                    .accessibilityHint("When enabled, mouse clicks are shown as a pulse effect in saved video recordings.")
+                Button("Customize mouse click effect…") {
+                    selectedTab.wrappedValue = .mouseClicks
+                }
+                .buttonStyle(.link)
+#endif
+            }
+        }
+
+        Section("After Capture") {
+            Toggle("Open trimmer after recording", isOn: $settings.showTrimmer)
+                .help("Open the trimmer when recording ends so you can trim before saving.")
+            Toggle("Save immediately", isOn: $settings.saveImmediatelyVideo)
+                .help("Save immediately instead of waiting for actions in the trimmer.")
+                .disabled(!settings.showTrimmer)
+            Toggle("Copy to clipboard", isOn: $settings.copyVideoToClipboard)
+                .help("Copy saved videos to the clipboard as a file URL.")
+        }
+
+        Section("Countdown") {
+            Toggle("Countdown before recording", isOn: $settings.videoCountdownEnabled)
+                .help("Wait before recording starts so you can prepare the screen.")
+            if settings.videoCountdownEnabled {
+                HStack {
+                    // Add countdown duration picker/slider here if needed
+                }
+                .help("Set the countdown duration in seconds.")
+            }
+        }
+    }
+}
