@@ -16,7 +16,7 @@ final class ProcessingIndicatorWindow: NSPanel {
     init(viewModel: ProcessingIndicatorViewModel) {
         self.viewModel = viewModel
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 280, height: 80),
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 100),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -32,13 +32,6 @@ final class ProcessingIndicatorWindow: NSPanel {
         let hostingView = NSHostingView(rootView: ProcessingIndicatorView(viewModel: viewModel))
         contentView = hostingView
         self.hostingView = hostingView
-        // Read fittingSize AFTER attaching as contentView so SwiftUI has a host
-        // to lay out against; otherwise it can return .zero and the panel
-        // ends up invisibly small.
-        let fittingSize = hostingView.fittingSize
-        if fittingSize.width > 0, fittingSize.height > 0 {
-            setContentSize(fittingSize)
-        }
     }
 
     func updateStatus(_ status: String?) {
@@ -69,12 +62,7 @@ final class ProcessingIndicatorWindow: NSPanel {
 
         collectionBehavior.insert(.moveToActiveSpace)
         alphaValue = 0
-        NSApp.activate()
         orderFrontRegardless()
-        // Force an immediate layout/paint so the panel is visible before any
-        // subsequent main-thread work blocks the run loop.
-        hostingView.layoutSubtreeIfNeeded()
-        displayIfNeeded()
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = 0.18
             ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
