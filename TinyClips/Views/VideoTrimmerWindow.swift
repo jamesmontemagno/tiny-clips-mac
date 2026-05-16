@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import AVFoundation
 import AVKit
+import ImageIO
 
 class VideoTrimmerWindow: NSWindow, NSWindowDelegate {
     private var onComplete: ((URL?) -> Void)?
@@ -48,6 +49,7 @@ private struct VideoTrimmerView: View {
     let onDone: (URL?) -> Void
 
     @StateObject private var viewModel: TrimmerViewModel
+    @State private var keyMonitor: Any?
 
     init(videoURL: URL, onDone: @escaping (URL?) -> Void) {
         self.videoURL = videoURL
@@ -68,6 +70,12 @@ private struct VideoTrimmerView: View {
             HStack {
                 Text(formatTime(viewModel.currentTime))
                     .monospacedDigit()
+
+                if viewModel.totalFrameCount > 1 {
+                    Text("Frame \(viewModel.currentFrameNumber) of \(viewModel.totalFrameCount)")
+                        .monospacedDigit()
+                }
+
                 Spacer()
                 Text(formatTime(viewModel.duration))
                     .monospacedDigit()
@@ -167,6 +175,29 @@ private struct VideoTrimmerView: View {
             .padding(.horizontal, 20)
             .padding(.top, 6)
 
+            HStack(spacing: 10) {
+                Button(action: { viewModel.stepFrame(by: -1) }) {
+                    Label("Previous Frame", systemImage: "chevron.left")
+                }
+                .help("Move to the previous frame (Left Arrow).")
+
+                Button(action: { viewModel.stepFrame(by: 1) }) {
+                    Label("Next Frame", systemImage: "chevron.right")
+                }
+                .help("Move to the next frame (Right Arrow).")
+
+                Spacer()
+
+                Button(action: { viewModel.exportCurrentFrame() }) {
+                    Label("Save Current Frame", systemImage: "photo")
+                }
+                .help("Export the current frame using your screenshot save settings.")
+                .disabled(viewModel.duration <= 0)
+            }
+            .font(.caption)
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
+
             Divider()
                 .padding(.top, 10)
 
@@ -201,6 +232,8 @@ private struct VideoTrimmerView: View {
             .padding()
         }
         .frame(minWidth: 560, minHeight: 420)
+        .onAppear(perform: installKeyMonitor)
+        .onDisappear(perform: removeKeyMonitor)
         .onChange(of: viewModel.speed) { _, _ in
             viewModel.applySpeedChange()
         }
@@ -217,6 +250,33 @@ private struct VideoTrimmerView: View {
         let secs = Int(seconds) % 60
         let frac = Int((seconds.truncatingRemainder(dividingBy: 1)) * 10)
         return String(format: "%d:%02d.%d", mins, secs, frac)
+    }
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.window?.title == "Trim Video" else { return event }
+            let relevantModifiers = event.modifierFlags.intersection([.command, .option, .control])
+            guard relevantModifiers.isEmpty else { return event }
+
+            switch event.keyCode {
+            case 123:
+                viewModel.stepFrame(by: -1)
+                return nil
+            case 124:
+                viewModel.stepFrame(by: 1)
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
     }
 }
 
@@ -339,6 +399,7 @@ private class TrimmerViewModel: ObservableObject {
     @Published var isPlaying = false
     @Published var isExporting = false
     @Published var speed: Double = 1.0
+    @Published private(set) var frameStepDuration: Double = 1.0 / 30.0
 
     func applySpeedChange() {
         player.isMuted = speed != 1.0
@@ -349,6 +410,17 @@ private class TrimmerViewModel: ObservableObject {
 
     var trimmedOutputDuration: Double {
         max(0, (trimEnd - trimStart) / speed)
+    }
+
+    var totalFrameCount: Int {
+        guard duration > 0, frameStepDuration > 0 else { return 0 }
+        return max(1, Int((duration / frameStepDuration).rounded(.down)) + 1)
+    }
+
+    var currentFrameNumber: Int {
+        guard totalFrameCount > 0 else { return 1 }
+        let currentIndex = Int((max(0, currentTime) / frameStepDuration).rounded())
+        return min(totalFrameCount, max(1, currentIndex + 1))
     }
 
     private var timeObserver: Any?
@@ -383,9 +455,20 @@ private class TrimmerViewModel: ObservableObject {
 
     @MainActor
     func loadDuration() async {
+        guard duration == 0 else { return }
         if let dur = try? await asset.load(.duration) {
             self.duration = dur.seconds
             self.trimEnd = dur.seconds
+        }
+        if let track = try? await asset.loadTracks(withMediaType: .video).first {
+            if let minFrameDuration = try? await track.load(.minFrameDuration),
+               minFrameDuration.isValid,
+               minFrameDuration.seconds > 0 {
+                frameStepDuration = minFrameDuration.seconds
+            } else if let nominalFrameRate = try? await track.load(.nominalFrameRate),
+                      nominalFrameRate > 0 {
+                frameStepDuration = 1.0 / Double(nominalFrameRate)
+            }
         }
     }
 
@@ -398,7 +481,19 @@ private class TrimmerViewModel: ObservableObject {
     }
 
     func seek(to time: Double) {
-        player.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        let clamped = min(max(0, time), duration)
+        currentTime = clamped
+        player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    func stepFrame(by offset: Int) {
+        guard duration > 0, frameStepDuration > 0 else { return }
+        player.pause()
+        isPlaying = false
+
+        let currentIndex = Int((max(0, currentTime) / frameStepDuration).rounded())
+        let targetIndex = max(0, min(currentIndex + offset, max(0, totalFrameCount - 1)))
+        seek(to: Double(targetIndex) * frameStepDuration)
     }
 
     func previewTrimmed() {
@@ -410,6 +505,40 @@ private class TrimmerViewModel: ObservableObject {
             player.isMuted = speed != 1.0
             player.playImmediately(atRate: Float(speed))
             isPlaying = true
+        }
+    }
+
+    func exportCurrentFrame() {
+        guard duration > 0 else { return }
+        isExporting = true
+        player.pause()
+        isPlaying = false
+
+        let outputURL = SaveService.shared.generateURL(for: .screenshot)
+        let requestedTime = CMTime(seconds: currentTime, preferredTimescale: 600)
+
+        Task {
+            do {
+                let generator = AVAssetImageGenerator(asset: asset)
+                generator.appliesPreferredTrackTransform = true
+                generator.requestedTimeToleranceBefore = .zero
+                generator.requestedTimeToleranceAfter = .zero
+
+                var actualTime = CMTime.zero
+                let image = try generator.copyCGImage(at: requestedTime, actualTime: &actualTime)
+                try Self.saveImage(image, to: outputURL)
+
+                await MainActor.run {
+                    self.currentTime = actualTime.seconds
+                    self.isExporting = false
+                    SaveService.shared.handleSavedFile(url: outputURL, type: .screenshot)
+                }
+            } catch {
+                await MainActor.run {
+                    self.isExporting = false
+                    SaveService.shared.showError("Could not save the current frame: \(error.localizedDescription)")
+                }
+            }
         }
     }
 
@@ -468,6 +597,29 @@ private class TrimmerViewModel: ObservableObject {
                 self.isExporting = false
                 completion(nil)
             }
+        }
+    }
+
+    private static func saveImage(_ image: CGImage, to outputURL: URL) throws {
+        let settings = CaptureSettings.shared
+        let imageType = settings.imageFormat.utType
+        var destinationProperties: [CFString: Any] = [:]
+        if settings.imageFormat == .jpeg {
+            destinationProperties[kCGImageDestinationLossyCompressionQuality] = settings.jpegQuality
+        }
+
+        guard let destination = CGImageDestinationCreateWithURL(
+            outputURL as CFURL,
+            imageType.identifier as CFString,
+            1,
+            nil
+        ) else {
+            throw CaptureError.saveFailed
+        }
+
+        CGImageDestinationAddImage(destination, image, destinationProperties as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else {
+            throw CaptureError.saveFailed
         }
     }
 }
