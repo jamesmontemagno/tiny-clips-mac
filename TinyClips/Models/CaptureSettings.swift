@@ -3,7 +3,6 @@ import SwiftUI
 import AppKit
 import ScreenCaptureKit
 import UniformTypeIdentifiers
-import Security
 
 // MARK: - Capture Region
 
@@ -57,11 +56,9 @@ struct CaptureRegion: Sendable {
 
 struct CaptureTarget {
     let region: CaptureRegion
-    let focusWindow: SCWindow?
 
-    init(region: CaptureRegion, focusWindow: SCWindow? = nil) {
+    init(region: CaptureRegion) {
         self.region = region
-        self.focusWindow = focusWindow
     }
 
     func prepare() async throws -> PreparedCaptureTarget {
@@ -71,59 +68,6 @@ struct CaptureTarget {
             pixelWidth: region.pixelWidth,
             pixelHeight: region.pixelHeight
         )
-    }
-}
-
-extension SCWindow {
-    @MainActor
-    @discardableResult
-    func focusForCapture() -> Bool {
-        guard let processID = owningApplication?.processID,
-              let app = NSRunningApplication(processIdentifier: processID)
-        else {
-            return false
-        }
-
-        let didActivateApp = app.activate(options: [.activateAllWindows])
-        let didRaiseWindow = raiseForCapture(processID: processID)
-        return didActivateApp || didRaiseWindow
-    }
-
-    @MainActor
-    private func raiseForCapture(processID: pid_t) -> Bool {
-        guard AXIsProcessTrusted(),
-              let selectedTitle = title,
-              !selectedTitle.isEmpty
-        else {
-            return false
-        }
-
-        let appElement = AXUIElementCreateApplication(processID)
-        var windowsValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsValue) == .success,
-              let windows = windowsValue as? [AXUIElement]
-        else {
-            return false
-        }
-
-        guard let window = windows.first(where: { axWindow in
-            guard let title = axWindow.titleForCapture else { return false }
-            return title == selectedTitle
-        }) else {
-            return false
-        }
-
-        return AXUIElementPerformAction(window, kAXRaiseAction as CFString) == .success
-    }
-}
-
-private extension AXUIElement {
-    var titleForCapture: String? {
-        var titleValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(self, kAXTitleAttribute as CFString, &titleValue) == .success else {
-            return nil
-        }
-        return titleValue as? String
     }
 }
 

@@ -390,8 +390,7 @@ class CaptureManager: ObservableObject {
             }
         }
 
-        startCaptureAfterPreparingTarget(
-            focusWindow: target.focusWindow,
+        showCountdownThen(
             for: .video,
             countdownEnabled: countdownEnabled,
             countdownDuration: countdownDuration,
@@ -448,8 +447,7 @@ class CaptureManager: ObservableObject {
             }
         }
 
-        startCaptureAfterPreparingTarget(
-            focusWindow: target.focusWindow,
+        showCountdownThen(
             for: .gif,
             countdownEnabled: countdownEnabled,
             countdownDuration: countdownDuration,
@@ -953,26 +951,6 @@ class CaptureManager: ObservableObject {
         window.show()
     }
 
-    private func startCaptureAfterPreparingTarget(
-        focusWindow: SCWindow?,
-        for type: CaptureType,
-        countdownEnabled: Bool? = nil,
-        countdownDuration: Int? = nil,
-        action: @escaping () -> Void
-    ) {
-        Task { @MainActor in
-            if focusWindow?.focusForCapture() == true {
-                try? await Task.sleep(nanoseconds: 350_000_000)
-            }
-            showCountdownThen(
-                for: type,
-                countdownEnabled: countdownEnabled,
-                countdownDuration: countdownDuration,
-                action: action
-            )
-        }
-    }
-
     private func showOnboardingIfNeeded() {
         let settings = CaptureSettings.shared
         guard !settings.hasCompletedOnboarding, onboardingWindow == nil else { return }
@@ -1117,7 +1095,7 @@ class CaptureManager: ObservableObject {
             else {
                 return nil
             }
-            return CaptureTarget(region: region, focusWindow: window)
+            return CaptureTarget(region: region)
         }
     }
 
