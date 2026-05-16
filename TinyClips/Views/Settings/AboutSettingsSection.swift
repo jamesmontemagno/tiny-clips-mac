@@ -5,7 +5,6 @@ struct AboutSettingsSection: View {
     let reportIssueURL: URL
     let appVersion: String
     let appBuild: String
-    let distributionChannel: String
 
     var body: some View {
         Section {

@@ -21,7 +21,7 @@ struct VideoSettingsSection: View {
             Toggle("Record output audio", isOn: $settings.recordAudio)
                 .help("Include the current system output mix in the recording.")
             Text("Output audio records the current system mix. macOS does not provide a separate output-device picker here.")
-                .font(.caption2)
+                .font(.caption)
                 .foregroundStyle(.secondary)
             Toggle("Record microphone", isOn: $settings.recordMicrophone)
                 .help("Include microphone input in the recording.")

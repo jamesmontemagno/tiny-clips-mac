@@ -111,8 +111,7 @@ struct SettingsView: View {
                         sparkleController: sparkleController,
                         reportIssueURL: reportIssueURL,
                         appVersion: appVersion,
-                        appBuild: appBuild,
-                        distributionChannel: distributionChannel
+                        appBuild: appBuild
                     )
                 }
             }
