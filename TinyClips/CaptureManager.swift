@@ -449,6 +449,19 @@ class CaptureManager: ObservableObject {
     }
 
     func stopRecording() {
+        // Tear down all recording UI synchronously so the user sees an
+        // immediate response (menu bar icon flips, stop panel and region
+        // indicator disappear, stop hotkey unregisters) regardless of
+        // whatever the async export flow does next. If the export later
+        // hangs, the user can still interact with the app.
+        guard isRecording || videoRecorder != nil || gifWriter != nil else { return }
+
+        dismissStopPanel()
+        dismissRegionIndicator()
+        resetRecordingAudioStatus()
+        activeRecordingRegion = nil
+        isRecording = false
+
         Task {
             await stopRecordingFlow()
         }
@@ -466,8 +479,6 @@ class CaptureManager: ObservableObject {
             stoppedRecordingType = nil
         }
 
-        // Dismiss stop panel immediately so the user gets instant feedback
-        dismissStopPanel()
         showProcessingIndicator()
         updateProcessingMessage("Processing...")
         updateProcessingProgress(0.05, status: "Preparing export...")
@@ -610,12 +621,6 @@ class CaptureManager: ObservableObject {
             }
             gifWriter = nil
         }
-
-        isRecording = false
-        activeRecordingRegion = nil
-        dismissStopPanel()
-        dismissRegionIndicator()
-        resetRecordingAudioStatus()
 
         if let stoppedRecordingType {
             AccessibilityAnnouncementService.shared.announceRecordingStopped(for: stoppedRecordingType)
