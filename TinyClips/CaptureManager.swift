@@ -538,24 +538,21 @@ class CaptureManager: ObservableObject {
                         ? SaveService.shared.generateURL(for: .video)
                         : temporaryURL(fileExtension: "mp4")
 
-                    // Keep the progress bar moving while AVAssetExportSession
-                    // runs the click-overlay render pass.
-                    let overlayProgressTask = Task { @MainActor in
-                        var progress = 0.55
-                        while !Task.isCancelled {
-                            try? await Task.sleep(nanoseconds: 350_000_000)
-                            progress = min(progress + 0.015, 0.84)
-                            updateProcessingProgress(progress, status: "Applying overlays...")
-                        }
-                    }
-                    defer { overlayProgressTask.cancel() }
-
                     savedVideoURL = try await Self.overlayVideoOffMain(
                         sourceURL: currentURL,
                         region: capturedMouseClickData.region,
                         events: capturedMouseClickData.events,
                         outputURL: overlayOutputURL,
-                        style: videoOverlayStyle
+                        style: videoOverlayStyle,
+                        onProgress: { [weak self] overlayProgress in
+                            guard let self else { return }
+                            // Map exporter 0...1 progress into the overlay phase range.
+                            let normalized = min(max(overlayProgress, 0), 1)
+                            let mapped = 0.55 + (normalized * 0.29)
+                            Task { @MainActor in
+                                self.updateProcessingProgress(mapped, status: "Applying overlays...")
+                            }
+                        }
                     )
                     updateProcessingProgress(0.85, status: "Finalizing...")
                 } catch {
@@ -879,9 +876,16 @@ class CaptureManager: ObservableObject {
     private func dismissProcessingIndicator() {
         guard let window = processingIndicatorWindow else { return }
 
+        // Ensure users can see the bar reach completion before the panel closes.
+        updateProcessingProgress(1.0, status: "Done")
+
         let minimumVisibleDuration: TimeInterval = 0.35
+        let minimumCompletionVisibleDuration: TimeInterval = 0.2
         let elapsed = Date().timeIntervalSince(processingIndicatorShownAt ?? .distantPast)
-        let remaining = max(0, minimumVisibleDuration - elapsed)
+        let remaining = max(
+            minimumCompletionVisibleDuration,
+            max(0, minimumVisibleDuration - elapsed)
+        )
 
         func dismissNow() {
             window.close()
@@ -1213,7 +1217,8 @@ class CaptureManager: ObservableObject {
         region: CaptureRegion,
         events: [MouseClickEvent],
         outputURL: URL,
-        style: MouseClickOverlayStyle
+        style: MouseClickOverlayStyle,
+        onProgress: ((Double) -> Void)? = nil
     ) async throws -> URL {
         try await Task.detached(priority: .userInitiated) {
             try await MouseClickOverlayProcessor.overlayOnVideo(
@@ -1221,7 +1226,8 @@ class CaptureManager: ObservableObject {
                 region: region,
                 events: events,
                 outputURL: outputURL,
-                style: style
+                style: style,
+                onProgress: onProgress
             )
         }.value
     }
