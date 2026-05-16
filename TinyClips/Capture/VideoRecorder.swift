@@ -43,6 +43,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     private var recordMicrophone = false
     private var selectedMicrophoneID = ""
     private var outputURL: URL?
+    private var recordingStartedAtUptime: TimeInterval?
     private let writingQueue = DispatchQueue(label: "com.tinyclips.video-writing")
     private let microphoneQueue = DispatchQueue(label: "com.tinyclips.microphone-capture")
     var onMicrophoneLevel: ((Double) -> Void)?
@@ -52,6 +53,11 @@ class VideoRecorder: NSObject, @unchecked Sendable {
 
     var isMicrophoneCaptureActive: Bool {
         microphoneSession != nil && recordMicrophone
+    }
+
+    var currentRecordingDuration: TimeInterval {
+        guard let recordingStartedAtUptime else { return 0 }
+        return max(0, ProcessInfo.processInfo.systemUptime - recordingStartedAtUptime)
     }
 
     func start(
@@ -127,6 +133,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
                 try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: writingQueue)
             }
             try await stream.startCapture()
+            recordingStartedAtUptime = ProcessInfo.processInfo.systemUptime
             self.stream = stream
 
             if recordMicrophone {
@@ -287,6 +294,8 @@ class VideoRecorder: NSObject, @unchecked Sendable {
     }
 
     func stop() async throws -> URL {
+        defer { recordingStartedAtUptime = nil }
+
         // Stop mic capture first
         stopMicrophoneCapture()
 
@@ -358,6 +367,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
             try? FileManager.default.removeItem(at: outputURL)
         }
         outputURL = nil
+        recordingStartedAtUptime = nil
     }
 }
 

@@ -818,6 +818,7 @@ private let numberCircleSizeRatio: CGFloat = 0.05
 private let numberCircleFontRatio: CGFloat = 0.55
 private let numberCircleMinimumDisplayPixels: CGFloat = 16
 
+@MainActor
 private class EditorViewModel: ObservableObject {
     let sourceURL: URL
     @Published var originalImage: NSImage?
@@ -1447,6 +1448,8 @@ private class EditorViewModel: ObservableObject {
     }
 
     private func renderFinalImage() -> NSBitmapImageRep? {
+        precondition(Thread.isMainThread, "Screenshot export rendering must run on the main thread.")
+
         guard let original = originalImage, imagePixelSize.width > 0 else { return nil }
 
         let pixelW = imagePixelSize.width
@@ -1481,10 +1484,14 @@ private class EditorViewModel: ObservableObject {
             bytesPerRow: 0,
             bitsPerPixel: 0
         ),
-        let context = NSGraphicsContext(bitmapImageRep: result)?.cgContext else {
+        let nsContext = NSGraphicsContext(bitmapImageRep: result) else {
             return nil
         }
         result.size = NSSize(width: outputW, height: outputH)
+        let context = nsContext.cgContext
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = nsContext
+        defer { NSGraphicsContext.restoreGraphicsState() }
 
         // Draw the original image (cropped)
         let drawRect = CGRect(x: 0, y: 0, width: outputW, height: outputH)
@@ -1632,17 +1639,13 @@ private class EditorViewModel: ObservableObject {
                 .foregroundColor: NSColor(annotation.textColor),
             ]
             let numTextSize = numberStr.size(withAttributes: numAttrs)
-            ctx.saveGState()
-            ctx.translateBy(x: 0, y: outputSize.height)
-            ctx.scaleBy(x: 1, y: -1)
             let numTextRect = CGRect(
                 x: pixelRect.midX - numTextSize.width / 2,
-                y: outputSize.height - pixelRect.midY - numTextSize.height / 2,
+                y: pixelRect.midY - numTextSize.height / 2,
                 width: numTextSize.width,
                 height: numTextSize.height
             )
             numberStr.draw(in: numTextRect, withAttributes: numAttrs)
-            ctx.restoreGState()
 
         case .text:
             let str = annotation.text as NSString
@@ -1651,18 +1654,15 @@ private class EditorViewModel: ObservableObject {
                 .font: NSFont.systemFont(ofSize: fontSize),
                 .foregroundColor: nsColor,
             ]
-            // NSString.draw uses flipped coords, so flip context temporarily
-            ctx.saveGState()
-            ctx.translateBy(x: 0, y: outputSize.height)
-            ctx.scaleBy(x: 1, y: -1)
-            let flippedRect = CGRect(
-                x: pixelRect.origin.x,
-                y: outputSize.height - pixelRect.origin.y - pixelRect.height,
-                width: pixelRect.width,
-                height: pixelRect.height
+            // NSGraphicsContext.current is set to the unflipped bitmap context,
+            // so NSString.draw uses CG (bottom-left) coordinates directly.
+            // pixelRect is already in CG space, so no manual flip is needed.
+            let textSize = str.size(withAttributes: attrs)
+            let drawPoint = CGPoint(
+                x: pixelRect.midX - textSize.width / 2,
+                y: pixelRect.midY - textSize.height / 2
             )
-            str.draw(in: flippedRect, withAttributes: attrs)
-            ctx.restoreGState()
+            str.draw(at: drawPoint, withAttributes: attrs)
 
         case .crop, .move:
             break

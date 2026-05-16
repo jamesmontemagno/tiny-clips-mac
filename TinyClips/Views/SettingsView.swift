@@ -1,23 +1,14 @@
 import SwiftUI
+import AppKit
 import AVFoundation
 import Combine
-
-// MARK: - Binding Helpers
-
-private extension Binding where Value == Int {
-    var doubleValue: Binding<Double> {
-        Binding<Double>(
-            get: { Double(wrappedValue) },
-            set: { wrappedValue = Int($0) }
-        )
-    }
-}
 
 enum SettingsTab: String, CaseIterable {
     case general = "General"
     case screenshot = "Screenshot"
     case video = "Video"
     case gif = "GIF"
+    case mouseClicks = "Mouse Clicks"
     case shortcuts = "Shortcuts"
     case pro = "Pro"
     case about = "About"
@@ -28,6 +19,7 @@ enum SettingsTab: String, CaseIterable {
         case .screenshot: return "camera"
         case .video: return "video"
         case .gif: return "photo.on.rectangle"
+        case .mouseClicks: return "cursorarrow.rays"
         case .shortcuts: return "command"
         case .pro: return "star"
         case .about: return "info.circle"
@@ -47,6 +39,9 @@ struct SettingsView: View {
     @ObservedObject private var settings = CaptureSettings.shared
     @ObservedObject private var sparkleController = SparkleController.shared
     @ObservedObject private var launchAtLogin = LaunchAtLoginManager.shared
+#if APPSTORE
+    @ObservedObject private var storeService = StoreService.shared
+#endif
     @Environment(\.openWindow) private var openWindow
     @State private var selectedTab: SettingsTab? = .general
     @State private var splitVisibility: NavigationSplitViewVisibility = .all
@@ -56,8 +51,19 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $splitVisibility) {
             List(SettingsTab.displayCases, id: \.self, selection: $selectedTab) { tab in
+#if APPSTORE
+                if tab == .mouseClicks && !storeService.isPro {
+                    Label(tab.rawValue, systemImage: tab.icon)
+                        .badge("PRO")
+                        .tag(tab as SettingsTab?)
+                } else {
+                    Label(tab.rawValue, systemImage: tab.icon)
+                        .tag(tab as SettingsTab?)
+                }
+#else
                 Label(tab.rawValue, systemImage: tab.icon)
                     .tag(tab as SettingsTab?)
+#endif
             }
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
@@ -65,19 +71,48 @@ struct SettingsView: View {
             Form {
                 switch selectedTab ?? .general {
                 case .general:
-                    generalSection
+                    GeneralSettingsSection(
+                        settings: settings,
+                        launchAtLogin: launchAtLogin,
+                        chooseSaveDirectory: chooseSaveDirectory,
+                        resetSaveDirectory: resetSaveDirectory,
+                        resetAllSettings: resetAllSettings,
+                        showInDockBinding: showInDockBinding
+                    )
                 case .screenshot:
-                    screenshotSection
+                    ScreenshotSettingsSection(settings: settings)
                 case .video:
-                    videoSection
+                    VideoSettingsSection(
+                        settings: settings,
+                        availableMicrophones: availableMicrophones,
+                        isPro: isAppStorePro,
+                        selectedTab: $selectedTab
+                    )
                 case .gif:
-                    gifSection
+                    GifSettingsSection(
+                        settings: settings,
+                        isPro: isAppStorePro,
+                        selectedTab: $selectedTab,
+                        gifMouseClickToggleBinding: gifMouseClickToggleBinding
+                    )
+                case .mouseClicks:
+                    MouseClicksSettingsSection(
+                        settings: settings,
+                        isPro: isAppStorePro
+                    )
                 case .shortcuts:
-                    shortcutsSection
+                    ShortcutsSettingsSection(settings: settings)
                 case .pro:
-                    proSection
+#if APPSTORE
+                    ProSettingsSection()
+#endif
                 case .about:
-                    aboutSection
+                    AboutSettingsSection(
+                        sparkleController: sparkleController,
+                        reportIssueURL: reportIssueURL,
+                        appVersion: appVersion,
+                        appBuild: appBuild
+                    )
                 }
             }
             .formStyle(.grouped)
@@ -101,431 +136,6 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in
             refreshMicrophones()
         }
-    }
-
-    // MARK: - General
-
-    @ViewBuilder
-    private var generalSection: some View {
-        Section("Output") {
-#if APPSTORE
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Default locations: Screenshots/GIFs → Pictures/TinyClips, Videos → Movies/TinyClips")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                HStack {
-                    Text(settings.saveDirectoryDisplayPath.isEmpty ? "Using default folders" : settings.saveDirectoryDisplayPath)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-
-                    Spacer()
-
-                    Button("Browse…") {
-                        chooseSaveDirectory()
-                    }
-
-                    if settings.hasCustomSaveDirectory {
-                        Button("Reset") {
-                            resetSaveDirectory()
-                        }
-                    }
-                }
-            }
-#else
-            HStack {
-                TextField("Save to", text: $settings.saveDirectory)
-                    .textFieldStyle(.roundedBorder)
-                Button("Browse…") {
-                    chooseSaveDirectory()
-                }
-            }
-#endif
-            VStack(alignment: .leading, spacing: 6) {
-                TextField("File name template", text: $settings.fileNameTemplate)
-                    .textFieldStyle(.roundedBorder)
-
-                HStack(spacing: 10) {
-                    Button("Classic") {
-                        settings.fileNameTemplate = "TinyClips {date} at {time}"
-                    }
-                    .buttonStyle(.link)
-
-                    Button("Type + Date") {
-                        settings.fileNameTemplate = "{type} {date} at {time}"
-                    }
-                    .buttonStyle(.link)
-
-                    Button("Date First") {
-                        settings.fileNameTemplate = "{date} {time} {type}"
-                    }
-                    .buttonStyle(.link)
-                }
-                .font(.caption)
-
-                Text("Tokens: {app}, {type}, {date}, {time}, {datetime}")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Text("Preview: \(SaveService.shared.namingPreview(for: .screenshot))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            Toggle("Show in Finder after save", isOn: $settings.showInFinder)
-            Toggle("Show notification after save", isOn: $settings.showSaveNotifications)
-        }
-
-        Section("Advanced") {
-            Toggle("Launch at login", isOn: Binding(
-                get: { launchAtLogin.isEnabled },
-                set: { launchAtLogin.setEnabled($0) }
-            ))
-            Toggle("Show TinyClips in Dock (enables ⌘⇥)", isOn: showInDockBinding)
-                .help("When enabled, TinyClips appears in Command-Tab and can participate in normal app/window switching.")
-            Toggle("Always capture main display", isOn: $settings.alwaysCaptureMainDisplay)
-                .help("Skip the display picker when multiple monitors are connected")
-            Toggle("Include TinyClips in captures", isOn: $settings.includeTinyClipsInCapture)
-                .help("For developer/demo use. When enabled, TinyClips windows can appear in screenshots, recordings, and window selection.")
-            Button("Reset All Settings to Defaults…") {
-                resetAllSettings()
-            }
-        }
-
-    }
-
-    // MARK: - Screenshot
-
-    @ViewBuilder
-    private var screenshotSection: some View {
-        Section("Capture Settings") {
-            Toggle("Show capture picker before screenshot", isOn: $settings.showScreenshotCapturePicker)
-                .help("When disabled, screenshots go straight to region selection.")
-
-            Picker("Default format:", selection: $settings.screenshotFormat) {
-                ForEach(ImageFormat.allCases, id: \.rawValue) { format in
-                    Text(format.label).tag(format.rawValue)
-                }
-            }
-            .help("Choose the default file format for screenshots.")
-
-            if settings.imageFormat == .jpeg {
-                HStack {
-                    Text("JPEG quality:")
-                    Slider(value: $settings.jpegQuality, in: 0.1...1.0, step: 0.05)
-                    Text("\(Int(settings.jpegQuality * 100))%")
-                        .monospacedDigit()
-                        .frame(width: 40, alignment: .trailing)
-                }
-                .help("Adjust JPEG compression quality. Higher values keep more detail but create larger files.")
-            }
-
-            Picker("Default scale:", selection: $settings.screenshotScale) {
-                Text("100%").tag(100)
-                Text("75%").tag(75)
-                Text("50%").tag(50)
-                Text("25%").tag(25)
-            }
-            .help("Resize the saved screenshot relative to captured pixels.")
-        }
-
-        Section("After Capture") {
-            Toggle("Open editor after capture", isOn: $settings.showScreenshotEditor)
-                .help("Open the screenshot editor after capture so you can annotate or crop.")
-                .onChange(of: settings.showScreenshotEditor) { _, isEnabled in
-                    if !isEnabled {
-                        settings.saveImmediatelyScreenshot = true
-                    }
-                }
-
-            Toggle("Save immediately", isOn: $settings.saveImmediatelyScreenshot)
-                .help("Save immediately instead of waiting for actions in the editor.")
-                .disabled(!settings.showScreenshotEditor)
-
-            Toggle("Copy to clipboard", isOn: $settings.copyScreenshotToClipboard)
-                .help("Copy saved screenshots to the clipboard as an image.")
-        }
-
-        Section("Countdown") {
-            Toggle("Countdown before screenshot", isOn: $settings.screenshotCountdownEnabled)
-                .help("Wait before capturing so you can prepare the screen.")
-            if settings.screenshotCountdownEnabled {
-                HStack {
-                    Text("Duration:")
-                    Slider(
-                        value: $settings.screenshotCountdownDuration.doubleValue,
-                        in: 1...10,
-                        step: 1
-                    )
-                    Text("\(settings.screenshotCountdownDuration)s")
-                        .monospacedDigit()
-                        .frame(width: 30, alignment: .trailing)
-                }
-                .help("Set the countdown duration in seconds.")
-            }
-        }
-    }
-
-    // MARK: - Video
-
-    @ViewBuilder
-    private var videoSection: some View {
-        Section("Capture Settings") {
-            Toggle("Show capture picker before recording", isOn: $settings.showVideoCapturePicker)
-                .help("When disabled, video recording goes straight to region selection.")
-
-            Picker("Frame rate:", selection: $settings.videoFrameRate) {
-                Text("24 fps").tag(24)
-                Text("30 fps").tag(30)
-                Text("60 fps").tag(60)
-            }
-            .help("Choose the target frame rate for video recordings.")
-
-            Toggle("Record output audio", isOn: $settings.recordAudio)
-                .help("Include the current system output mix in the recording.")
-            Text("Output audio records the current system mix. macOS does not provide a separate output-device picker here.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Toggle("Record microphone", isOn: $settings.recordMicrophone)
-                .help("Include microphone input in the recording.")
-            Picker("Microphone input:", selection: $settings.selectedMicrophoneID) {
-                Text("System Default").tag("")
-                ForEach(availableMicrophones) { device in
-                    Text(device.name).tag(device.id)
-                }
-            }
-            .help("Choose which microphone to use for recordings.")
-            Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
-                .help("Show a visible border around the selected capture area while recording.")
-        }
-
-        Section("After Capture") {
-            Toggle("Open trimmer after recording", isOn: $settings.showTrimmer)
-                .help("Open the trimmer when recording ends so you can trim before saving.")
-                .onChange(of: settings.showTrimmer) { _, isEnabled in
-                    if !isEnabled {
-                        settings.saveImmediatelyVideo = true
-                    }
-                }
-            Toggle("Save immediately", isOn: $settings.saveImmediatelyVideo)
-                .help("Save immediately instead of waiting for actions in the trimmer.")
-                .disabled(!settings.showTrimmer)
-            Toggle("Copy to clipboard", isOn: $settings.copyVideoToClipboard)
-                .help("Copy saved videos to the clipboard as a file URL.")
-        }
-
-        Section("Countdown") {
-            Toggle("Countdown before recording", isOn: $settings.videoCountdownEnabled)
-                .help("Wait before recording starts so you can prepare the screen.")
-            if settings.videoCountdownEnabled {
-                HStack {
-                    Text("Duration:")
-                    Slider(
-                        value: $settings.videoCountdownDuration.doubleValue,
-                        in: 1...10,
-                        step: 1
-                    )
-                    Text("\(settings.videoCountdownDuration)s")
-                        .monospacedDigit()
-                        .frame(width: 30, alignment: .trailing)
-                }
-                .help("Set the countdown duration in seconds.")
-            }
-        }
-    }
-
-    // MARK: - GIF
-
-    @ViewBuilder
-    private var gifSection: some View {
-        Section("Capture Settings") {
-            Toggle("Show capture picker before recording", isOn: $settings.showGifCapturePicker)
-                .help("When disabled, GIF recording goes straight to region selection.")
-
-            HStack {
-                Text("Frame rate:")
-                Slider(value: $settings.gifFrameRate, in: 5...30, step: 1)
-                Text("\(Int(settings.gifFrameRate)) fps")
-                    .monospacedDigit()
-                    .frame(width: 50, alignment: .trailing)
-            }
-            .help("Choose the frame rate for GIF recording.")
-            HStack {
-                Text("Max width:")
-                Slider(
-                    value: Binding(
-                        get: { Double(settings.gifMaxWidth) },
-                        set: { settings.gifMaxWidth = Int($0) }
-                    ),
-                    in: 320...1920,
-                    step: 40
-                )
-                Text("\(settings.gifMaxWidth)px")
-                    .monospacedDigit()
-                    .frame(width: 60, alignment: .trailing)
-            }
-            .help("Limit GIF output width to reduce file size.")
-            Toggle("Show capture region during recording", isOn: $settings.showRegionIndicator)
-                .help("Show a visible border around the selected capture area while recording.")
-        }
-
-        Section("After Capture") {
-            Toggle("Open trimmer after recording", isOn: $settings.showGifTrimmer)
-                .help("Open the trimmer when recording ends so you can trim before saving.")
-                .onChange(of: settings.showGifTrimmer) { _, isEnabled in
-                    if !isEnabled {
-                        settings.saveImmediatelyGif = true
-                    }
-                }
-            Toggle("Save immediately", isOn: $settings.saveImmediatelyGif)
-                .help("Save immediately instead of waiting for actions in the trimmer.")
-                .disabled(!settings.showGifTrimmer)
-            Toggle("Copy to clipboard", isOn: $settings.copyGifToClipboard)
-                .help("Copy saved GIFs to the clipboard as a file URL.")
-        }
-
-        Section("Countdown") {
-            Toggle("Countdown before recording", isOn: $settings.gifCountdownEnabled)
-                .help("Wait before recording starts so you can prepare the screen.")
-            if settings.gifCountdownEnabled {
-                HStack {
-                    Text("Duration:")
-                    Slider(
-                        value: $settings.gifCountdownDuration.doubleValue,
-                        in: 1...10,
-                        step: 1
-                    )
-                    Text("\(settings.gifCountdownDuration)s")
-                        .monospacedDigit()
-                        .frame(width: 30, alignment: .trailing)
-                }
-                .help("Set the countdown duration in seconds.")
-            }
-        }
-    }
-
-    // MARK: - Shortcuts
-
-    @ViewBuilder
-    private var shortcutsSection: some View {
-        Section("Global Keyboard Shortcuts") {
-            Text("These shortcuts work system-wide, even when the menu is closed. At least one modifier key (⌃ ⌥ ⇧ ⌘) is required.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            ShortcutRecorderField(
-                label: "Screenshot",
-                keyCode: $settings.screenshotHotKeyCode,
-                carbonModifiers: $settings.screenshotHotKeyModifiers,
-                defaultBinding: .defaultScreenshot
-            )
-            .accessibilityLabel("Screenshot keyboard shortcut")
-
-            ShortcutRecorderField(
-                label: "Record Video",
-                keyCode: $settings.videoHotKeyCode,
-                carbonModifiers: $settings.videoHotKeyModifiers,
-                defaultBinding: .defaultVideo
-            )
-            .accessibilityLabel("Record Video keyboard shortcut")
-
-            ShortcutRecorderField(
-                label: "Record GIF",
-                keyCode: $settings.gifHotKeyCode,
-                carbonModifiers: $settings.gifHotKeyModifiers,
-                defaultBinding: .defaultGif
-            )
-            .accessibilityLabel("Record GIF keyboard shortcut")
-        }
-
-        Section("Fixed Shortcuts") {
-            Text("The following shortcuts are fixed and cannot be changed.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            fixedShortcutRow(label: "Stop Recording", keys: "⌘.")
-            fixedShortcutRow(label: "Settings", keys: "⌘,")
-            fixedShortcutRow(label: "Quit", keys: "⌘Q")
-        }
-    }
-
-    private func fixedShortcutRow(label: String, keys: String) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            Text(keys)
-                .font(.system(.body, design: .monospaced))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    // MARK: - Pro
-
-    @ViewBuilder
-    private var proSection: some View {
-#if APPSTORE
-        ProSettingsSection()
-#endif
-    }
-
-    // MARK: - About
-
-    @ViewBuilder
-    private var aboutSection: some View {
-        Section {
-            HStack {
-                Spacer()
-                VStack(spacing: 8) {
-                    if let appIcon = NSImage(named: "AppIcon") {
-                        Image(nsImage: appIcon)
-                            .resizable()
-                            .frame(width: 64, height: 64)
-                            .cornerRadius(14)
-                    }
-                    Text("TinyClips")
-                        .font(.headline)
-                    Text("v\(appVersion) (\(appBuild))")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            .padding(.vertical, 4)
-        }
-
-        Section {
-            Link("GitHub Repository", destination: URL(string: "https://github.com/jamesmontemagno/tiny-clips-mac")!)
-                .accessibilityHint("Opens the TinyClips GitHub repository in your browser.")
-            Link("Report an Issue", destination: reportIssueURL)
-                .accessibilityHint("Opens the issue reporter in your browser.")
-            if let privacyURL = URL(string: "https://tinyclips.app/privacy.html") {
-                Link("Privacy Policy", destination: privacyURL)
-                    .accessibilityHint("Opens Privacy Policy in your browser.")
-            }
-            if let termsURL = URL(string: "https://tinyclips.app/terms.html") {
-                Link("Terms of Use", destination: termsURL)
-                    .accessibilityHint("Opens Terms of Use in your browser.")
-            }
-        }
-
-#if !APPSTORE
-        Section {
-            Toggle("Automatically check for updates", isOn: Binding(
-                get: { sparkleController.automaticallyChecksForUpdates },
-                set: { sparkleController.automaticallyChecksForUpdates = $0 }
-            ))
-            .help("When enabled, TinyClips periodically checks for updates and Sparkle presents the standard update alert when one is available.")
-
-            Button("Check for Updates\u{2026}") {
-                sparkleController.checkForUpdates()
-            }
-            .help("Manually check for updates now.")
-        }
-#endif
     }
 
     // MARK: - Helpers
@@ -560,6 +170,8 @@ struct SettingsView: View {
         settings.saveDirectoryBookmark = Data()
         settings.saveDirectoryDisplayPath = ""
     }
+#else
+    private func resetSaveDirectory() {}
 #endif
 
     private func resetAllSettings() {
@@ -644,54 +256,19 @@ struct SettingsView: View {
         }
         settings.selectedMicrophoneID = ""
     }
-}
 
-// MARK: - Pro Settings Section (APPSTORE only)
+    private var gifMouseClickToggleBinding: Binding<Bool> {
+        Binding(
+            get: { settings.shouldShowMouseClickVisuals(for: .gif) },
+            set: { settings.setShowMouseClickVisuals($0, for: .gif) }
+        )
+    }
 
+    private var isAppStorePro: Bool {
 #if APPSTORE
-private struct ProSettingsSection: View {
-    @ObservedObject private var storeService = StoreService.shared
-
-    var body: some View {
-        if storeService.isPro {
-            Section {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("TinyClips Pro")
-                            .font(.headline)
-                        if let plan = storeService.activeProPlan {
-                            Text("Plan: \(plan.label) — thank you for your support!")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("Active — thank you for your support!")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    Label("Active", systemImage: "checkmark.seal.fill")
-                        .foregroundStyle(.green)
-                        .font(.callout)
-                }
-
-                HStack(spacing: 10) {
-                    Button("Manage Subscription") {
-                        storeService.manageSubscriptions()
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button("Restore Purchases") {
-                        Task { await storeService.restore() }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(storeService.isPurchasing)
-                }
-            }
-
-        } else {
-            ProSubscriptionView()
-        }
+        return storeService.isPro
+#else
+        return true
+#endif
     }
 }
-#endif

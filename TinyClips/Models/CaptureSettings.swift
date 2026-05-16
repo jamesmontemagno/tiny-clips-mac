@@ -179,6 +179,51 @@ enum ImageFormat: String, CaseIterable {
 
 // MARK: - Settings
 
+struct MouseClickOverlayStyle: Sendable {
+    let colorHex: String
+    let size: CGFloat
+    let strokeWidth: CGFloat
+    let opacity: CGFloat
+    let duration: TimeInterval
+}
+
+extension MouseClickOverlayStyle {
+    var color: NSColor {
+        NSColor(hexRGBString: colorHex) ?? .white
+    }
+}
+
+extension NSColor {
+    convenience init?(hexRGBString: String) {
+        var value = hexRGBString.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.hasPrefix("#") {
+            value.removeFirst()
+        }
+
+        guard value.count == 6, let rgb = Int(value, radix: 16) else {
+            return nil
+        }
+
+        let red = CGFloat((rgb >> 16) & 0xFF) / 255.0
+        let green = CGFloat((rgb >> 8) & 0xFF) / 255.0
+        let blue = CGFloat(rgb & 0xFF) / 255.0
+        self.init(calibratedRed: red, green: green, blue: blue, alpha: 1.0)
+    }
+
+    var hexRGBString: String {
+        guard let resolved = usingColorSpace(.sRGB) ?? usingColorSpace(.deviceRGB) else {
+            return "#FFFFFF"
+        }
+
+        return String(
+            format: "#%02X%02X%02X",
+            Int((resolved.redComponent * 255.0).rounded()),
+            Int((resolved.greenComponent * 255.0).rounded()),
+            Int((resolved.blueComponent * 255.0).rounded())
+        )
+    }
+}
+
 class CaptureSettings: ObservableObject {
     static let shared = CaptureSettings()
 
@@ -216,6 +261,19 @@ class CaptureSettings: ObservableObject {
     @AppStorage("gifFrameRate") var gifFrameRate: Double = 10
     @AppStorage("gifMaxWidth") var gifMaxWidth: Int = 640
     @AppStorage("videoFrameRate") var videoFrameRate: Int = 30
+    @AppStorage("showMouseClickVisualsInVideo") var showMouseClickVisualsInVideo: Bool = false
+    @AppStorage("showMouseClickVisualsInGif") var showMouseClickVisualsInGif: Bool = false
+    @AppStorage("gifMouseClicksUseVideoSettings") var gifMouseClicksUseVideoSettings: Bool = false
+    @AppStorage("videoMouseClickColorHex") var videoMouseClickColorHex: String = "#FFFFFF"
+    @AppStorage("videoMouseClickSize") var videoMouseClickSize: Double = 32
+    @AppStorage("videoMouseClickStrokeWidth") var videoMouseClickStrokeWidth: Double = 3
+    @AppStorage("videoMouseClickOpacity") var videoMouseClickOpacity: Double = 0.85
+    @AppStorage("videoMouseClickDuration") var videoMouseClickDuration: Double = 0.45
+    @AppStorage("gifMouseClickColorHex") var gifMouseClickColorHex: String = "#FFFFFF"
+    @AppStorage("gifMouseClickSize") var gifMouseClickSize: Double = 24
+    @AppStorage("gifMouseClickStrokeWidth") var gifMouseClickStrokeWidth: Double = 3
+    @AppStorage("gifMouseClickOpacity") var gifMouseClickOpacity: Double = 0.8
+    @AppStorage("gifMouseClickDuration") var gifMouseClickDuration: Double = 0.45
     @AppStorage("showTrimmer") var showTrimmer: Bool = true
     @AppStorage("recordAudio") var recordAudio: Bool = false
     @AppStorage("recordMicrophone") var recordMicrophone: Bool = false
@@ -284,6 +342,74 @@ class CaptureSettings: ObservableObject {
         }
     }
 
+    func mouseClickOverlayStyle(for type: CaptureType) -> MouseClickOverlayStyle {
+        switch type {
+        case .video:
+            return MouseClickOverlayStyle(
+                colorHex: videoMouseClickColorHex,
+                size: CGFloat(videoMouseClickSize),
+                strokeWidth: CGFloat(videoMouseClickStrokeWidth),
+                opacity: CGFloat(videoMouseClickOpacity),
+                duration: videoMouseClickDuration
+            )
+        case .gif:
+            if gifMouseClicksUseVideoSettings {
+                return mouseClickOverlayStyle(for: .video)
+            }
+            return MouseClickOverlayStyle(
+                colorHex: gifMouseClickColorHex,
+                size: CGFloat(gifMouseClickSize),
+                strokeWidth: CGFloat(gifMouseClickStrokeWidth),
+                opacity: CGFloat(gifMouseClickOpacity),
+                duration: gifMouseClickDuration
+            )
+        case .screenshot:
+            return MouseClickOverlayStyle(
+                colorHex: "#FFFFFF",
+                size: 32,
+                strokeWidth: 3,
+                opacity: 0.85,
+                duration: 0.45
+            )
+        }
+    }
+
+    func shouldShowMouseClickVisuals(for type: CaptureType) -> Bool {
+        switch type {
+        case .video:
+            return showMouseClickVisualsInVideo
+        case .gif:
+            return gifMouseClicksUseVideoSettings ? showMouseClickVisualsInVideo : showMouseClickVisualsInGif
+        case .screenshot:
+            return false
+        }
+    }
+
+    func setShowMouseClickVisuals(_ isEnabled: Bool, for type: CaptureType) {
+        switch type {
+        case .video:
+            showMouseClickVisualsInVideo = isEnabled
+        case .gif:
+            if gifMouseClicksUseVideoSettings {
+                showMouseClickVisualsInVideo = isEnabled
+            } else {
+                showMouseClickVisualsInGif = isEnabled
+            }
+        case .screenshot:
+            break
+        }
+    }
+
+    var videoMouseClickColor: NSColor {
+        get { NSColor(hexRGBString: videoMouseClickColorHex) ?? .white }
+        set { videoMouseClickColorHex = newValue.hexRGBString }
+    }
+
+    var gifMouseClickColor: NSColor {
+        get { NSColor(hexRGBString: gifMouseClickColorHex) ?? .white }
+        set { gifMouseClickColorHex = newValue.hexRGBString }
+    }
+
     func resetToDefaults() {
         // Remove all keys in one pass so only a single objectWillChange fires
         let keys: [String] = [
@@ -299,7 +425,11 @@ class CaptureSettings: ObservableObject {
             "clipsManagerAutoUploadAfterSave", "clipsManagerAutoCopyUploadLink",
             "clipsManagerLastViewMode", "clipsManagerLastSortOption", "clipsManagerLastFilterType", "clipsManagerLastDateFilter",
             "clipsManagerLastSmartCollection", "clipsManagerLastSearchText", "clipsManagerLastSelectedTag", "clipsManagerLastSelectedCollection",
-            "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showTrimmer",
+            "gifFrameRate", "gifMaxWidth", "videoFrameRate", "showMouseClickVisualsInVideo", "showMouseClickVisualsInGif",
+            "gifMouseClicksUseVideoSettings",
+            "videoMouseClickColorHex", "videoMouseClickSize", "videoMouseClickStrokeWidth", "videoMouseClickOpacity", "videoMouseClickDuration",
+            "gifMouseClickColorHex", "gifMouseClickSize", "gifMouseClickStrokeWidth", "gifMouseClickOpacity", "gifMouseClickDuration",
+            "showTrimmer",
             "recordAudio", "recordMicrophone", "selectedMicrophoneID", "showScreenshotEditor", "showGifTrimmer",
             "saveImmediatelyScreenshot", "saveImmediatelyVideo", "saveImmediatelyGif",
             "showScreenshotCapturePicker", "showVideoCapturePicker", "showGifCapturePicker",
