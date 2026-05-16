@@ -363,11 +363,7 @@ class CaptureManager: ObservableObject {
                     self.activeRecordingRegion = target.region
                     self.isRecording = true
                     self.activeMouseClickCaptureEnabledOverride = mouseClicksEnabled
-                    if let region = target.region {
-                        self.startMouseClickMonitoringIfNeeded(for: .video, region: region)
-                    } else {
-                        _ = self.stopMouseClickMonitoring()
-                    }
+                    self.startMouseClickMonitoringIfNeeded(for: .video, region: target.region)
                     self.recordingMicrophoneEnabled = false
                     self.microphoneWarningMessage = nil
                     self.microphoneLevel = 0
@@ -394,7 +390,8 @@ class CaptureManager: ObservableObject {
             }
         }
 
-        showCountdownThen(
+        startCaptureAfterPreparingTarget(
+            focusWindow: target.focusWindow,
             for: .video,
             countdownEnabled: countdownEnabled,
             countdownDuration: countdownDuration,
@@ -436,11 +433,7 @@ class CaptureManager: ObservableObject {
                     self.activeRecordingRegion = target.region
                     self.isRecording = true
                     self.activeMouseClickCaptureEnabledOverride = mouseClicksEnabled
-                    if let region = target.region {
-                        self.startMouseClickMonitoringIfNeeded(for: .gif, region: region)
-                    } else {
-                        _ = self.stopMouseClickMonitoring()
-                    }
+                    self.startMouseClickMonitoringIfNeeded(for: .gif, region: target.region)
 
                     try await writer.start(target: target)
                     self.showStopPanel()
@@ -455,7 +448,8 @@ class CaptureManager: ObservableObject {
             }
         }
 
-        showCountdownThen(
+        startCaptureAfterPreparingTarget(
+            focusWindow: target.focusWindow,
             for: .gif,
             countdownEnabled: countdownEnabled,
             countdownDuration: countdownDuration,
@@ -959,6 +953,26 @@ class CaptureManager: ObservableObject {
         window.show()
     }
 
+    private func startCaptureAfterPreparingTarget(
+        focusWindow: SCWindow?,
+        for type: CaptureType,
+        countdownEnabled: Bool? = nil,
+        countdownDuration: Int? = nil,
+        action: @escaping () -> Void
+    ) {
+        Task { @MainActor in
+            if focusWindow?.focusForCapture() == true {
+                try? await Task.sleep(nanoseconds: 350_000_000)
+            }
+            showCountdownThen(
+                for: type,
+                countdownEnabled: countdownEnabled,
+                countdownDuration: countdownDuration,
+                action: action
+            )
+        }
+    }
+
     private func showOnboardingIfNeeded() {
         let settings = CaptureSettings.shared
         guard !settings.hasCompletedOnboarding, onboardingWindow == nil else { return }
@@ -1072,8 +1086,8 @@ class CaptureManager: ObservableObject {
 
         dismissRegionIndicator()
 
-        if mode == .region, let region = target.region, CaptureSettings.shared.showRegionIndicator {
-            let panel = RegionIndicatorPanel(region: region)
+        if mode == .region, CaptureSettings.shared.showRegionIndicator {
+            let panel = RegionIndicatorPanel(region: target.region)
             panel.show()
             regionIndicatorPanel = panel
         }
@@ -1085,7 +1099,7 @@ class CaptureManager: ObservableObject {
         switch mode {
         case .region:
             guard let region = await RegionSelector.selectRegion() else { return nil }
-            return .region(region)
+            return CaptureTarget(region: region)
         case .screen:
             let needsPicker = NSScreen.screens.count > 1 && !CaptureSettings.shared.alwaysCaptureMainDisplay
             let screen: NSScreen?
@@ -1096,11 +1110,55 @@ class CaptureManager: ObservableObject {
             }
             guard let screen else { return nil }
             guard let region = CaptureRegion.fullScreen(for: screen) else { return nil }
-            return .region(region)
+            return CaptureTarget(region: region)
         case .window:
-            guard let window = await WindowSelector.selectWindow() else { return nil }
-            return .window(window)
+            guard let window = await WindowSelector.selectWindow(),
+                  let region = captureRegion(for: window)
+            else {
+                return nil
+            }
+            return CaptureTarget(region: region, focusWindow: window)
         }
+    }
+
+    private func captureRegion(for window: SCWindow) -> CaptureRegion? {
+        let screens = NSScreen.screens
+        let windowRect = appKitRect(fromSCFrame: window.frame, screens: screens)
+        let windowCenter = NSPoint(x: windowRect.midX, y: windowRect.midY)
+
+        guard let screen = screens.first(where: { $0.frame.contains(windowCenter) })
+            ?? screens.first(where: { $0.frame.intersects(windowRect) })
+        else {
+            return nil
+        }
+
+        guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+            return nil
+        }
+
+        let clippedWindowRect = windowRect.intersection(screen.frame)
+        guard !clippedWindowRect.isNull, !clippedWindowRect.isEmpty else {
+            return nil
+        }
+
+        let localX = clippedWindowRect.minX - screen.frame.minX
+        let localY = screen.frame.maxY - clippedWindowRect.maxY
+
+        return CaptureRegion(
+            sourceRect: CGRect(x: localX, y: localY, width: clippedWindowRect.width, height: clippedWindowRect.height),
+            displayID: displayID,
+            scaleFactor: screen.backingScaleFactor
+        )
+    }
+
+    private func appKitRect(fromSCFrame scFrame: CGRect, screens: [NSScreen]) -> CGRect {
+        let primaryScreenTop = screens.first?.frame.maxY ?? 0
+        return CGRect(
+            x: scFrame.minX,
+            y: primaryScreenTop - scFrame.maxY,
+            width: scFrame.width,
+            height: scFrame.height
+        )
     }
 
     private func pickScreen() async -> NSScreen? {

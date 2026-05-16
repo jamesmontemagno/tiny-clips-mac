@@ -55,51 +55,75 @@ struct CaptureRegion: Sendable {
     }
 }
 
-enum CaptureTarget {
-    case region(CaptureRegion)
-    case window(SCWindow)
+struct CaptureTarget {
+    let region: CaptureRegion
+    let focusWindow: SCWindow?
 
-    var region: CaptureRegion? {
-        if case let .region(region) = self {
-            return region
-        }
-        return nil
+    init(region: CaptureRegion, focusWindow: SCWindow? = nil) {
+        self.region = region
+        self.focusWindow = focusWindow
     }
 
     func prepare() async throws -> PreparedCaptureTarget {
-        switch self {
-        case let .region(region):
-            return PreparedCaptureTarget(
-                filter: try await region.makeFilter(),
-                config: region.makeStreamConfig(),
-                pixelWidth: region.pixelWidth,
-                pixelHeight: region.pixelHeight
-            )
-        case let .window(window):
-            let filter = SCContentFilter(desktopIndependentWindow: window)
-            let pixelSize = Self.pixelSize(for: filter)
-            let config = SCStreamConfiguration()
-            config.width = pixelSize.width
-            config.height = pixelSize.height
-            config.scalesToFit = false
-            config.showsCursor = true
-            config.includeChildWindows = true
+        PreparedCaptureTarget(
+            filter: try await region.makeFilter(),
+            config: region.makeStreamConfig(),
+            pixelWidth: region.pixelWidth,
+            pixelHeight: region.pixelHeight
+        )
+    }
+}
 
-            return PreparedCaptureTarget(
-                filter: filter,
-                config: config,
-                pixelWidth: pixelSize.width,
-                pixelHeight: pixelSize.height
-            )
+extension SCWindow {
+    @MainActor
+    @discardableResult
+    func focusForCapture() -> Bool {
+        guard let processID = owningApplication?.processID,
+              let app = NSRunningApplication(processIdentifier: processID)
+        else {
+            return false
         }
+
+        let didActivateApp = app.activate(options: [.activateAllWindows])
+        let didRaiseWindow = raiseForCapture(processID: processID)
+        return didActivateApp || didRaiseWindow
     }
 
-    private static func pixelSize(for filter: SCContentFilter) -> (width: Int, height: Int) {
-        let scale = CGFloat(filter.pointPixelScale)
-        return (
-            width: max(1, Int((filter.contentRect.width * scale).rounded())),
-            height: max(1, Int((filter.contentRect.height * scale).rounded()))
-        )
+    @MainActor
+    private func raiseForCapture(processID: pid_t) -> Bool {
+        guard AXIsProcessTrusted(),
+              let selectedTitle = title,
+              !selectedTitle.isEmpty
+        else {
+            return false
+        }
+
+        let appElement = AXUIElementCreateApplication(processID)
+        var windowsValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsValue) == .success,
+              let windows = windowsValue as? [AXUIElement]
+        else {
+            return false
+        }
+
+        guard let window = windows.first(where: { axWindow in
+            guard let title = axWindow.titleForCapture else { return false }
+            return title == selectedTitle
+        }) else {
+            return false
+        }
+
+        return AXUIElementPerformAction(window, kAXRaiseAction as CFString) == .success
+    }
+}
+
+private extension AXUIElement {
+    var titleForCapture: String? {
+        var titleValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(self, kAXTitleAttribute as CFString, &titleValue) == .success else {
+            return nil
+        }
+        return titleValue as? String
     }
 }
 
