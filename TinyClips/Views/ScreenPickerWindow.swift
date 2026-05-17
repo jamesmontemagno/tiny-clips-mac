@@ -199,6 +199,7 @@ private struct ScreenPickerView: View {
                     .onHover { hovering in
                         hoveredIndex = hovering ? screen.index : nil
                     }
+                    .help(screen.isMain ? "Capture the main display." : "Capture display \(screen.displayNumber).")
                     .accessibilityLabel("Display \(screen.displayNumber)")
                     .accessibilityValue(screen.isMain ? "\(screen.resolution), main display" : screen.resolution)
                     .accessibilityHint("Selects this display for capture.")

@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 import AVFoundation
 import AVKit
+import ImageIO
+import Carbon.HIToolbox
 
 class VideoTrimmerWindow: NSWindow, NSWindowDelegate {
     private var onComplete: ((URL?) -> Void)?
@@ -9,7 +11,7 @@ class VideoTrimmerWindow: NSWindow, NSWindowDelegate {
 
     convenience init(videoURL: URL, onComplete: @escaping (URL?) -> Void) {
         self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 580, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 560),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -18,7 +20,7 @@ class VideoTrimmerWindow: NSWindow, NSWindowDelegate {
         self.title = "Trim Video"
         self.isReleasedWhenClosed = false
         self.delegate = self
-        self.minSize = NSSize(width: 560, height: 420)
+        self.minSize = NSSize(width: 680, height: 540)
         self.center()
 
         let trimmerView = VideoTrimmerView(videoURL: videoURL) { [weak self] resultURL in
@@ -48,6 +50,8 @@ private struct VideoTrimmerView: View {
     let onDone: (URL?) -> Void
 
     @StateObject private var viewModel: TrimmerViewModel
+    @State private var keyMonitor: Any?
+    @State private var trimmerWindow: NSWindow?
 
     init(videoURL: URL, onDone: @escaping (URL?) -> Void) {
         self.videoURL = videoURL
@@ -64,18 +68,41 @@ private struct VideoTrimmerView: View {
                 .padding([.top, .horizontal])
                 .task { await viewModel.loadDuration() }
 
-            // Current time display
-            HStack {
+            HStack(spacing: 10) {
                 Text(formatTime(viewModel.currentTime))
                     .monospacedDigit()
-                Spacer()
+                    .frame(width: 64, alignment: .leading)
+
+                Spacer(minLength: 8)
+
+                Button(action: { viewModel.stepFrame(by: -1) }) {
+                    Text("<")
+                }
+                .accessibilityLabel("Previous frame")
+                .help("Move to the previous frame (Left Arrow).")
+
+                Text("Frame \(viewModel.currentFrameNumber) of \(max(1, viewModel.totalFrameCount))")
+                    .monospacedDigit()
+                    .frame(minWidth: 140)
+                    .multilineTextAlignment(.center)
+
+                Button(action: { viewModel.stepFrame(by: 1) }) {
+                    Text(">")
+                }
+                .accessibilityLabel("Next frame")
+                .help("Move to the next frame (Right Arrow).")
+
+                Spacer(minLength: 8)
+
                 Text(formatTime(viewModel.duration))
                     .monospacedDigit()
+                    .frame(width: 64, alignment: .trailing)
             }
             .font(.caption)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 20)
             .padding(.top, 6)
+            .disabled(viewModel.duration <= 0)
 
             // Trim range control
             TrimRangeSlider(
@@ -116,8 +143,9 @@ private struct VideoTrimmerView: View {
                     value: Binding(
                         get: { viewModel.trimStart },
                         set: { newValue in
-                            viewModel.trimStart = min(max(0, newValue), maxStart)
-                            viewModel.seek(to: viewModel.trimStart)
+                            let clamped = min(max(0, newValue), maxStart)
+                            viewModel.trimStart = clamped
+                            viewModel.seek(to: max(viewModel.currentTime, clamped))
                         }
                     ),
                     in: 0...maxStart,
@@ -153,7 +181,8 @@ private struct VideoTrimmerView: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(width: 120)
-                .help("Changing speed affects export playback rate. Audio is only kept at 1x.")
+                .accessibilityLabel("Playback speed")
+                .help("Choose the export playback speed. Audio is kept only at 1x.")
 
                 if viewModel.speed != 1.0 {
                     Text("Audio will be removed on export")
@@ -175,32 +204,55 @@ private struct VideoTrimmerView: View {
                 Button(action: { viewModel.previewTrimmed() }) {
                     Label("Preview", systemImage: viewModel.isPlaying ? "pause.fill" : "play.fill")
                 }
+                .help(viewModel.isPlaying ? "Pause the trimmed preview." : "Play the trimmed preview.")
 
                 Spacer()
 
-                Button("Cancel") {
+                Menu {
+                    Button("Save Frame", systemImage: "square.and.arrow.down") {
+                        viewModel.exportCurrentFrame()
+                    }
+                    .help("Save the current frame as an image.")
+
+                    Button("Copy Frame", systemImage: "doc.on.doc") {
+                        viewModel.copyCurrentFrame()
+                    }
+                    .help("Copy the current frame to the clipboard.")
+
+                    Divider()
+
+                    Button("Save Without Trimming", systemImage: "film") {
+                        SaveService.shared.handleSavedFile(url: videoURL, type: .video)
+                    }
+                    .help("Save the original video without trimming.")
+
+                    Button("Save Trimmed", systemImage: "scissors") {
+                        viewModel.exportTrimmed { resultURL in
+                            guard let resultURL else { return }
+                            SaveService.shared.handleSavedFile(url: resultURL, type: .video)
+                        }
+                    }
+                    .help("Export only the selected trimmed segment.")
+                } label: {
+                    Label("Save", systemImage: "square.and.arrow.down")
+                }
+                .help("Save the current frame or export the video.")
+                .disabled(viewModel.duration <= 0 || viewModel.isExporting)
+
+                Button("Done") {
                     viewModel.cleanup()
                     onDone(nil)
                 }
                 .keyboardShortcut(.cancelAction)
-
-                Button("Save Without Trimming") {
-                    viewModel.cleanup()
-                    onDone(videoURL)
-                }
-
-                Button("Save Trimmed") {
-                    viewModel.cleanup()
-                    viewModel.exportTrimmed { resultURL in
-                        onDone(resultURL)
-                    }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(viewModel.isExporting)
+                .help("Close the trimmer.")
+                .tint(.accentColor)
+                .buttonStyle(.borderedProminent)
             }
             .padding()
         }
-        .frame(minWidth: 560, minHeight: 420)
+        .frame(minWidth: 660, minHeight: 540)
+        .onAppear(perform: installKeyMonitor)
+        .onDisappear(perform: removeKeyMonitor)
         .onChange(of: viewModel.speed) { _, _ in
             viewModel.applySpeedChange()
         }
@@ -217,6 +269,39 @@ private struct VideoTrimmerView: View {
         let secs = Int(seconds) % 60
         let frac = Int((seconds.truncatingRemainder(dividingBy: 1)) * 10)
         return String(format: "%d:%02d.%d", mins, secs, frac)
+    }
+
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        trimmerWindow = NSApp.keyWindow
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.window === trimmerWindow else { return event }
+            if let firstResponder = event.window?.firstResponder,
+               firstResponder is NSText || firstResponder is NSTextView {
+                return event
+            }
+            let relevantModifiers = event.modifierFlags.intersection([.command, .option, .control])
+            guard relevantModifiers.isEmpty else { return event }
+
+            switch Int(event.keyCode) {
+            case kVK_LeftArrow:
+                viewModel.stepFrame(by: -1)
+                return nil
+            case kVK_RightArrow:
+                viewModel.stepFrame(by: 1)
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeKeyMonitor() {
+        trimmerWindow = nil
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
     }
 }
 
@@ -299,7 +384,23 @@ private struct TrimRangeSlider: View {
                     .offset(x: playheadX - 1)
                     .allowsHitTesting(false)
             }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        seekPlayhead(to: value.location.x, usable: usable)
+                    }
+                    .onEnded { value in
+                        seekPlayhead(to: value.location.x, usable: usable)
+                    }
+            )
         }
+    }
+
+    private func seekPlayhead(to x: CGFloat, usable: CGFloat) {
+        guard duration > 0, !draggingStart, !draggingEnd else { return }
+        let normalized = min(max(0, x - handleWidth), usable) / usable
+        onSeek(Double(normalized) * duration)
     }
 
     private func trimHandle(color: Color) -> some View {
@@ -339,6 +440,7 @@ private class TrimmerViewModel: ObservableObject {
     @Published var isPlaying = false
     @Published var isExporting = false
     @Published var speed: Double = 1.0
+    @Published private(set) var frameStepDuration: Double = 1.0 / 30.0
 
     func applySpeedChange() {
         player.isMuted = speed != 1.0
@@ -349,6 +451,17 @@ private class TrimmerViewModel: ObservableObject {
 
     var trimmedOutputDuration: Double {
         max(0, (trimEnd - trimStart) / speed)
+    }
+
+    var totalFrameCount: Int {
+        guard duration > 0, frameStepDuration > 0 else { return 0 }
+        return max(1, Int((duration / frameStepDuration).rounded(.up)))
+    }
+
+    var currentFrameNumber: Int {
+        guard totalFrameCount > 0 else { return 1 }
+        let currentIndex = Int((max(0, currentTime) / frameStepDuration).rounded())
+        return min(totalFrameCount, max(1, currentIndex + 1))
     }
 
     private var timeObserver: Any?
@@ -383,9 +496,20 @@ private class TrimmerViewModel: ObservableObject {
 
     @MainActor
     func loadDuration() async {
+        guard duration == 0 else { return }
         if let dur = try? await asset.load(.duration) {
             self.duration = dur.seconds
             self.trimEnd = dur.seconds
+        }
+        if let track = try? await asset.loadTracks(withMediaType: .video).first {
+            if let minFrameDuration = try? await track.load(.minFrameDuration),
+               minFrameDuration.isValid,
+               minFrameDuration.seconds > 0 {
+                frameStepDuration = minFrameDuration.seconds
+            } else if let nominalFrameRate = try? await track.load(.nominalFrameRate),
+                      nominalFrameRate > 0 {
+                frameStepDuration = 1.0 / Double(nominalFrameRate)
+            }
         }
     }
 
@@ -398,7 +522,19 @@ private class TrimmerViewModel: ObservableObject {
     }
 
     func seek(to time: Double) {
-        player.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+        let clamped = min(max(0, time), duration)
+        currentTime = clamped
+        player.seek(to: CMTime(seconds: clamped, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    func stepFrame(by offset: Int) {
+        guard duration > 0, frameStepDuration > 0 else { return }
+        player.pause()
+        isPlaying = false
+
+        let currentIndex = Int((max(0, currentTime) / frameStepDuration).rounded())
+        let targetIndex = max(0, min(currentIndex + offset, max(0, totalFrameCount - 1)))
+        seek(to: Double(targetIndex) * frameStepDuration)
     }
 
     func previewTrimmed() {
@@ -411,6 +547,82 @@ private class TrimmerViewModel: ObservableObject {
             player.playImmediately(atRate: Float(speed))
             isPlaying = true
         }
+    }
+
+    func exportCurrentFrame() {
+        guard duration > 0 else { return }
+        isExporting = true
+        player.pause()
+        isPlaying = false
+
+        let outputURL = SaveService.shared.generateURL(for: .screenshot, stemSuffix: "Frame")
+        let requestedTime = CMTime(seconds: currentTime, preferredTimescale: 600)
+
+        Task {
+            do {
+                let frameCapture = try await captureCurrentFrame(at: requestedTime)
+                try ScreenshotCapture.saveImage(frameCapture.image, to: outputURL)
+
+                await MainActor.run {
+                    self.seek(to: frameCapture.actualTime.seconds)
+                    self.isExporting = false
+                    SaveService.shared.handleSavedFile(url: outputURL, type: .screenshot)
+                }
+            } catch {
+                await MainActor.run {
+                    self.isExporting = false
+                    SaveService.shared.showError("Could not save the current frame: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    func copyCurrentFrame() {
+        guard duration > 0 else { return }
+        isExporting = true
+        player.pause()
+        isPlaying = false
+
+        let requestedTime = CMTime(seconds: currentTime, preferredTimescale: 600)
+
+        Task {
+            do {
+                let frameCapture = try await captureCurrentFrame(at: requestedTime)
+
+                let didCopy = await MainActor.run { () -> Bool in
+                    self.seek(to: frameCapture.actualTime.seconds)
+                    let image = NSImage(cgImage: frameCapture.image, size: .zero)
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    return pasteboard.writeObjects([image])
+                }
+
+                await MainActor.run {
+                    self.isExporting = false
+                    if !didCopy {
+                        SaveService.shared.showError("Could not copy the current frame to the clipboard.")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.isExporting = false
+                    SaveService.shared.showError("Could not copy the current frame: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func captureCurrentFrame(at requestedTime: CMTime) async throws -> (image: CGImage, actualTime: CMTime) {
+        try await Task.detached(priority: .userInitiated) { [asset] in
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.requestedTimeToleranceBefore = .zero
+            generator.requestedTimeToleranceAfter = .zero
+
+            var actualTime = CMTime.zero
+            let image = try generator.copyCGImage(at: requestedTime, actualTime: &actualTime)
+            return (image, actualTime)
+        }.value
     }
 
     func exportTrimmed(completion: @escaping (URL?) -> Void) {

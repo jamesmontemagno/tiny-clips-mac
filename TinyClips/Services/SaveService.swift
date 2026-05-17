@@ -78,7 +78,15 @@ class SaveService: NSObject, UNUserNotificationCenterDelegate {
         return generateURL(for: type, fileExtension: type.fileExtension)
     }
 
+    func generateURL(for type: CaptureType, stemSuffix: String?) -> URL {
+        return generateURL(for: type, fileExtension: type.fileExtension, stemSuffix: stemSuffix)
+    }
+
     func generateURL(for type: CaptureType, fileExtension: String) -> URL {
+        generateURL(for: type, fileExtension: fileExtension, stemSuffix: nil)
+    }
+
+    func generateURL(for type: CaptureType, fileExtension: String, stemSuffix: String?) -> URL {
 #if APPSTORE
         let directoryURL = outputDirectoryURL(for: type)
 
@@ -97,7 +105,13 @@ class SaveService: NSObject, UNUserNotificationCenterDelegate {
         )
 #endif
 
-        let filename = generatedFileName(for: type, fileExtension: fileExtension)
+        var filename = generatedFileName(for: type, fileExtension: fileExtension)
+        if let stemSuffix,
+           !stemSuffix.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let ext = (filename as NSString).pathExtension
+            let stem = (filename as NSString).deletingPathExtension
+            filename = ext.isEmpty ? "\(stem) \(stemSuffix)" : "\(stem) \(stemSuffix).\(ext)"
+        }
 
 #if APPSTORE
         return uniqueURL(in: directoryURL, filename: filename)

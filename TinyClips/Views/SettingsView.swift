@@ -121,11 +121,13 @@ struct SettingsView: View {
         .frame(minWidth: 720, minHeight: 460)
         .alert("Hide Dock icon?", isPresented: $showDisableDockWarning) {
             Button("Cancel", role: .cancel) {}
+                .help("Keep TinyClips visible in the Dock.")
             Button("Hide Dock Icon", role: .destructive) {
                 settings.showInDock = false
                 applyDockVisibility(false)
                 reopenSettingsWindow()
             }
+            .help("Hide TinyClips from the Dock.")
         } message: {
             Text("TinyClips may briefly close the Settings window when switching out of Dock mode.")
         }

@@ -335,6 +335,7 @@ private struct ScreenshotEditorView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(tool.label) tool")
                 .accessibilityValue(viewModel.selectedTool == tool ? "Selected" : "Not selected")
+                .help("Use the \(tool.label.lowercased()) tool.")
             }
 
             Spacer()
@@ -347,6 +348,7 @@ private struct ScreenshotEditorView: View {
                             .frame(width: 28)
                             .accessibilityLabel("\(primaryColorLabel) color")
                             .accessibilityHint("Adjusts the color used by the selected annotation tool.")
+                            .help("Choose the \(primaryColorLabel.lowercased()) color.")
                         Text(primaryColorLabel)
                             .font(.system(size: 8))
                             .foregroundStyle(.secondary)
@@ -360,6 +362,7 @@ private struct ScreenshotEditorView: View {
                                 .frame(width: 28)
                                 .accessibilityLabel("Fill color")
                                 .accessibilityHint("Selects the fill color for rectangle and circle shapes. Use transparent for no fill.")
+                                .help("Choose the fill color.")
                             Text("Fill")
                                 .font(.system(size: 8))
                                 .foregroundStyle(.secondary)
@@ -374,6 +377,7 @@ private struct ScreenshotEditorView: View {
                                 .frame(width: 28)
                                 .accessibilityLabel("Text color")
                                 .accessibilityHint("Sets the numeral color inside the number badge.")
+                                .help("Choose the number text color.")
                             Text("Text")
                                 .font(.system(size: 8))
                                 .foregroundStyle(.secondary)
@@ -397,6 +401,7 @@ private struct ScreenshotEditorView: View {
                 .frame(width: 96)
                 .accessibilityLabel("Line width")
                 .accessibilityValue("\(Int(viewModel.lineWidth)) pixels")
+                .help("Choose the line width.")
             }
 
             if viewModel.showsNumberSizeControl {
@@ -420,6 +425,7 @@ private struct ScreenshotEditorView: View {
                 .frame(width: 96)
                 .accessibilityLabel("Number size")
                 .accessibilityValue("\(Int(numberSizeBinding.wrappedValue * 100)) percent")
+                .help("Choose the number badge size.")
             }
 
             if viewModel.showsRedactionPresetControl {
@@ -432,6 +438,7 @@ private struct ScreenshotEditorView: View {
                 .frame(width: 110)
                 .accessibilityLabel("Redaction pixelation strength")
                 .accessibilityValue(blurPresetBinding.wrappedValue.label)
+                .help("Choose the redaction pixelation strength.")
             }
 
             // Undo
@@ -444,6 +451,7 @@ private struct ScreenshotEditorView: View {
             .keyboardShortcut("z", modifiers: .command)
             .accessibilityLabel("Undo")
             .accessibilityHint("Removes the last annotation.")
+            .help("Undo the last annotation.")
         }
     }
 
@@ -463,6 +471,7 @@ private struct ScreenshotEditorView: View {
                 }
             }
             .frame(width: 140)
+            .help("Choose the file format for saving.")
 
             Picker("Scale:", selection: $viewModel.saveScale) {
                 Text("100%").tag(100)
@@ -476,10 +485,13 @@ private struct ScreenshotEditorView: View {
                 Text("25%").tag(25)
             }
             .frame(width: 120)
+            .help("Choose the export scale.")
 
             if viewModel.saveFormat == .jpeg {
                 Slider(value: $viewModel.saveJpegQuality, in: 0.1...1.0, step: 0.05)
                     .frame(width: 80)
+                    .accessibilityLabel("JPEG quality")
+                    .help("Adjust JPEG quality.")
                 Text("\(Int(viewModel.saveJpegQuality * 100))%")
                     .font(.caption)
                     .monospacedDigit()
@@ -492,17 +504,20 @@ private struct ScreenshotEditorView: View {
                 onDone(nil)
             }
             .keyboardShortcut(.cancelAction)
+            .help("Close without saving changes.")
 
             Button {
                 viewModel.copyToClipboard()
             } label: {
                 Label("Copy", systemImage: "doc.on.doc")
             }
+            .help("Copy the edited image to the clipboard.")
 
             Button("Save") {
                 saveImage()
             }
             .keyboardShortcut(.defaultAction)
+            .help("Save the edited image.")
         }
     }
 
@@ -1734,6 +1749,7 @@ private struct InlineTextEditor: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Decrease text size")
                 .accessibilityHint("Reduces text size by two points.")
+                .help("Decrease text size.")
 
                 Text("\(Int(fontSize))pt")
                     .font(.system(size: 11))
@@ -1751,6 +1767,7 @@ private struct InlineTextEditor: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Increase text size")
                 .accessibilityHint("Increases text size by two points.")
+                .help("Increase text size.")
             }
         }
         .padding(.horizontal, 8)
