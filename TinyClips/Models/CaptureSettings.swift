@@ -251,7 +251,20 @@ class CaptureSettings: ObservableObject {
     @AppStorage("saveImmediatelyScreenshot") var saveImmediatelyScreenshot: Bool = true
     @AppStorage("saveImmediatelyVideo") var saveImmediatelyVideo: Bool = true
     @AppStorage("saveImmediatelyGif") var saveImmediatelyGif: Bool = true
-    @AppStorage("showScreenshotCapturePicker") var showScreenshotCapturePicker: Bool = true
+    @AppStorage("showScreenshotCapturePicker") var showScreenshotCapturePicker: Bool = true {
+        didSet {
+            if !showScreenshotCapturePicker {
+                showScreenshotCapturePickerAfterCapture = false
+            }
+        }
+    }
+    @AppStorage("showScreenshotCapturePickerAfterCapture") var showScreenshotCapturePickerAfterCapture: Bool = true {
+        didSet {
+            if showScreenshotCapturePickerAfterCapture && !showScreenshotCapturePicker {
+                showScreenshotCapturePickerAfterCapture = false
+            }
+        }
+    }
     @AppStorage("showVideoCapturePicker") var showVideoCapturePicker: Bool = true
     @AppStorage("showGifCapturePicker") var showGifCapturePicker: Bool = true
     @AppStorage("screenshotFormat") var screenshotFormat: String = ImageFormat.jpeg.rawValue
@@ -308,6 +321,10 @@ class CaptureSettings: ObservableObject {
         case .gif:
             return showGifCapturePicker
         }
+    }
+
+    var shouldShowScreenshotCapturePickerAfterCapture: Bool {
+        showScreenshotCapturePicker && showScreenshotCapturePickerAfterCapture
     }
 
     func mouseClickOverlayStyle(for type: CaptureType) -> MouseClickOverlayStyle {
@@ -400,7 +417,7 @@ class CaptureSettings: ObservableObject {
             "showTrimmer",
             "recordAudio", "recordMicrophone", "selectedMicrophoneID", "showScreenshotEditor", "showGifTrimmer",
             "saveImmediatelyScreenshot", "saveImmediatelyVideo", "saveImmediatelyGif",
-            "showScreenshotCapturePicker", "showVideoCapturePicker", "showGifCapturePicker",
+            "showScreenshotCapturePicker", "showScreenshotCapturePickerAfterCapture", "showVideoCapturePicker", "showGifCapturePicker",
             "screenshotFormat", "screenshotScale", "jpegQuality",
             "videoCountdownEnabled", "videoCountdownDuration",
             "gifCountdownEnabled", "gifCountdownDuration",

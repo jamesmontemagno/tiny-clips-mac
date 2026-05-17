@@ -271,7 +271,8 @@ class CaptureManager: ObservableObject {
                 } catch {
                     SaveService.shared.showError("Screenshot failed: \(error.localizedDescription)")
                 }
-                if shouldReturnToPickerAfterCapture {
+                if shouldReturnToPickerAfterCapture,
+                   CaptureSettings.shared.shouldShowScreenshotCapturePickerAfterCapture {
                     self.showScreenshotPicker()
                 }
             }
