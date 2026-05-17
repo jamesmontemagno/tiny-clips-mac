@@ -2,10 +2,10 @@ import AppKit
 import SwiftUI
 
 class StartRecordingPanel: NSPanel {
-    private var onStart: ((Bool, Bool, String, Bool) -> Void)?
+    private var onStart: ((Bool, Bool, String, Bool, Bool) -> Void)?
     private var onCancel: (() -> Void)?
 
-    convenience init(captureType: CaptureType, onStart: @escaping (Bool, Bool, String, Bool) -> Void, onCancel: @escaping () -> Void) {
+    convenience init(captureType: CaptureType, onStart: @escaping (Bool, Bool, String, Bool, Bool) -> Void, onCancel: @escaping () -> Void) {
         self.init(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -24,22 +24,30 @@ class StartRecordingPanel: NSPanel {
 
         let settings = CaptureSettings.shared
         let allowsMouseClickToggle: Bool
+        let allowsKeyboardOverlayToggle: Bool
     #if APPSTORE
         allowsMouseClickToggle = StoreService.shared.isPro
+        allowsKeyboardOverlayToggle = StoreService.shared.isPro
     #else
         allowsMouseClickToggle = true
+        allowsKeyboardOverlayToggle = true
     #endif
         let defaultMouseClicksEnabled = allowsMouseClickToggle
             ? settings.shouldShowMouseClickVisuals(for: captureType)
+            : false
+        let defaultKeyboardOverlayEnabled = allowsKeyboardOverlayToggle
+            ? settings.shouldShowKeyboardOverlay(for: captureType)
             : false
         let hostingView = NSHostingView(rootView: StartRecordingView(
             systemAudio: settings.recordAudio,
             microphone: settings.recordMicrophone,
             selectedMicrophoneID: settings.selectedMicrophoneID,
             mouseClicksEnabled: defaultMouseClicksEnabled,
+            keyboardOverlayEnabled: defaultKeyboardOverlayEnabled,
             allowsMouseClickToggle: allowsMouseClickToggle,
-            onStart: { [weak self] systemAudio, mic, mouseClicksEnabled in
-            self?.onStart?(systemAudio, mic.enabled, mic.deviceID, mouseClicksEnabled)
+            allowsKeyboardOverlayToggle: allowsKeyboardOverlayToggle,
+            onStart: { [weak self] systemAudio, mic, mouseClicksEnabled, keyboardOverlayEnabled in
+            self?.onStart?(systemAudio, mic.enabled, mic.deviceID, mouseClicksEnabled, keyboardOverlayEnabled)
                 self?.onStart = nil
                 self?.onCancel = nil
             },
@@ -82,9 +90,11 @@ private struct StartRecordingView: View {
     @State var microphone: Bool
     @State var selectedMicrophoneID: String
     @State var mouseClicksEnabled: Bool
+    @State var keyboardOverlayEnabled: Bool
     let allowsMouseClickToggle: Bool
+    let allowsKeyboardOverlayToggle: Bool
     private let microphones = MicrophoneDeviceCatalog.availableOptions()
-    let onStart: (Bool, MicrophoneState, Bool) -> Void
+    let onStart: (Bool, MicrophoneState, Bool, Bool) -> Void
     let onCancel: () -> Void
 
     var body: some View {
@@ -142,6 +152,24 @@ private struct StartRecordingView: View {
                 .accessibilityHint("Toggles mouse click visuals for this recording.")
             }
 
+            if allowsKeyboardOverlayToggle {
+                Button {
+                    keyboardOverlayEnabled.toggle()
+                } label: {
+                    Image(systemName: "keyboard")
+                        .font(.system(size: 13))
+                        .foregroundStyle(keyboardOverlayEnabled ? .white : .primary.opacity(0.5))
+                        .frame(width: 28, height: 28)
+                        .background(keyboardOverlayEnabled ? .blue : .primary.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .help(keyboardOverlayEnabled ? "Keyboard keys in recording: ON" : "Keyboard keys in recording: OFF")
+                .accessibilityLabel("Keyboard overlay")
+                .accessibilityValue(keyboardOverlayEnabled ? "On" : "Off")
+                .accessibilityHint("Toggles keyboard key overlays for this recording.")
+            }
+
             if microphone {
                 Picker("Mic", selection: $selectedMicrophoneID) {
                     Text("System Default").tag("")
@@ -160,7 +188,7 @@ private struct StartRecordingView: View {
 
             // Start button
             Button {
-                onStart(systemAudio, .init(enabled: microphone, deviceID: selectedMicrophoneID), mouseClicksEnabled)
+                onStart(systemAudio, .init(enabled: microphone, deviceID: selectedMicrophoneID), mouseClicksEnabled, keyboardOverlayEnabled)
             } label: {
                 HStack(spacing: 5) {
                     Circle()

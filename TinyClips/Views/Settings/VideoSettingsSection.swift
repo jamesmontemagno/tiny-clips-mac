@@ -43,6 +43,13 @@ struct VideoSettingsSection: View {
                         selectedTab.wrappedValue = .mouseClicks
                     }
                     .buttonStyle(.link)
+                    Toggle("Show keyboard keys in recording", isOn: $settings.showKeyboardOverlayInVideo)
+                        .help("Shows pressed keys in a subtle overlay in saved video recordings.")
+                        .accessibilityHint("When enabled, pressed keys are rendered in saved video recordings.")
+                    Button("Customize keyboard overlay…") {
+                        selectedTab.wrappedValue = .keyboardOverlay
+                    }
+                    .buttonStyle(.link)
                 } else {
 #if APPSTORE
                     Toggle(isOn: .constant(false)) {
@@ -56,6 +63,19 @@ struct VideoSettingsSection: View {
                     .help("Requires TinyClips Pro.")
                     Button("Unlock with Pro…") {
                         selectedTab.wrappedValue = .mouseClicks
+                    }
+                    .buttonStyle(.link)
+                    Toggle(isOn: .constant(false)) {
+                        HStack(spacing: 8) {
+                            Text("Show keyboard keys in recording")
+                            Image(systemName: "lock.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .disabled(true)
+                    .help("Requires TinyClips Pro.")
+                    Button("Unlock with Pro…") {
+                        selectedTab.wrappedValue = .keyboardOverlay
                     }
                     .buttonStyle(.link)
 #endif

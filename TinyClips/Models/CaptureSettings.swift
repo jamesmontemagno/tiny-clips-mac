@@ -161,6 +161,84 @@ extension MouseClickOverlayStyle {
     }
 }
 
+enum KeyboardOverlayDisplayMode: String, CaseIterable {
+    case allKeys
+    case nonModifierKeys
+    case customSubset
+
+    var label: String {
+        switch self {
+        case .allKeys: return "All keys"
+        case .nonModifierKeys: return "Non-modifier keys only"
+        case .customSubset: return "Custom subset"
+        }
+    }
+}
+
+enum KeyboardOverlayPosition: String, CaseIterable, Sendable {
+    case topLeading
+    case topCenter
+    case topTrailing
+    case bottomLeading
+    case bottomCenter
+    case bottomTrailing
+
+    var label: String {
+        switch self {
+        case .topLeading: return "Top Left"
+        case .topCenter: return "Top Center"
+        case .topTrailing: return "Top Right"
+        case .bottomLeading: return "Bottom Left"
+        case .bottomCenter: return "Bottom Center"
+        case .bottomTrailing: return "Bottom Right"
+        }
+    }
+}
+
+enum KeyboardOverlayAnimationStyle: String, CaseIterable, Sendable {
+    case fade
+    case slide
+    case pop
+
+    var label: String {
+        switch self {
+        case .fade: return "Fade"
+        case .slide: return "Slide"
+        case .pop: return "Pop"
+        }
+    }
+}
+
+enum KeyboardOverlayShapeStyle: String, CaseIterable, Sendable {
+    case roundedRect
+    case capsule
+    case minimal
+
+    var label: String {
+        switch self {
+        case .roundedRect: return "Rounded Rectangle"
+        case .capsule: return "Capsule"
+        case .minimal: return "Minimal"
+        }
+    }
+}
+
+struct KeyboardOverlayStyle: Sendable {
+    let colorHex: String
+    let fontSize: CGFloat
+    let duration: TimeInterval
+    let position: KeyboardOverlayPosition
+    let animationStyle: KeyboardOverlayAnimationStyle
+    let shapeStyle: KeyboardOverlayShapeStyle
+    let soundEffectsEnabled: Bool
+}
+
+extension KeyboardOverlayStyle {
+    var color: NSColor {
+        NSColor(hexRGBString: colorHex) ?? .black
+    }
+}
+
 extension NSColor {
     convenience init?(hexRGBString: String) {
         var value = hexRGBString.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -242,6 +320,27 @@ class CaptureSettings: ObservableObject {
     @AppStorage("gifMouseClickStrokeWidth") var gifMouseClickStrokeWidth: Double = 3
     @AppStorage("gifMouseClickOpacity") var gifMouseClickOpacity: Double = 0.85
     @AppStorage("gifMouseClickDuration") var gifMouseClickDuration: Double = 0.45
+    @AppStorage("showKeyboardOverlayInVideo") var showKeyboardOverlayInVideo: Bool = false
+    @AppStorage("showKeyboardOverlayInGif") var showKeyboardOverlayInGif: Bool = false
+    @AppStorage("gifKeyboardOverlayUseVideoSettings") var gifKeyboardOverlayUseVideoSettings: Bool = false
+    @AppStorage("videoKeyboardOverlayDisplayMode") var videoKeyboardOverlayDisplayModeRaw: String = KeyboardOverlayDisplayMode.nonModifierKeys.rawValue
+    @AppStorage("gifKeyboardOverlayDisplayMode") var gifKeyboardOverlayDisplayModeRaw: String = KeyboardOverlayDisplayMode.nonModifierKeys.rawValue
+    @AppStorage("videoKeyboardOverlayCustomKeys") var videoKeyboardOverlayCustomKeys: String = ""
+    @AppStorage("gifKeyboardOverlayCustomKeys") var gifKeyboardOverlayCustomKeys: String = ""
+    @AppStorage("videoKeyboardOverlayColorHex") var videoKeyboardOverlayColorHex: String = "#000000"
+    @AppStorage("gifKeyboardOverlayColorHex") var gifKeyboardOverlayColorHex: String = "#000000"
+    @AppStorage("videoKeyboardOverlaySize") var videoKeyboardOverlaySize: Double = 22
+    @AppStorage("gifKeyboardOverlaySize") var gifKeyboardOverlaySize: Double = 22
+    @AppStorage("videoKeyboardOverlayDuration") var videoKeyboardOverlayDuration: Double = 0.85
+    @AppStorage("gifKeyboardOverlayDuration") var gifKeyboardOverlayDuration: Double = 0.85
+    @AppStorage("videoKeyboardOverlayPosition") var videoKeyboardOverlayPositionRaw: String = KeyboardOverlayPosition.bottomCenter.rawValue
+    @AppStorage("gifKeyboardOverlayPosition") var gifKeyboardOverlayPositionRaw: String = KeyboardOverlayPosition.bottomCenter.rawValue
+    @AppStorage("videoKeyboardOverlayAnimationStyle") var videoKeyboardOverlayAnimationStyleRaw: String = KeyboardOverlayAnimationStyle.fade.rawValue
+    @AppStorage("gifKeyboardOverlayAnimationStyle") var gifKeyboardOverlayAnimationStyleRaw: String = KeyboardOverlayAnimationStyle.fade.rawValue
+    @AppStorage("videoKeyboardOverlayShapeStyle") var videoKeyboardOverlayShapeStyleRaw: String = KeyboardOverlayShapeStyle.roundedRect.rawValue
+    @AppStorage("gifKeyboardOverlayShapeStyle") var gifKeyboardOverlayShapeStyleRaw: String = KeyboardOverlayShapeStyle.roundedRect.rawValue
+    @AppStorage("videoKeyboardOverlaySoundEffects") var videoKeyboardOverlaySoundEffects: Bool = false
+    @AppStorage("gifKeyboardOverlaySoundEffects") var gifKeyboardOverlaySoundEffects: Bool = false
     @AppStorage("showTrimmer") var showTrimmer: Bool = true
     @AppStorage("recordAudio") var recordAudio: Bool = false
     @AppStorage("recordMicrophone") var recordMicrophone: Bool = false
@@ -370,6 +469,102 @@ class CaptureSettings: ObservableObject {
         }
     }
 
+    func shouldShowKeyboardOverlay(for type: CaptureType) -> Bool {
+        switch type {
+        case .video:
+            return showKeyboardOverlayInVideo
+        case .gif:
+            return gifKeyboardOverlayUseVideoSettings ? showKeyboardOverlayInVideo : showKeyboardOverlayInGif
+        case .screenshot:
+            return false
+        }
+    }
+
+    func setShowKeyboardOverlay(_ isEnabled: Bool, for type: CaptureType) {
+        switch type {
+        case .video:
+            showKeyboardOverlayInVideo = isEnabled
+        case .gif:
+            if gifKeyboardOverlayUseVideoSettings {
+                showKeyboardOverlayInVideo = isEnabled
+            } else {
+                showKeyboardOverlayInGif = isEnabled
+            }
+        case .screenshot:
+            break
+        }
+    }
+
+    func keyboardOverlayDisplayMode(for type: CaptureType) -> KeyboardOverlayDisplayMode {
+        let value: String
+        switch type {
+        case .video:
+            value = videoKeyboardOverlayDisplayModeRaw
+        case .gif:
+            value = gifKeyboardOverlayUseVideoSettings ? videoKeyboardOverlayDisplayModeRaw : gifKeyboardOverlayDisplayModeRaw
+        case .screenshot:
+            value = KeyboardOverlayDisplayMode.nonModifierKeys.rawValue
+        }
+        return KeyboardOverlayDisplayMode(rawValue: value) ?? .nonModifierKeys
+    }
+
+    func keyboardOverlayCustomKeySet(for type: CaptureType) -> Set<String> {
+        let rawValue: String
+        switch type {
+        case .video:
+            rawValue = videoKeyboardOverlayCustomKeys
+        case .gif:
+            rawValue = gifKeyboardOverlayUseVideoSettings ? videoKeyboardOverlayCustomKeys : gifKeyboardOverlayCustomKeys
+        case .screenshot:
+            rawValue = ""
+        }
+
+        return Set(
+            rawValue
+                .split(whereSeparator: { ",;\n ".contains($0) })
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+                .filter { !$0.isEmpty }
+        )
+    }
+
+    func keyboardOverlayStyle(for type: CaptureType) -> KeyboardOverlayStyle {
+        switch type {
+        case .video:
+            return KeyboardOverlayStyle(
+                colorHex: videoKeyboardOverlayColorHex,
+                fontSize: CGFloat(videoKeyboardOverlaySize),
+                duration: videoKeyboardOverlayDuration,
+                position: KeyboardOverlayPosition(rawValue: videoKeyboardOverlayPositionRaw) ?? .bottomCenter,
+                animationStyle: KeyboardOverlayAnimationStyle(rawValue: videoKeyboardOverlayAnimationStyleRaw) ?? .fade,
+                shapeStyle: KeyboardOverlayShapeStyle(rawValue: videoKeyboardOverlayShapeStyleRaw) ?? .roundedRect,
+                soundEffectsEnabled: videoKeyboardOverlaySoundEffects
+            )
+        case .gif:
+            if gifKeyboardOverlayUseVideoSettings {
+                return keyboardOverlayStyle(for: .video)
+            }
+            return KeyboardOverlayStyle(
+                colorHex: gifKeyboardOverlayColorHex,
+                fontSize: CGFloat(gifKeyboardOverlaySize),
+                duration: gifKeyboardOverlayDuration,
+                position: KeyboardOverlayPosition(rawValue: gifKeyboardOverlayPositionRaw) ?? .bottomCenter,
+                animationStyle: KeyboardOverlayAnimationStyle(rawValue: gifKeyboardOverlayAnimationStyleRaw) ?? .fade,
+                shapeStyle: KeyboardOverlayShapeStyle(rawValue: gifKeyboardOverlayShapeStyleRaw) ?? .roundedRect,
+                soundEffectsEnabled: gifKeyboardOverlaySoundEffects
+            )
+        case .screenshot:
+            return KeyboardOverlayStyle(
+                colorHex: "#000000",
+                fontSize: 20,
+                duration: 0.85,
+                position: .bottomCenter,
+                animationStyle: .fade,
+                shapeStyle: .roundedRect,
+                soundEffectsEnabled: false
+            )
+        }
+    }
+
     func setShowMouseClickVisuals(_ isEnabled: Bool, for type: CaptureType) {
         switch type {
         case .video:
@@ -395,6 +590,16 @@ class CaptureSettings: ObservableObject {
         set { gifMouseClickColorHex = newValue.hexRGBString }
     }
 
+    var videoKeyboardOverlayColor: NSColor {
+        get { NSColor(hexRGBString: videoKeyboardOverlayColorHex) ?? .black }
+        set { videoKeyboardOverlayColorHex = newValue.hexRGBString }
+    }
+
+    var gifKeyboardOverlayColor: NSColor {
+        get { NSColor(hexRGBString: gifKeyboardOverlayColorHex) ?? .black }
+        set { gifKeyboardOverlayColorHex = newValue.hexRGBString }
+    }
+
     func resetToDefaults() {
         // Remove all keys in one pass so only a single objectWillChange fires
         let keys: [String] = [
@@ -414,6 +619,16 @@ class CaptureSettings: ObservableObject {
             "gifMouseClicksUseVideoSettings",
             "videoMouseClickColorHex", "videoMouseClickSize", "videoMouseClickStrokeWidth", "videoMouseClickOpacity", "videoMouseClickDuration",
             "gifMouseClickColorHex", "gifMouseClickSize", "gifMouseClickStrokeWidth", "gifMouseClickOpacity", "gifMouseClickDuration",
+            "showKeyboardOverlayInVideo", "showKeyboardOverlayInGif", "gifKeyboardOverlayUseVideoSettings",
+            "videoKeyboardOverlayDisplayMode", "gifKeyboardOverlayDisplayMode",
+            "videoKeyboardOverlayCustomKeys", "gifKeyboardOverlayCustomKeys",
+            "videoKeyboardOverlayColorHex", "gifKeyboardOverlayColorHex",
+            "videoKeyboardOverlaySize", "gifKeyboardOverlaySize",
+            "videoKeyboardOverlayDuration", "gifKeyboardOverlayDuration",
+            "videoKeyboardOverlayPosition", "gifKeyboardOverlayPosition",
+            "videoKeyboardOverlayAnimationStyle", "gifKeyboardOverlayAnimationStyle",
+            "videoKeyboardOverlayShapeStyle", "gifKeyboardOverlayShapeStyle",
+            "videoKeyboardOverlaySoundEffects", "gifKeyboardOverlaySoundEffects",
             "showTrimmer",
             "recordAudio", "recordMicrophone", "selectedMicrophoneID", "showScreenshotEditor", "showGifTrimmer",
             "saveImmediatelyScreenshot", "saveImmediatelyVideo", "saveImmediatelyGif",

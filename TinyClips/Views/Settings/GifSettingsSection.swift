@@ -5,6 +5,7 @@ struct GifSettingsSection: View {
     let isPro: Bool
     let selectedTab: Binding<SettingsTab?>
     let gifMouseClickToggleBinding: Binding<Bool>
+    let gifKeyboardOverlayToggleBinding: Binding<Bool>
 
     var body: some View {
         Section("Capture Settings") {
@@ -58,6 +59,26 @@ struct GifSettingsSection: View {
                         selectedTab.wrappedValue = .mouseClicks
                     }
                     .buttonStyle(.link)
+                    Toggle(
+                        settings.gifKeyboardOverlayUseVideoSettings
+                            ? "Show keyboard keys in recording (mirrors Video)"
+                            : "Show keyboard keys in recording",
+                        isOn: gifKeyboardOverlayToggleBinding
+                    )
+                    .help(
+                        settings.gifKeyboardOverlayUseVideoSettings
+                            ? "Uses the Video keyboard overlay on/off setting for GIF recordings."
+                            : "Shows pressed keys in a subtle overlay in saved GIF recordings."
+                    )
+                    .accessibilityHint(
+                        settings.gifKeyboardOverlayUseVideoSettings
+                            ? "When enabled, GIF recordings use the same keyboard overlay visibility setting as Video recordings."
+                            : "When enabled, pressed keys are shown in saved GIF recordings."
+                    )
+                    Button("Customize keyboard overlay…") {
+                        selectedTab.wrappedValue = .keyboardOverlay
+                    }
+                    .buttonStyle(.link)
                 } else {
 #if APPSTORE
                     Toggle(isOn: .constant(false)) {
@@ -73,6 +94,21 @@ struct GifSettingsSection: View {
                     .help("Requires TinyClips Pro.")
                     Button("Unlock with Pro…") {
                         selectedTab.wrappedValue = .mouseClicks
+                    }
+                    .buttonStyle(.link)
+                    Toggle(isOn: .constant(false)) {
+                        HStack(spacing: 8) {
+                            Text(settings.gifKeyboardOverlayUseVideoSettings
+                                ? "Show keyboard keys in recording (mirrors Video)"
+                                : "Show keyboard keys in recording")
+                            Image(systemName: "lock.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .disabled(true)
+                    .help("Requires TinyClips Pro.")
+                    Button("Unlock with Pro…") {
+                        selectedTab.wrappedValue = .keyboardOverlay
                     }
                     .buttonStyle(.link)
 #endif

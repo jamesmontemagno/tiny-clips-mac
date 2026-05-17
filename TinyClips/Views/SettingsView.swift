@@ -9,6 +9,7 @@ enum SettingsTab: String, CaseIterable {
     case video = "Video"
     case gif = "GIF"
     case mouseClicks = "Mouse Clicks"
+    case keyboardOverlay = "Keyboard Overlay"
     case shortcuts = "Shortcuts"
     case pro = "Pro"
     case about = "About"
@@ -20,6 +21,7 @@ enum SettingsTab: String, CaseIterable {
         case .video: return "video"
         case .gif: return "photo.on.rectangle"
         case .mouseClicks: return "cursorarrow.rays"
+        case .keyboardOverlay: return "keyboard"
         case .shortcuts: return "command"
         case .pro: return "star"
         case .about: return "info.circle"
@@ -52,7 +54,7 @@ struct SettingsView: View {
         NavigationSplitView(columnVisibility: $splitVisibility) {
             List(SettingsTab.displayCases, id: \.self, selection: $selectedTab) { tab in
 #if APPSTORE
-                if tab == .mouseClicks && !storeService.isPro {
+                if (tab == .mouseClicks || tab == .keyboardOverlay) && !storeService.isPro {
                     Label(tab.rawValue, systemImage: tab.icon)
                         .badge("PRO")
                         .tag(tab as SettingsTab?)
@@ -93,10 +95,16 @@ struct SettingsView: View {
                         settings: settings,
                         isPro: isAppStorePro,
                         selectedTab: $selectedTab,
-                        gifMouseClickToggleBinding: gifMouseClickToggleBinding
+                        gifMouseClickToggleBinding: gifMouseClickToggleBinding,
+                        gifKeyboardOverlayToggleBinding: gifKeyboardOverlayToggleBinding
                     )
                 case .mouseClicks:
                     MouseClicksSettingsSection(
+                        settings: settings,
+                        isPro: isAppStorePro
+                    )
+                case .keyboardOverlay:
+                    KeyboardOverlaySettingsSection(
                         settings: settings,
                         isPro: isAppStorePro
                     )
@@ -263,6 +271,13 @@ struct SettingsView: View {
         Binding(
             get: { settings.shouldShowMouseClickVisuals(for: .gif) },
             set: { settings.setShowMouseClickVisuals($0, for: .gif) }
+        )
+    }
+
+    private var gifKeyboardOverlayToggleBinding: Binding<Bool> {
+        Binding(
+            get: { settings.shouldShowKeyboardOverlay(for: .gif) },
+            set: { settings.setShowKeyboardOverlay($0, for: .gif) }
         )
     }
 

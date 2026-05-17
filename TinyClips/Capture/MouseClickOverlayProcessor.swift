@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import CoreGraphics
+import CoreText
 import ImageIO
 import QuartzCore
 
@@ -342,5 +343,479 @@ enum MouseClickOverlayProcessor {
             }
             return candidateID == displayID
         }
+    }
+}
+
+struct KeyboardOverlayEvent: Sendable {
+    let timeOffset: TimeInterval
+    let label: String
+    let keyToken: String
+    let isModifierOnly: Bool
+}
+
+@MainActor
+final class KeyboardEventMonitor {
+    private var globalKeyDownMonitor: Any?
+    private var localKeyDownMonitor: Any?
+    private var globalFlagsMonitor: Any?
+    private var localFlagsMonitor: Any?
+    private var startTimestamp: TimeInterval = 0
+    private var events: [KeyboardOverlayEvent] = []
+    private var previousFlags: NSEvent.ModifierFlags = []
+
+    func start() {
+        stop()
+        startTimestamp = ProcessInfo.processInfo.systemUptime
+        events = []
+        previousFlags = []
+
+        globalKeyDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            self?.recordKeyDown(event)
+        }
+        localKeyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            self?.recordKeyDown(event)
+            return event
+        }
+        globalFlagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
+            self?.recordFlagsChanged(event)
+        }
+        localFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
+            self?.recordFlagsChanged(event)
+            return event
+        }
+    }
+
+    @discardableResult
+    func stop() -> [KeyboardOverlayEvent] {
+        if let globalKeyDownMonitor {
+            NSEvent.removeMonitor(globalKeyDownMonitor)
+            self.globalKeyDownMonitor = nil
+        }
+        if let localKeyDownMonitor {
+            NSEvent.removeMonitor(localKeyDownMonitor)
+            self.localKeyDownMonitor = nil
+        }
+        if let globalFlagsMonitor {
+            NSEvent.removeMonitor(globalFlagsMonitor)
+            self.globalFlagsMonitor = nil
+        }
+        if let localFlagsMonitor {
+            NSEvent.removeMonitor(localFlagsMonitor)
+            self.localFlagsMonitor = nil
+        }
+
+        let captured = events
+        events = []
+        previousFlags = []
+        return captured
+    }
+
+    private func recordKeyDown(_ event: NSEvent) {
+        let keyDisplay = HotKeyBinding.keyCodeToDisplayString(Int(event.keyCode))
+            ?? event.charactersIgnoringModifiers?.uppercased()
+            ?? "?"
+        let keyToken = normalizedToken(from: keyDisplay)
+        let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        let label = formattedLabel(modifiers: flags, keyDisplay: keyDisplay)
+        appendEvent(
+            KeyboardOverlayEvent(
+                timeOffset: max(0, event.timestamp - startTimestamp),
+                label: label,
+                keyToken: keyToken,
+                isModifierOnly: false
+            )
+        )
+    }
+
+    private func recordFlagsChanged(_ event: NSEvent) {
+        let tracked = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        let newlyPressed = tracked.subtracting(previousFlags)
+        previousFlags = tracked
+
+        let ordered: [(NSEvent.ModifierFlags, String, String)] = [
+            (.command, "⌘", "COMMAND"),
+            (.shift, "⇧", "SHIFT"),
+            (.option, "⌥", "OPTION"),
+            (.control, "⌃", "CONTROL")
+        ]
+
+        for (flag, symbol, token) in ordered where newlyPressed.contains(flag) {
+            appendEvent(
+                KeyboardOverlayEvent(
+                    timeOffset: max(0, event.timestamp - startTimestamp),
+                    label: symbol,
+                    keyToken: token,
+                    isModifierOnly: true
+                )
+            )
+        }
+    }
+
+    private func formattedLabel(modifiers: NSEvent.ModifierFlags, keyDisplay: String) -> String {
+        var parts: [String] = []
+        if modifiers.contains(.command) { parts.append("⌘") }
+        if modifiers.contains(.shift) { parts.append("⇧") }
+        if modifiers.contains(.option) { parts.append("⌥") }
+        if modifiers.contains(.control) { parts.append("⌃") }
+        parts.append(keyDisplay)
+        return parts.joined(separator: " + ")
+    }
+
+    private func normalizedToken(from value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: " ", with: "")
+            .uppercased()
+    }
+
+    private func appendEvent(_ event: KeyboardOverlayEvent) {
+        if let last = events.last,
+           last.label == event.label,
+           abs(last.timeOffset - event.timeOffset) < 0.03 {
+            return
+        }
+        events.append(event)
+    }
+}
+
+private struct FilteredKeyboardOverlayEvent: Sendable {
+    let timeOffset: TimeInterval
+    let label: String
+}
+
+enum KeyboardOverlayProcessor {
+    static func overlayOnVideo(
+        sourceURL: URL,
+        region: CaptureRegion,
+        events: [KeyboardOverlayEvent],
+        outputURL: URL,
+        style: KeyboardOverlayStyle,
+        displayMode: KeyboardOverlayDisplayMode,
+        customKeys: Set<String>
+    ) async throws -> URL {
+        _ = region
+        let filteredEvents = filterEvents(events, displayMode: displayMode, customKeys: customKeys)
+        guard !filteredEvents.isEmpty else {
+            return sourceURL
+        }
+
+        let asset = AVURLAsset(url: sourceURL)
+        guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+            return sourceURL
+        }
+
+        let composition = AVMutableComposition()
+        guard let compositionVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            return sourceURL
+        }
+
+        try compositionVideoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: asset.duration), of: videoTrack, at: .zero)
+        compositionVideoTrack.preferredTransform = videoTrack.preferredTransform
+
+        for audioTrack in asset.tracks(withMediaType: .audio) {
+            if let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+                try compositionAudioTrack.insertTimeRange(CMTimeRange(start: .zero, duration: asset.duration), of: audioTrack, at: .zero)
+            }
+        }
+
+        let transformedSize = videoTrack.naturalSize.applying(videoTrack.preferredTransform)
+        let renderSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
+
+        let videoComposition = AVMutableVideoComposition()
+        videoComposition.renderSize = renderSize
+        let sourceTimescale = max(30, Int32(videoTrack.nominalFrameRate.rounded(.up)))
+        videoComposition.frameDuration = CMTime(value: 1, timescale: sourceTimescale)
+
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = CMTimeRange(start: .zero, duration: asset.duration)
+
+        let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionVideoTrack)
+        layerInstruction.setTransform(videoTrack.preferredTransform, at: .zero)
+        instruction.layerInstructions = [layerInstruction]
+        videoComposition.instructions = [instruction]
+
+        let parentLayer = CALayer()
+        parentLayer.frame = CGRect(origin: .zero, size: renderSize)
+        parentLayer.isGeometryFlipped = true
+
+        let videoLayer = CALayer()
+        videoLayer.frame = CGRect(origin: .zero, size: renderSize)
+        parentLayer.addSublayer(videoLayer)
+
+        for event in filteredEvents where event.timeOffset <= asset.duration.seconds {
+            let eventLayer = makeVideoEventLayer(label: event.label, renderSize: renderSize, style: style)
+            let animation = makeVideoAnimation(style: style)
+            animation.beginTime = AVCoreAnimationBeginTimeAtZero + event.timeOffset
+            eventLayer.add(animation, forKey: "keyboard-overlay-anim")
+            parentLayer.addSublayer(eventLayer)
+        }
+
+        videoComposition.animationTool = AVVideoCompositionCoreAnimationTool(postProcessingAsVideoLayer: videoLayer, in: parentLayer)
+
+        try? FileManager.default.removeItem(at: outputURL)
+        guard let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
+            return sourceURL
+        }
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mp4
+        exportSession.videoComposition = videoComposition
+        exportSession.shouldOptimizeForNetworkUse = true
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            exportSession.exportAsynchronously {
+                switch exportSession.status {
+                case .completed:
+                    continuation.resume(returning: ())
+                case .failed, .cancelled:
+                    continuation.resume(throwing: exportSession.error ?? CaptureError.saveFailed)
+                default:
+                    continuation.resume(throwing: CaptureError.saveFailed)
+                }
+            }
+        }
+
+        if FileManager.default.fileExists(atPath: outputURL.path) {
+            try? FileManager.default.removeItem(at: sourceURL)
+        }
+        return outputURL
+    }
+
+    static func overlayOnGif(
+        gifData: GifCaptureData,
+        region: CaptureRegion,
+        events: [KeyboardOverlayEvent],
+        style: KeyboardOverlayStyle,
+        displayMode: KeyboardOverlayDisplayMode,
+        customKeys: Set<String>
+    ) -> GifCaptureData {
+        _ = region
+        let filteredEvents = filterEvents(events, displayMode: displayMode, customKeys: customKeys)
+        guard !filteredEvents.isEmpty else {
+            return gifData
+        }
+
+        var processedFrames: [CGImage] = []
+        processedFrames.reserveCapacity(gifData.frames.count)
+
+        for (index, frame) in gifData.frames.enumerated() {
+            let frameTime = Double(index) * gifData.frameDelay
+            processedFrames.append(drawKeyboardOverlay(on: frame, at: frameTime, events: filteredEvents, style: style))
+        }
+
+        return GifCaptureData(frames: processedFrames, frameDelay: gifData.frameDelay, maxWidth: gifData.maxWidth)
+    }
+
+    private static func filterEvents(
+        _ events: [KeyboardOverlayEvent],
+        displayMode: KeyboardOverlayDisplayMode,
+        customKeys: Set<String>
+    ) -> [FilteredKeyboardOverlayEvent] {
+        let normalizedCustom = Set(customKeys.map { $0.uppercased() })
+        return events.compactMap { event in
+            switch displayMode {
+            case .allKeys:
+                return .init(timeOffset: event.timeOffset, label: event.label)
+            case .nonModifierKeys:
+                return event.isModifierOnly ? nil : .init(timeOffset: event.timeOffset, label: event.label)
+            case .customSubset:
+                guard !normalizedCustom.isEmpty, normalizedCustom.contains(event.keyToken.uppercased()) else {
+                    return nil
+                }
+                return .init(timeOffset: event.timeOffset, label: event.label)
+            }
+        }
+    }
+
+    private static func makeVideoEventLayer(label: String, renderSize: CGSize, style: KeyboardOverlayStyle) -> CALayer {
+        let fontSize = max(12, style.fontSize)
+        let paddingX = max(12, fontSize * 0.55)
+        let paddingY = max(6, fontSize * 0.35)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+        ]
+        let textSize = NSAttributedString(string: label, attributes: attributes).size()
+
+        let backgroundRect = CGRect(
+            x: 0,
+            y: 0,
+            width: textSize.width + (paddingX * 2),
+            height: textSize.height + (paddingY * 2)
+        )
+
+        let container = CALayer()
+        container.frame = positionedRectFlipped(itemSize: backgroundRect.size, canvasSize: renderSize, position: style.position)
+        container.opacity = 0
+
+        let background = CALayer()
+        background.frame = CGRect(origin: .zero, size: backgroundRect.size)
+        background.backgroundColor = style.color.withAlphaComponent(style.shapeStyle == .minimal ? 0.6 : 0.82).cgColor
+        background.cornerRadius = style.shapeStyle == .capsule
+            ? backgroundRect.height / 2
+            : (style.shapeStyle == .minimal ? 6 : 10)
+        container.addSublayer(background)
+
+        let textLayer = CATextLayer()
+        textLayer.frame = CGRect(
+            x: paddingX,
+            y: max(0, (backgroundRect.height - textSize.height) / 2),
+            width: textSize.width,
+            height: textSize.height + 2
+        )
+        textLayer.alignmentMode = .center
+        textLayer.foregroundColor = contrastingTextColor(for: style.color).cgColor
+        textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
+        textLayer.font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+        textLayer.fontSize = fontSize
+        textLayer.string = label
+        container.addSublayer(textLayer)
+
+        return container
+    }
+
+    private static func makeVideoAnimation(style: KeyboardOverlayStyle) -> CAAnimationGroup {
+        let group = CAAnimationGroup()
+        group.duration = style.duration
+        group.isRemovedOnCompletion = false
+        group.fillMode = .both
+
+        let opacity = CAKeyframeAnimation(keyPath: "opacity")
+        opacity.values = [0, 1, 0]
+        opacity.keyTimes = [0, 0.15, 1]
+
+        let transform = CAKeyframeAnimation(keyPath: "transform")
+        switch style.animationStyle {
+        case .fade:
+            transform.values = [CATransform3DIdentity, CATransform3DIdentity, CATransform3DIdentity]
+            transform.keyTimes = [0, 0.5, 1]
+        case .slide:
+            transform.values = [
+                CATransform3DMakeTranslation(0, 10, 0),
+                CATransform3DIdentity,
+                CATransform3DMakeTranslation(0, -6, 0)
+            ]
+            transform.keyTimes = [0, 0.3, 1]
+        case .pop:
+            transform.values = [
+                CATransform3DMakeScale(0.85, 0.85, 1),
+                CATransform3DMakeScale(1.03, 1.03, 1),
+                CATransform3DIdentity
+            ]
+            transform.keyTimes = [0, 0.25, 1]
+        }
+
+        group.animations = [opacity, transform]
+        return group
+    }
+
+    private static func drawKeyboardOverlay(
+        on image: CGImage,
+        at frameTime: TimeInterval,
+        events: [FilteredKeyboardOverlayEvent],
+        style: KeyboardOverlayStyle
+    ) -> CGImage {
+        guard let context = CGContext(
+            data: nil,
+            width: image.width,
+            height: image.height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else {
+            return image
+        }
+
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+
+        guard let event = events.last(where: { frameTime >= $0.timeOffset && frameTime <= ($0.timeOffset + style.duration) }) else {
+            return context.makeImage() ?? image
+        }
+
+        let elapsed = frameTime - event.timeOffset
+        let progress = max(0, min(1, elapsed / style.duration))
+        let alpha = max(0, 1 - progress)
+
+        let fontSize = max(12, style.fontSize)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
+            .foregroundColor: contrastingTextColor(for: style.color).withAlphaComponent(alpha)
+        ]
+        let attributed = NSAttributedString(string: event.label, attributes: attributes)
+        let textSize = attributed.size()
+
+        let paddingX = max(12, fontSize * 0.55)
+        let paddingY = max(6, fontSize * 0.35)
+        let bubbleSize = CGSize(width: textSize.width + (paddingX * 2), height: textSize.height + (paddingY * 2))
+        var drawRect = positionedRect(itemSize: bubbleSize, canvasSize: CGSize(width: image.width, height: image.height), position: style.position)
+
+        if style.animationStyle == .slide {
+            drawRect.origin.y += (1 - progress) * 8
+        }
+
+        let path = CGPath(roundedRect: drawRect, cornerWidth: style.shapeStyle == .capsule ? drawRect.height / 2 : (style.shapeStyle == .minimal ? 6 : 10), cornerHeight: style.shapeStyle == .capsule ? drawRect.height / 2 : (style.shapeStyle == .minimal ? 6 : 10), transform: nil)
+        context.setFillColor(style.color.withAlphaComponent((style.shapeStyle == .minimal ? 0.6 : 0.82) * alpha).cgColor)
+        context.addPath(path)
+        context.fillPath()
+
+        let textRect = CGRect(
+            x: drawRect.minX + paddingX,
+            y: drawRect.minY + ((drawRect.height - textSize.height) / 2),
+            width: textSize.width,
+            height: textSize.height
+        )
+
+        let line = CTLineCreateWithAttributedString(attributed)
+        context.saveGState()
+        context.textMatrix = .identity
+        context.textPosition = CGPoint(
+            x: textRect.minX,
+            y: textRect.minY + max(1, (textRect.height - fontSize) / 2)
+        )
+        CTLineDraw(line, context)
+        context.restoreGState()
+
+        return context.makeImage() ?? image
+    }
+
+    private static func positionedRect(itemSize: CGSize, canvasSize: CGSize, position: KeyboardOverlayPosition) -> CGRect {
+        let marginX: CGFloat = max(16, itemSize.height * 0.6)
+        let marginY: CGFloat = max(16, itemSize.height * 0.8)
+
+        let x: CGFloat
+        switch position {
+        case .topLeading, .bottomLeading:
+            x = marginX
+        case .topCenter, .bottomCenter:
+            x = max(marginX, (canvasSize.width - itemSize.width) / 2)
+        case .topTrailing, .bottomTrailing:
+            x = max(marginX, canvasSize.width - itemSize.width - marginX)
+        }
+
+        let y: CGFloat
+        switch position {
+        case .topLeading, .topCenter, .topTrailing:
+            y = max(marginY, canvasSize.height - itemSize.height - marginY)
+        case .bottomLeading, .bottomCenter, .bottomTrailing:
+            y = marginY
+        }
+
+        return CGRect(origin: CGPoint(x: x, y: y), size: itemSize)
+    }
+
+    private static func positionedRectFlipped(itemSize: CGSize, canvasSize: CGSize, position: KeyboardOverlayPosition) -> CGRect {
+        var rect = positionedRect(itemSize: itemSize, canvasSize: canvasSize, position: position)
+        switch position {
+        case .topLeading, .topCenter, .topTrailing:
+            rect.origin.y = max(16, itemSize.height * 0.8)
+        case .bottomLeading, .bottomCenter, .bottomTrailing:
+            rect.origin.y = max(16, canvasSize.height - itemSize.height - max(16, itemSize.height * 0.8))
+        }
+        return rect
+    }
+
+    private static func contrastingTextColor(for color: NSColor) -> NSColor {
+        guard let rgb = color.usingColorSpace(.sRGB) else { return .white }
+        let luminance = (0.2126 * rgb.redComponent) + (0.7152 * rgb.greenComponent) + (0.0722 * rgb.blueComponent)
+        return luminance > 0.6 ? .black : .white
     }
 }

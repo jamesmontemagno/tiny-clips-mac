@@ -43,6 +43,10 @@ class CaptureManager: ObservableObject {
     private var activeMouseClickRegion: CaptureRegion?
     private var activeMouseClickCaptureType: CaptureType?
     private var activeMouseClickCaptureEnabledOverride: Bool?
+    private var keyboardEventMonitor: KeyboardEventMonitor?
+    private var activeKeyboardRegion: CaptureRegion?
+    private var activeKeyboardCaptureType: CaptureType?
+    private var activeKeyboardCaptureEnabledOverride: Bool?
     private let hotKeyManager = HotKeyManager()
     private var hotKeySettingsCancellable: AnyCancellable?
 
@@ -320,6 +324,7 @@ class CaptureManager: ObservableObject {
         microphone: Bool,
         selectedMicrophoneID: String,
         mouseClicksEnabled: Bool,
+        keyboardOverlayEnabled: Bool,
         countdownEnabled: Bool,
         countdownDuration: Int
     ) {
@@ -364,7 +369,9 @@ class CaptureManager: ObservableObject {
                     self.activeRecordingRegion = target.region
                     self.isRecording = true
                     self.activeMouseClickCaptureEnabledOverride = mouseClicksEnabled
+                    self.activeKeyboardCaptureEnabledOverride = keyboardOverlayEnabled
                     self.startMouseClickMonitoringIfNeeded(for: .video, region: target.region)
+                    self.startKeyboardMonitoringIfNeeded(for: .video, region: target.region)
                     self.recordingMicrophoneEnabled = false
                     self.microphoneWarningMessage = nil
                     self.microphoneLevel = 0
@@ -381,7 +388,9 @@ class CaptureManager: ObservableObject {
                     self.showStopPanel()
                 } catch {
                     _ = self.stopMouseClickMonitoring()
+                    _ = self.stopKeyboardMonitoring()
                     self.activeMouseClickCaptureEnabledOverride = nil
+                    self.activeKeyboardCaptureEnabledOverride = nil
                     self.resetRecordingAudioStatus()
                     self.isRecording = false
                     self.activeRecordingRegion = nil
@@ -418,7 +427,13 @@ class CaptureManager: ObservableObject {
         }
     }
 
-    private func beginGifRecording(target: CaptureTarget, mouseClicksEnabled: Bool, countdownEnabled: Bool, countdownDuration: Int) {
+    private func beginGifRecording(
+        target: CaptureTarget,
+        mouseClicksEnabled: Bool,
+        keyboardOverlayEnabled: Bool,
+        countdownEnabled: Bool,
+        countdownDuration: Int
+    ) {
         resetRecordingAudioStatus()
         let doRecord = { [weak self] in
             guard let self else { return }
@@ -433,13 +448,17 @@ class CaptureManager: ObservableObject {
                     self.activeRecordingRegion = target.region
                     self.isRecording = true
                     self.activeMouseClickCaptureEnabledOverride = mouseClicksEnabled
+                    self.activeKeyboardCaptureEnabledOverride = keyboardOverlayEnabled
                     self.startMouseClickMonitoringIfNeeded(for: .gif, region: target.region)
+                    self.startKeyboardMonitoringIfNeeded(for: .gif, region: target.region)
 
                     try await writer.start(target: target)
                     self.showStopPanel()
                 } catch {
                     _ = self.stopMouseClickMonitoring()
+                    _ = self.stopKeyboardMonitoring()
                     self.activeMouseClickCaptureEnabledOverride = nil
+                    self.activeKeyboardCaptureEnabledOverride = nil
                     self.isRecording = false
                     self.activeRecordingRegion = nil
                     self.dismissRegionIndicator()
@@ -481,8 +500,10 @@ class CaptureManager: ObservableObject {
     private func stopRecordingFlow() async {
         defer { isStoppingRecording = false }
         defer { activeMouseClickCaptureEnabledOverride = nil }
+        defer { activeKeyboardCaptureEnabledOverride = nil }
 
         let capturedMouseClickData = stopMouseClickMonitoring()
+        let capturedKeyboardData = stopKeyboardMonitoring()
         let shortVideoIndicatorBypassThreshold: TimeInterval = 120
 
         let stoppedRecordingType: CaptureType?
@@ -497,7 +518,8 @@ class CaptureManager: ObservableObject {
         let shouldShowProcessingIndicator: Bool = {
             guard let videoRecorder, gifWriter == nil else { return true }
             let mouseClicksEnabled = shouldCaptureMouseClicks(for: .video)
-            if mouseClicksEnabled {
+            let keyboardOverlayEnabled = shouldCaptureKeyboardOverlay(for: .video)
+            if mouseClicksEnabled || keyboardOverlayEnabled {
                 return true
             }
             return videoRecorder.currentRecordingDuration >= shortVideoIndicatorBypassThreshold
@@ -514,7 +536,10 @@ class CaptureManager: ObservableObject {
         // the user changes preferences while export is in progress.
         let videoShowTrimmer = CaptureSettings.shared.showTrimmer
         let videoShouldSaveImmediately = !videoShowTrimmer || CaptureSettings.shared.saveImmediatelyVideo
-        let videoOverlayStyle = CaptureSettings.shared.mouseClickOverlayStyle(for: .video)
+        let videoMouseOverlayStyle = CaptureSettings.shared.mouseClickOverlayStyle(for: .video)
+        let videoKeyboardOverlayStyle = CaptureSettings.shared.keyboardOverlayStyle(for: .video)
+        let videoKeyboardDisplayMode = CaptureSettings.shared.keyboardOverlayDisplayMode(for: .video)
+        let videoKeyboardCustomKeys = CaptureSettings.shared.keyboardOverlayCustomKeySet(for: .video)
 
         var savedVideoURL: URL?
 
@@ -527,38 +552,54 @@ class CaptureManager: ObservableObject {
                 SaveService.shared.showError("Video save failed: \(error.localizedDescription)")
             }
 
-            if let currentURL = savedVideoURL,
-               let capturedMouseClickData,
-               capturedMouseClickData.type == .video,
-               !capturedMouseClickData.events.isEmpty {
-                do {
-                    // Use the final save URL as the overlay output when saving immediately,
-                    // so the processed file lands in the user's save directory rather than
-                    // a temp location that the OS can delete.
-                    let overlayOutputURL = videoShouldSaveImmediately
-                        ? SaveService.shared.generateURL(for: .video)
-                        : temporaryURL(fileExtension: "mp4")
-
-                    savedVideoURL = try await Self.overlayVideoOffMain(
-                        sourceURL: currentURL,
-                        region: capturedMouseClickData.region,
-                        events: capturedMouseClickData.events,
-                        outputURL: overlayOutputURL,
-                        style: videoOverlayStyle,
-                        onProgress: { [weak self] overlayProgress in
-                            guard let self else { return }
-                            // Map exporter 0...1 progress into the overlay phase range.
-                            let normalized = min(max(overlayProgress, 0), 1)
-                            let mapped = 0.55 + (normalized * 0.29)
-                            Task { @MainActor in
-                                self.updateProcessingProgress(mapped, status: "Applying overlays...")
-                            }
+            if let currentURL = savedVideoURL {
+                var workingURL = currentURL
+                let hasMouseEvents = capturedMouseClickData?.type == .video && !(capturedMouseClickData?.events.isEmpty ?? true)
+                let hasKeyboardEvents = capturedKeyboardData?.type == .video && !(capturedKeyboardData?.events.isEmpty ?? true)
+                let needsAnyVideoOverlay = hasMouseEvents || hasKeyboardEvents
+                if needsAnyVideoOverlay {
+                    do {
+                        if hasMouseEvents, let capturedMouseClickData {
+                            let mouseOutputURL = hasKeyboardEvents
+                                ? temporaryURL(fileExtension: "mp4")
+                                : (videoShouldSaveImmediately ? SaveService.shared.generateURL(for: .video) : temporaryURL(fileExtension: "mp4"))
+                            workingURL = try await Self.overlayVideoOffMain(
+                                sourceURL: workingURL,
+                                region: capturedMouseClickData.region,
+                                events: capturedMouseClickData.events,
+                                outputURL: mouseOutputURL,
+                                style: videoMouseOverlayStyle,
+                                onProgress: { [weak self] overlayProgress in
+                                    guard let self else { return }
+                                    let normalized = min(max(overlayProgress, 0), 1)
+                                    let mapped = 0.55 + (normalized * 0.18)
+                                    Task { @MainActor in
+                                        self.updateProcessingProgress(mapped, status: "Applying overlays...")
+                                    }
+                                }
+                            )
                         }
-                    )
-                    updateProcessingProgress(0.85, status: "Finalizing...")
-                } catch {
-                    SaveService.shared.showError("Mouse click overlay failed for video: \(error.localizedDescription)")
+
+                        if hasKeyboardEvents, let capturedKeyboardData {
+                            let keyboardOutputURL = videoShouldSaveImmediately
+                                ? SaveService.shared.generateURL(for: .video)
+                                : temporaryURL(fileExtension: "mp4")
+                            workingURL = try await Self.overlayKeyboardVideoOffMain(
+                                sourceURL: workingURL,
+                                region: capturedKeyboardData.region,
+                                events: capturedKeyboardData.events,
+                                outputURL: keyboardOutputURL,
+                                style: videoKeyboardOverlayStyle,
+                                displayMode: videoKeyboardDisplayMode,
+                                customKeys: videoKeyboardCustomKeys
+                            )
+                            updateProcessingProgress(0.85, status: "Finalizing...")
+                        }
+                    } catch {
+                        SaveService.shared.showError("Overlay failed for video: \(error.localizedDescription)")
+                    }
                 }
+                savedVideoURL = workingURL
             }
             updateProcessingProgress(1.0, status: "Done")
             videoRecorder = nil
@@ -569,6 +610,10 @@ class CaptureManager: ObservableObject {
             do {
                 let settings = CaptureSettings.shared
                 let shouldSaveImmediately = !settings.showGifTrimmer || settings.saveImmediatelyGif
+                let gifMouseOverlayStyle = settings.mouseClickOverlayStyle(for: .gif)
+                let gifKeyboardOverlayStyle = settings.keyboardOverlayStyle(for: .gif)
+                let gifKeyboardDisplayMode = settings.keyboardOverlayDisplayMode(for: .gif)
+                let gifKeyboardCustomKeys = settings.keyboardOverlayCustomKeySet(for: .gif)
 
                 updateProcessingProgress(0.1, status: "Exporting GIF…")
 
@@ -580,7 +625,6 @@ class CaptureManager: ObservableObject {
                        capturedMouseClickData.type == .gif,
                        !capturedMouseClickData.events.isEmpty {
                         let inputGifData = gifData
-                        let overlayStyle = settings.mouseClickOverlayStyle(for: .gif)
                         let region = capturedMouseClickData.region
                         let events = capturedMouseClickData.events
                         gifData = await Self.runOffMain {
@@ -588,7 +632,25 @@ class CaptureManager: ObservableObject {
                                 gifData: inputGifData,
                                 region: region,
                                 events: events,
-                                style: overlayStyle
+                                style: gifMouseOverlayStyle
+                            )
+                        }
+                    }
+
+                    if let capturedKeyboardData,
+                       capturedKeyboardData.type == .gif,
+                       !capturedKeyboardData.events.isEmpty {
+                        let inputGifData = gifData
+                        let region = capturedKeyboardData.region
+                        let events = capturedKeyboardData.events
+                        gifData = await Self.runOffMain {
+                            KeyboardOverlayProcessor.overlayOnGif(
+                                gifData: inputGifData,
+                                region: region,
+                                events: events,
+                                style: gifKeyboardOverlayStyle,
+                                displayMode: gifKeyboardDisplayMode,
+                                customKeys: gifKeyboardCustomKeys
                             )
                         }
                     }
@@ -614,24 +676,34 @@ class CaptureManager: ObservableObject {
                     try await writer.stop(outputURL: url)
                     updateProcessingProgress(0.5, status: "Applying overlays…")
 
-                    if let capturedMouseClickData,
-                       capturedMouseClickData.type == .gif,
-                       !capturedMouseClickData.events.isEmpty {
+                    let hasGifMouseEvents = capturedMouseClickData?.type == .gif && !(capturedMouseClickData?.events.isEmpty ?? true)
+                    let hasGifKeyboardEvents = capturedKeyboardData?.type == .gif && !(capturedKeyboardData?.events.isEmpty ?? true)
+                    if hasGifMouseEvents || hasGifKeyboardEvents {
                         do {
-                            let overlayStyle = settings.mouseClickOverlayStyle(for: .gif)
-                            let region = capturedMouseClickData.region
-                            let events = capturedMouseClickData.events
                             let tempURL = temporaryURL(fileExtension: "gif")
                             defer { try? FileManager.default.removeItem(at: tempURL) }
 
                             try await Self.runOffMainThrowing {
-                                let gifData = try MouseClickOverlayProcessor.loadGifCaptureData(from: url)
-                                let processedGifData = MouseClickOverlayProcessor.overlayOnGif(
-                                    gifData: gifData,
-                                    region: region,
-                                    events: events,
-                                    style: overlayStyle
-                                )
+                                let inputGifData = try MouseClickOverlayProcessor.loadGifCaptureData(from: url)
+                                var processedGifData = inputGifData
+                                if hasGifMouseEvents, let capturedMouseClickData {
+                                    processedGifData = MouseClickOverlayProcessor.overlayOnGif(
+                                        gifData: processedGifData,
+                                        region: capturedMouseClickData.region,
+                                        events: capturedMouseClickData.events,
+                                        style: gifMouseOverlayStyle
+                                    )
+                                }
+                                if hasGifKeyboardEvents, let capturedKeyboardData {
+                                    processedGifData = KeyboardOverlayProcessor.overlayOnGif(
+                                        gifData: processedGifData,
+                                        region: capturedKeyboardData.region,
+                                        events: capturedKeyboardData.events,
+                                        style: gifKeyboardOverlayStyle,
+                                        displayMode: gifKeyboardDisplayMode,
+                                        customKeys: gifKeyboardCustomKeys
+                                    )
+                                }
                                 try GifWriter.writeGIF(
                                     frames: processedGifData.frames,
                                     frameDelay: processedGifData.frameDelay,
@@ -644,7 +716,7 @@ class CaptureManager: ObservableObject {
                                 _ = try FileManager.default.replaceItemAt(url, withItemAt: tempURL)
                             }
                         } catch {
-                            SaveService.shared.showError("Mouse click overlay failed for GIF: \(error.localizedDescription)")
+                            SaveService.shared.showError("Overlay failed for GIF: \(error.localizedDescription)")
                         }
                     }
 
@@ -697,6 +769,7 @@ class CaptureManager: ObservableObject {
         pendingRecordingType = nil
 
         _ = stopMouseClickMonitoring()
+        _ = stopKeyboardMonitoring()
 
         if isStoppingRecording {
             return
@@ -783,7 +856,7 @@ class CaptureManager: ObservableObject {
     private func showStartPanel() {
         let panel = StartRecordingPanel(
             captureType: pendingRecordingType ?? .video,
-            onStart: { [weak self] systemAudio, mic, selectedMicrophoneID, mouseClicksEnabled in
+            onStart: { [weak self] systemAudio, mic, selectedMicrophoneID, mouseClicksEnabled, keyboardOverlayEnabled in
                 guard
                     let self,
                     let target = self.pendingRecordingTarget,
@@ -805,6 +878,7 @@ class CaptureManager: ObservableObject {
                         microphone: mic,
                         selectedMicrophoneID: selectedMicrophoneID,
                         mouseClicksEnabled: mouseClicksEnabled,
+                        keyboardOverlayEnabled: keyboardOverlayEnabled,
                         countdownEnabled: countdownEnabled,
                         countdownDuration: countdownDuration
                     )
@@ -812,6 +886,7 @@ class CaptureManager: ObservableObject {
                     self.beginGifRecording(
                         target: target,
                         mouseClicksEnabled: mouseClicksEnabled,
+                        keyboardOverlayEnabled: keyboardOverlayEnabled,
                         countdownEnabled: countdownEnabled,
                         countdownDuration: countdownDuration
                     )
@@ -1197,6 +1272,44 @@ class CaptureManager: ObservableObject {
         return CaptureSettings.shared.shouldShowMouseClickVisuals(for: type)
     }
 
+    private func startKeyboardMonitoringIfNeeded(for type: CaptureType, region: CaptureRegion) {
+        guard shouldCaptureKeyboardOverlay(for: type) else {
+            _ = stopKeyboardMonitoring()
+            return
+        }
+
+        _ = stopKeyboardMonitoring()
+
+        let monitor = KeyboardEventMonitor()
+        monitor.start()
+        keyboardEventMonitor = monitor
+        activeKeyboardRegion = region
+        activeKeyboardCaptureType = type
+    }
+
+    private func stopKeyboardMonitoring() -> (type: CaptureType, region: CaptureRegion, events: [KeyboardOverlayEvent])? {
+        guard let keyboardEventMonitor, let activeKeyboardRegion, let activeKeyboardCaptureType else {
+            return nil
+        }
+
+        let events = keyboardEventMonitor.stop()
+        self.keyboardEventMonitor = nil
+        self.activeKeyboardRegion = nil
+        self.activeKeyboardCaptureType = nil
+
+        return (activeKeyboardCaptureType, activeKeyboardRegion, events)
+    }
+
+    private func shouldCaptureKeyboardOverlay(for type: CaptureType) -> Bool {
+#if APPSTORE
+        guard StoreService.shared.isPro else { return false }
+#endif
+        if let activeKeyboardCaptureEnabledOverride {
+            return activeKeyboardCaptureEnabledOverride
+        }
+        return CaptureSettings.shared.shouldShowKeyboardOverlay(for: type)
+    }
+
     private func temporaryURL(fileExtension: String) -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("TinyClips-\(UUID().uuidString)")
@@ -1241,6 +1354,28 @@ class CaptureManager: ObservableObject {
                 outputURL: outputURL,
                 style: style,
                 onProgress: onProgress
+            )
+        }.value
+    }
+
+    nonisolated private static func overlayKeyboardVideoOffMain(
+        sourceURL: URL,
+        region: CaptureRegion,
+        events: [KeyboardOverlayEvent],
+        outputURL: URL,
+        style: KeyboardOverlayStyle,
+        displayMode: KeyboardOverlayDisplayMode,
+        customKeys: Set<String>
+    ) async throws -> URL {
+        try await Task.detached(priority: .userInitiated) {
+            try await KeyboardOverlayProcessor.overlayOnVideo(
+                sourceURL: sourceURL,
+                region: region,
+                events: events,
+                outputURL: outputURL,
+                style: style,
+                displayMode: displayMode,
+                customKeys: customKeys
             )
         }.value
     }
