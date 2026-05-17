@@ -11,7 +11,7 @@ class VideoTrimmerWindow: NSWindow, NSWindowDelegate {
 
     convenience init(videoURL: URL, onComplete: @escaping (URL?) -> Void) {
         self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 580, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 700, height: 560),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
@@ -20,7 +20,7 @@ class VideoTrimmerWindow: NSWindow, NSWindowDelegate {
         self.title = "Trim Video"
         self.isReleasedWhenClosed = false
         self.delegate = self
-        self.minSize = NSSize(width: 560, height: 420)
+        self.minSize = NSSize(width: 680, height: 540)
         self.center()
 
         let trimmerView = VideoTrimmerView(videoURL: videoURL) { [weak self] resultURL in
@@ -68,24 +68,39 @@ private struct VideoTrimmerView: View {
                 .padding([.top, .horizontal])
                 .task { await viewModel.loadDuration() }
 
-            // Current time display
-            HStack {
+            HStack(spacing: 10) {
                 Text(formatTime(viewModel.currentTime))
                     .monospacedDigit()
+                    .frame(width: 64, alignment: .leading)
 
-                if viewModel.totalFrameCount > 1 {
-                    Text("Frame \(viewModel.currentFrameNumber) of \(viewModel.totalFrameCount)")
-                        .monospacedDigit()
+                Spacer(minLength: 8)
+
+                Button(action: { viewModel.stepFrame(by: -1) }) {
+                    Text("<")
                 }
+                .help("Move to the previous frame (Left Arrow).")
 
-                Spacer()
+                Text("Frame \(viewModel.currentFrameNumber) of \(max(1, viewModel.totalFrameCount))")
+                    .monospacedDigit()
+                    .frame(minWidth: 140)
+                    .multilineTextAlignment(.center)
+
+                Button(action: { viewModel.stepFrame(by: 1) }) {
+                    Text(">")
+                }
+                .help("Move to the next frame (Right Arrow).")
+
+                Spacer(minLength: 8)
+
                 Text(formatTime(viewModel.duration))
                     .monospacedDigit()
+                    .frame(width: 64, alignment: .trailing)
             }
             .font(.caption)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 20)
             .padding(.top, 6)
+            .disabled(viewModel.duration <= 0)
 
             // Trim range control
             TrimRangeSlider(
@@ -172,34 +187,22 @@ private struct VideoTrimmerView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                Button(action: { viewModel.exportCurrentFrame() }) {
+                    Label("Save Frame", systemImage: "square.and.arrow.down")
+                }
+                .help("Export the current frame using your screenshot save settings.")
+
+                Button(action: { viewModel.copyCurrentFrame() }) {
+                    Label("Copy Frame", systemImage: "doc.on.doc")
+                }
+                .help("Copy the current frame image to the clipboard.")
+                .disabled(viewModel.duration <= 0)
+
                 Spacer()
             }
             .font(.caption)
             .padding(.horizontal, 20)
             .padding(.top, 6)
-
-            HStack(spacing: 10) {
-                Button(action: { viewModel.stepFrame(by: -1) }) {
-                    Label("Previous Frame", systemImage: "chevron.left")
-                }
-                .help("Move to the previous frame (Left Arrow).")
-
-                Button(action: { viewModel.stepFrame(by: 1) }) {
-                    Label("Next Frame", systemImage: "chevron.right")
-                }
-                .help("Move to the next frame (Right Arrow).")
-
-                Spacer()
-
-                Button(action: { viewModel.exportCurrentFrame() }) {
-                    Label("Save Current Frame", systemImage: "photo")
-                }
-                .help("Export the current frame using your screenshot save settings.")
-                .disabled(viewModel.duration <= 0)
-            }
-            .font(.caption)
-            .padding(.horizontal, 20)
-            .padding(.top, 4)
 
             Divider()
                 .padding(.top, 10)
@@ -234,7 +237,7 @@ private struct VideoTrimmerView: View {
             }
             .padding()
         }
-        .frame(minWidth: 560, minHeight: 420)
+        .frame(minWidth: 660, minHeight: 540)
         .onAppear(perform: installKeyMonitor)
         .onDisappear(perform: removeKeyMonitor)
         .onChange(of: viewModel.speed) { _, _ in
@@ -368,7 +371,23 @@ private struct TrimRangeSlider: View {
                     .offset(x: playheadX - 1)
                     .allowsHitTesting(false)
             }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        seekPlayhead(to: value.location.x, usable: usable)
+                    }
+                    .onEnded { value in
+                        seekPlayhead(to: value.location.x, usable: usable)
+                    }
+            )
         }
+    }
+
+    private func seekPlayhead(to x: CGFloat, usable: CGFloat) {
+        guard duration > 0, !draggingStart, !draggingEnd else { return }
+        let normalized = min(max(0, x - handleWidth), usable) / usable
+        onSeek(Double(normalized) * duration)
     }
 
     private func trimHandle(color: Color) -> some View {
@@ -523,25 +542,16 @@ private class TrimmerViewModel: ObservableObject {
         player.pause()
         isPlaying = false
 
-        let outputURL = SaveService.shared.generateURL(for: .screenshot)
+        let outputURL = SaveService.shared.generateURL(for: .screenshot, stemSuffix: "Frame")
         let requestedTime = CMTime(seconds: currentTime, preferredTimescale: 600)
 
         Task {
             do {
-                let actualTime = try await Task.detached(priority: .userInitiated) { [asset] in
-                    let generator = AVAssetImageGenerator(asset: asset)
-                    generator.appliesPreferredTrackTransform = true
-                    generator.requestedTimeToleranceBefore = .zero
-                    generator.requestedTimeToleranceAfter = .zero
-
-                    var actualTime = CMTime.zero
-                    let image = try generator.copyCGImage(at: requestedTime, actualTime: &actualTime)
-                    try ScreenshotCapture.saveImage(image, to: outputURL)
-                    return actualTime
-                }.value
+                let frameCapture = try await captureCurrentFrame(at: requestedTime)
+                try ScreenshotCapture.saveImage(frameCapture.image, to: outputURL)
 
                 await MainActor.run {
-                    self.seek(to: actualTime.seconds)
+                    self.seek(to: frameCapture.actualTime.seconds)
                     self.isExporting = false
                     SaveService.shared.handleSavedFile(url: outputURL, type: .screenshot)
                 }
@@ -552,6 +562,54 @@ private class TrimmerViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func copyCurrentFrame() {
+        guard duration > 0 else { return }
+        isExporting = true
+        player.pause()
+        isPlaying = false
+
+        let requestedTime = CMTime(seconds: currentTime, preferredTimescale: 600)
+
+        Task {
+            do {
+                let frameCapture = try await captureCurrentFrame(at: requestedTime)
+
+                let didCopy = await MainActor.run { () -> Bool in
+                    self.seek(to: frameCapture.actualTime.seconds)
+                    let image = NSImage(cgImage: frameCapture.image, size: .zero)
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    return pasteboard.writeObjects([image])
+                }
+
+                await MainActor.run {
+                    self.isExporting = false
+                    if !didCopy {
+                        SaveService.shared.showError("Could not copy the current frame to the clipboard.")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.isExporting = false
+                    SaveService.shared.showError("Could not copy the current frame: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func captureCurrentFrame(at requestedTime: CMTime) async throws -> (image: CGImage, actualTime: CMTime) {
+        try await Task.detached(priority: .userInitiated) { [asset] in
+            let generator = AVAssetImageGenerator(asset: asset)
+            generator.appliesPreferredTrackTransform = true
+            generator.requestedTimeToleranceBefore = .zero
+            generator.requestedTimeToleranceAfter = .zero
+
+            var actualTime = CMTime.zero
+            let image = try generator.copyCGImage(at: requestedTime, actualTime: &actualTime)
+            return (image, actualTime)
+        }.value
     }
 
     func exportTrimmed(completion: @escaping (URL?) -> Void) {
