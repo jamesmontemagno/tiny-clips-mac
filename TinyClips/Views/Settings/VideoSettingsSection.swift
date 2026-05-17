@@ -126,14 +126,14 @@ struct VideoSettingsSection: View {
     private func requestKeyboardOverlayPermissionIfNeeded() {
 #if !APPSTORE
         let permissionManager = PermissionManager.shared
-        if permissionManager.hasInputMonitoringPermission() {
+        if permissionManager.hasKeyboardOverlayGlobalKeyPermission() {
             return
         }
 
-        let granted = permissionManager.requestInputMonitoringPermission()
+        let granted = permissionManager.requestKeyboardOverlayGlobalKeyPermission()
         if !granted {
             SaveService.shared.showError(
-                "Keyboard overlay needs Input Monitoring to capture letters and numbers across apps. Enable TinyClips in System Settings > Privacy & Security > Input Monitoring, then relaunch the app."
+                "Keyboard overlay needs both Input Monitoring and Accessibility permissions to capture letters and numbers across apps. Enable TinyClips in System Settings > Privacy & Security for both sections, then relaunch the app."
             )
         }
 #endif

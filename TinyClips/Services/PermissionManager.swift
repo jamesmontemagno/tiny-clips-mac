@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import ScreenCaptureKit
 import UserNotifications
+import ApplicationServices
 #if !APPSTORE
 import IOKit.hid
 #endif
@@ -104,6 +105,10 @@ class PermissionManager: ObservableObject {
         return IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
     }
 
+    func hasAccessibilityPermission() -> Bool {
+        AXIsProcessTrusted()
+    }
+
     /// Triggers the system's Input Monitoring prompt the first time it is called
     /// for this app. On subsequent launches macOS returns the current grant
     /// state without prompting again.
@@ -115,8 +120,30 @@ class PermissionManager: ObservableObject {
         return IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
     }
 
+    @discardableResult
+    func requestAccessibilityPermission() -> Bool {
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        return AXIsProcessTrustedWithOptions(options)
+    }
+
+    func hasKeyboardOverlayGlobalKeyPermission() -> Bool {
+        hasInputMonitoringPermission() && hasAccessibilityPermission()
+    }
+
+    @discardableResult
+    func requestKeyboardOverlayGlobalKeyPermission() -> Bool {
+        let hasInput = hasInputMonitoringPermission() || requestInputMonitoringPermission()
+        let hasAX = hasAccessibilityPermission() || requestAccessibilityPermission()
+        return hasInput && hasAX
+    }
+
     func openInputMonitoringSettings() {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func openAccessibilitySettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") else { return }
         NSWorkspace.shared.open(url)
     }
 #endif
