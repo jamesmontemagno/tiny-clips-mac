@@ -561,7 +561,7 @@ private class TrimmerViewModel: ObservableObject {
         Task {
             do {
                 let frameCapture = try await captureCurrentFrame(at: requestedTime)
-                try ScreenshotCapture.saveImage(frameCapture.image, to: outputURL)
+                _ = try ScreenshotCapture.saveImage(frameCapture.image, to: outputURL)
 
                 await MainActor.run {
                     self.seek(to: frameCapture.actualTime.seconds)
@@ -613,16 +613,20 @@ private class TrimmerViewModel: ObservableObject {
     }
 
     private func captureCurrentFrame(at requestedTime: CMTime) async throws -> (image: CGImage, actualTime: CMTime) {
-        try await Task.detached(priority: .userInitiated) { [asset] in
-            let generator = AVAssetImageGenerator(asset: asset)
-            generator.appliesPreferredTrackTransform = true
-            generator.requestedTimeToleranceBefore = .zero
-            generator.requestedTimeToleranceAfter = .zero
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
 
-            var actualTime = CMTime.zero
-            let image = try generator.copyCGImage(at: requestedTime, actualTime: &actualTime)
-            return (image, actualTime)
-        }.value
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(image: CGImage, actualTime: CMTime), Error>) in
+            generator.generateCGImageAsynchronously(for: requestedTime) { image, actualTime, error in
+                if let image {
+                    continuation.resume(returning: (image, actualTime))
+                } else {
+                    continuation.resume(throwing: error ?? CaptureError.saveFailed)
+                }
+            }
+        }
     }
 
     func exportTrimmed(completion: @escaping (URL?) -> Void) {

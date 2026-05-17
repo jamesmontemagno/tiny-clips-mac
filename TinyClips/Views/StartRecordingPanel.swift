@@ -26,12 +26,13 @@ class StartRecordingPanel: NSPanel {
         let allowsMouseClickToggle: Bool
     #if APPSTORE
         allowsMouseClickToggle = StoreService.shared.isPro
-    #else
-        allowsMouseClickToggle = true
-    #endif
         let defaultMouseClicksEnabled = allowsMouseClickToggle
             ? settings.shouldShowMouseClickVisuals(for: captureType)
             : false
+    #else
+        allowsMouseClickToggle = true
+        let defaultMouseClicksEnabled = settings.shouldShowMouseClickVisuals(for: captureType)
+    #endif
         let hostingView = NSHostingView(rootView: StartRecordingView(
             systemAudio: settings.recordAudio,
             microphone: settings.recordMicrophone,

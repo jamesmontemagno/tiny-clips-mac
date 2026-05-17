@@ -73,37 +73,43 @@ enum MouseClickOverlayProcessor {
         }
 
         let asset = AVURLAsset(url: sourceURL)
-        guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+        onProgress?(0.1)
+        guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
             return sourceURL
         }
+        let assetDuration = try await asset.load(.duration)
+        let preferredTransform = try await videoTrack.load(.preferredTransform)
+        onProgress?(0.25)
 
         let composition = AVMutableComposition()
         guard let compositionVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
             return sourceURL
         }
 
-        try compositionVideoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: asset.duration), of: videoTrack, at: .zero)
-        compositionVideoTrack.preferredTransform = videoTrack.preferredTransform
+        try compositionVideoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: assetDuration), of: videoTrack, at: .zero)
+        compositionVideoTrack.preferredTransform = preferredTransform
 
-        for audioTrack in asset.tracks(withMediaType: .audio) {
+        for audioTrack in try await asset.loadTracks(withMediaType: .audio) {
             if let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
-                try compositionAudioTrack.insertTimeRange(CMTimeRange(start: .zero, duration: asset.duration), of: audioTrack, at: .zero)
+                try compositionAudioTrack.insertTimeRange(CMTimeRange(start: .zero, duration: assetDuration), of: audioTrack, at: .zero)
             }
         }
 
-        let transformedSize = videoTrack.naturalSize.applying(videoTrack.preferredTransform)
+        let naturalSize = try await videoTrack.load(.naturalSize)
+        let transformedSize = naturalSize.applying(preferredTransform)
         let renderSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.renderSize = renderSize
-        let sourceTimescale = max(30, Int32(videoTrack.nominalFrameRate.rounded(.up)))
+        let nominalFrameRate = try await videoTrack.load(.nominalFrameRate)
+        let sourceTimescale = max(30, Int32(nominalFrameRate.rounded(.up)))
         videoComposition.frameDuration = CMTime(value: 1, timescale: sourceTimescale)
 
         let instruction = AVMutableVideoCompositionInstruction()
-        instruction.timeRange = CMTimeRange(start: .zero, duration: asset.duration)
+        instruction.timeRange = CMTimeRange(start: .zero, duration: assetDuration)
 
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionVideoTrack)
-        layerInstruction.setTransform(videoTrack.preferredTransform, at: .zero)
+        layerInstruction.setTransform(preferredTransform, at: .zero)
         instruction.layerInstructions = [layerInstruction]
         videoComposition.instructions = [instruction]
 
@@ -116,8 +122,9 @@ enum MouseClickOverlayProcessor {
         parentLayer.addSublayer(videoLayer)
 
         let clickColor = style.color.cgColor
+        onProgress?(0.55)
 
-        for event in mappedEvents where event.timeOffset <= asset.duration.seconds {
+        for event in mappedEvents where event.timeOffset <= assetDuration.seconds {
             let ringLayer = CAShapeLayer()
             let diameter = style.size
             ringLayer.path = CGPath(ellipseIn: CGRect(x: 0, y: 0, width: diameter, height: diameter), transform: nil)
@@ -162,48 +169,13 @@ enum MouseClickOverlayProcessor {
         exportSession.videoComposition = videoComposition
         exportSession.shouldOptimizeForNetworkUse = true
 
-        // Poll export progress so callers can keep UI feedback moving.
-        let progressTask = Task.detached(priority: .utility) {
-            while !Task.isCancelled {
-                let status = exportSession.status
-                if status == .completed || status == .failed || status == .cancelled {
-                    break
-                }
-                onProgress?(Double(exportSession.progress))
-                try? await Task.sleep(nanoseconds: 150_000_000)
-            }
-        }
-
-        // Protect against export sessions that get stuck in waiting/exporting.
-        let timeoutSeconds = max(30.0, min(300.0, asset.duration.seconds * 2.0 + 10.0))
-        let timeoutTask = Task.detached(priority: .utility) {
-            try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
-            if exportSession.status == .waiting || exportSession.status == .exporting {
-                exportSession.cancelExport()
-            }
-        }
-
-        defer {
-            progressTask.cancel()
-            timeoutTask.cancel()
-        }
-
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            exportSession.exportAsynchronously {
-                switch exportSession.status {
-                case .completed:
-                    continuation.resume(returning: ())
-                case .failed, .cancelled:
-                    continuation.resume(throwing: exportSession.error ?? CaptureError.saveFailed)
-                default:
-                    continuation.resume(throwing: CaptureError.saveFailed)
-                }
-            }
-        }
+        onProgress?(0.8)
+        try await exportSession.export(to: outputURL, as: .mp4)
 
         if FileManager.default.fileExists(atPath: outputURL.path) {
             try? FileManager.default.removeItem(at: sourceURL)
         }
+        onProgress?(1.0)
         return outputURL
     }
 
