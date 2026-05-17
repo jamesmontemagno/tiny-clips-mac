@@ -496,6 +496,13 @@ class CaptureSettings: ObservableObject {
     }
 
     func keyboardOverlayDisplayMode(for type: CaptureType) -> KeyboardOverlayDisplayMode {
+#if APPSTORE
+        // The sandboxed App Store build can only capture modifier (`flagsChanged`)
+        // events — Input Monitoring is unavailable, so non-modifier filters or a
+        // custom key subset would drop every event. Force `.allKeys` so modifier
+        // chords are always rendered.
+        return .allKeys
+#else
         let value: String
         switch type {
         case .video:
@@ -506,6 +513,7 @@ class CaptureSettings: ObservableObject {
             value = KeyboardOverlayDisplayMode.nonModifierKeys.rawValue
         }
         return KeyboardOverlayDisplayMode(rawValue: value) ?? .nonModifierKeys
+#endif
     }
 
     func keyboardOverlayCustomKeySet(for type: CaptureType) -> Set<String> {

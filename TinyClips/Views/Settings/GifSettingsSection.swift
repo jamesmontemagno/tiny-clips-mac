@@ -75,6 +75,10 @@ struct GifSettingsSection: View {
                             ? "When enabled, GIF recordings use the same keyboard overlay visibility setting as Video recordings."
                             : "When enabled, pressed keys are shown in saved GIF recordings."
                     )
+                    .onChange(of: gifKeyboardOverlayToggleBinding.wrappedValue) { _, isEnabled in
+                        guard isEnabled else { return }
+                        requestKeyboardOverlayPermissionIfNeeded()
+                    }
                     Button("Customize keyboard overlay…") {
                         selectedTab.wrappedValue = .keyboardOverlay
                     }
@@ -150,5 +154,21 @@ struct GifSettingsSection: View {
                 .help("Set the countdown duration in seconds.")
             }
         }
+    }
+
+    private func requestKeyboardOverlayPermissionIfNeeded() {
+#if !APPSTORE
+        let permissionManager = PermissionManager.shared
+        if permissionManager.hasInputMonitoringPermission() {
+            return
+        }
+
+        let granted = permissionManager.requestInputMonitoringPermission()
+        if !granted {
+            SaveService.shared.showError(
+                "Keyboard overlay needs Input Monitoring to capture letters and numbers across apps. Enable TinyClips in System Settings > Privacy & Security > Input Monitoring, then relaunch the app."
+            )
+        }
+#endif
     }
 }

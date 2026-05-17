@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+- Keyboard overlay now prompts for the macOS Input Monitoring permission on first recording (direct distribution build). Without the grant only modifier keys are captured; with it letters, numbers, and symbols are recorded across all apps.
+- Mac App Store build now clearly indicates that the keyboard overlay is limited to modifier keys (⌘ ⇧ ⌥ ⌃) and forces the matching display mode, since Input Monitoring is unavailable to sandboxed apps.
+
 ### Fixed
 - Window video and GIF recording now use the selected window bounds with the existing region recording path.
 - Processing indicator after recording stops now reliably appears and animates. Replaced the custom spinner (which failed to animate in borderless `NSPanel` + `NSHostingView`) with the system `ProgressView`. Added a spring fade-in entrance and a smooth window-level fade-in via `NSAnimationContext`.

@@ -46,6 +46,10 @@ struct VideoSettingsSection: View {
                     Toggle("Show keyboard keys in recording", isOn: $settings.showKeyboardOverlayInVideo)
                         .help("Shows pressed keys in a subtle overlay in saved video recordings.")
                         .accessibilityHint("When enabled, pressed keys are rendered in saved video recordings.")
+                        .onChange(of: settings.showKeyboardOverlayInVideo) { _, isEnabled in
+                            guard isEnabled else { return }
+                            requestKeyboardOverlayPermissionIfNeeded()
+                        }
                     Button("Customize keyboard overlay…") {
                         selectedTab.wrappedValue = .keyboardOverlay
                     }
@@ -117,5 +121,21 @@ struct VideoSettingsSection: View {
                 .help("Set the countdown duration in seconds.")
             }
         }
+    }
+
+    private func requestKeyboardOverlayPermissionIfNeeded() {
+#if !APPSTORE
+        let permissionManager = PermissionManager.shared
+        if permissionManager.hasInputMonitoringPermission() {
+            return
+        }
+
+        let granted = permissionManager.requestInputMonitoringPermission()
+        if !granted {
+            SaveService.shared.showError(
+                "Keyboard overlay needs Input Monitoring to capture letters and numbers across apps. Enable TinyClips in System Settings > Privacy & Security > Input Monitoring, then relaunch the app."
+            )
+        }
+#endif
     }
 }

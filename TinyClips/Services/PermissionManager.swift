@@ -2,6 +2,9 @@ import AppKit
 import AVFoundation
 import ScreenCaptureKit
 import UserNotifications
+#if !APPSTORE
+import IOKit.hid
+#endif
 
 @MainActor
 class PermissionManager: ObservableObject {
@@ -87,6 +90,36 @@ class PermissionManager: ObservableObject {
         guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") else { return }
         NSWorkspace.shared.open(url)
     }
+
+#if !APPSTORE
+    /// Global `NSEvent` key-down monitoring (used by the keyboard overlay) requires
+    /// the user to grant Input Monitoring in Privacy & Security. Without it, only
+    /// modifier (`flagsChanged`) events are delivered for other apps. Sandboxed
+    /// builds cannot use Input Monitoring at all, so this is gated to the direct
+    /// distribution target.
+    func hasInputMonitoringPermission() -> Bool {
+        if #available(macOS 10.15, *) {
+            return CGPreflightListenEventAccess()
+        }
+        return IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+    }
+
+    /// Triggers the system's Input Monitoring prompt the first time it is called
+    /// for this app. On subsequent launches macOS returns the current grant
+    /// state without prompting again.
+    @discardableResult
+    func requestInputMonitoringPermission() -> Bool {
+        if #available(macOS 10.15, *) {
+            return CGRequestListenEventAccess()
+        }
+        return IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+    }
+
+    func openInputMonitoringSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") else { return }
+        NSWorkspace.shared.open(url)
+    }
+#endif
 
     // MARK: - Internal
 

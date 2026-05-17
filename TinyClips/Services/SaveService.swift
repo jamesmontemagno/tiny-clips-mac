@@ -381,7 +381,16 @@ class SaveService: NSObject, UNUserNotificationCenterDelegate {
         alert.informativeText = message
         alert.alertStyle = .warning
         alert.addButton(withTitle: "OK")
-        alert.runModal()
+
+        if let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first {
+            alert.beginSheetModal(for: window)
+        } else {
+            // Avoid presenting modal alerts synchronously inside SwiftUI/AppKit
+            // layout/update transactions.
+            DispatchQueue.main.async {
+                alert.runModal()
+            }
+        }
     }
 }
 

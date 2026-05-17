@@ -216,7 +216,15 @@ struct KeyboardOverlaySettingsSection: View {
             }
         }
         .help("Show all keys, hide modifier-only keys, or use a custom key subset.")
+#if APPSTORE
+        .disabled(true)
+#endif
 
+#if APPSTORE
+        Text("Only modifier keys (⌘ ⇧ ⌥ ⌃) are captured in the App Store build because Input Monitoring is unavailable to sandboxed apps.")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+#else
         if KeyboardOverlayDisplayMode(rawValue: displayModeRaw.wrappedValue) == .customSubset {
             TextField("Custom keys (comma-separated, e.g. A, B, 4, SPACE)", text: customKeys)
                 .textFieldStyle(.roundedBorder)
@@ -224,6 +232,7 @@ struct KeyboardOverlaySettingsSection: View {
                 .accessibilityLabel("Custom keyboard overlay keys")
                 .accessibilityHint("Provide a comma-separated list of keys to visualize.")
         }
+#endif
 
         Picker("Position", selection: positionRaw) {
             ForEach(KeyboardOverlayPosition.allCases, id: \.rawValue) { position in

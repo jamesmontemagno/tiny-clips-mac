@@ -338,6 +338,10 @@ final class KeyboardEventMonitor {
         events = []
         previousFlags = []
 
+#if !APPSTORE
+        // Global `.keyDown` requires Input Monitoring permission and is unavailable
+        // in the sandboxed Mac App Store build, so non-modifier key capture is
+        // limited to the direct distribution target.
         globalKeyDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             self?.recordKeyDown(event)
         }
@@ -345,6 +349,9 @@ final class KeyboardEventMonitor {
             self?.recordKeyDown(event)
             return event
         }
+#endif
+        // `.flagsChanged` is delivered globally without Input Monitoring permission,
+        // so modifier-only overlays still work in the sandboxed build.
         globalFlagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
             self?.recordFlagsChanged(event)
         }

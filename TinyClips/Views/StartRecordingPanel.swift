@@ -156,6 +156,9 @@ private struct StartRecordingView: View {
             if allowsKeyboardOverlayToggle {
                 Button {
                     keyboardOverlayEnabled.toggle()
+                    if keyboardOverlayEnabled {
+                        requestKeyboardOverlayPermissionIfNeeded()
+                    }
                 } label: {
                     Image(systemName: "keyboard")
                         .font(.system(size: 13))
@@ -237,5 +240,21 @@ private struct StartRecordingView: View {
                         .strokeBorder(.primary.opacity(0.15), lineWidth: 0.5)
                 }
         }
+    }
+
+    private func requestKeyboardOverlayPermissionIfNeeded() {
+#if !APPSTORE
+        let permissionManager = PermissionManager.shared
+        if permissionManager.hasInputMonitoringPermission() {
+            return
+        }
+
+        let granted = permissionManager.requestInputMonitoringPermission()
+        if !granted {
+            SaveService.shared.showError(
+                "Keyboard overlay needs Input Monitoring to capture letters and numbers across apps. Enable TinyClips in System Settings > Privacy & Security > Input Monitoring, then relaunch the app."
+            )
+        }
+#endif
     }
 }
