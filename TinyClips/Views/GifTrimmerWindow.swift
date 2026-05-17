@@ -83,18 +83,40 @@ private struct GifTrimmerView: View {
                     .padding([.top, .horizontal])
             }
 
-            // Frame counter
-            HStack {
-                Text("Frame \(viewModel.currentFrameIndex + 1) of \(viewModel.totalFrames)")
+            // Frame counter and selection
+            HStack(spacing: 10) {
+                Text("\(formatDuration(viewModel.currentDurationSeconds))")
                     .monospacedDigit()
-                Spacer()
-                Text("\(String(format: "%.1f", viewModel.totalDurationSeconds))s total")
+                    .frame(width: 64, alignment: .leading)
+
+                Spacer(minLength: 8)
+
+                Button(action: { viewModel.stepFrame(by: -1) }) {
+                    Text("<")
+                }
+                .help("Move to the previous frame.")
+
+                Text("Frame \(viewModel.currentFrameIndex + 1) of \(max(1, viewModel.totalFrames))")
                     .monospacedDigit()
+                    .frame(minWidth: 140)
+                    .multilineTextAlignment(.center)
+
+                Button(action: { viewModel.stepFrame(by: 1) }) {
+                    Text(">")
+                }
+                .help("Move to the next frame.")
+
+                Spacer(minLength: 8)
+
+                Text("\(formatDuration(viewModel.totalDurationSeconds)) total")
+                    .monospacedDigit()
+                    .frame(width: 80, alignment: .trailing)
             }
             .font(.caption)
             .foregroundStyle(.secondary)
             .padding(.horizontal, 20)
             .padding(.top, 6)
+            .disabled(viewModel.totalFrames <= 0)
 
             // Trim range slider
             GifTrimSlider(
@@ -189,19 +211,35 @@ private struct GifTrimmerView: View {
 
                 Spacer()
 
-                Button("Cancel") {
+                Menu {
+                    Button("Save Frame", systemImage: "square.and.arrow.down") {
+                        saveCurrentFrame()
+                    }
+
+                    Button("Copy Frame", systemImage: "doc.on.doc") {
+                        copyCurrentFrame()
+                    }
+
+                    Divider()
+
+                    Button("Save All Frames", systemImage: "photo.stack") {
+                        saveAllFrames()
+                    }
+
+                    Button("Save Trimmed", systemImage: "scissors") {
+                        saveTrimmedGif()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                } label: {
+                    Label("Save", systemImage: "square.and.arrow.down")
+                }
+
+                Button("Done") {
                     onDone(nil)
                 }
                 .keyboardShortcut(.cancelAction)
-
-                Button("Save All Frames") {
-                    saveGif(trimmed: false)
-                }
-
-                Button("Save Trimmed") {
-                    saveGif(trimmed: true)
-                }
-                .keyboardShortcut(.defaultAction)
+                .tint(.accentColor)
+                .buttonStyle(.borderedProminent)
             }
             .padding()
         }
@@ -217,17 +255,88 @@ private struct GifTrimmerView: View {
         }
     }
 
-    private func saveGif(trimmed: Bool) {
+    private func saveTrimmedGif() {
         guard !isSaving else { return }
         isSaving = true
 
+        let destinationURL = outputURL
+
         DispatchQueue.main.async {
-            if let url = viewModel.exportGif(to: outputURL, trimmed: trimmed) {
-                onDone(url)
+            if let url = viewModel.exportGif(to: destinationURL, trimmed: true) {
+                isSaving = false
+                SaveService.shared.handleSavedFile(url: url, type: .gif)
             } else {
                 isSaving = false
             }
         }
+    }
+
+    private func saveAllFrames() {
+        guard !isSaving else { return }
+        isSaving = true
+
+        let destinationDirectory = destinationDirectoryForFrames()
+
+        do {
+            try FileManager.default.createDirectory(
+                at: destinationDirectory,
+                withIntermediateDirectories: true
+            )
+        } catch {
+            isSaving = false
+            SaveService.shared.showError("Could not create folder for frames: \(error.localizedDescription)")
+            return
+        }
+
+        DispatchQueue.main.async {
+            do {
+                let savedDirectory = try viewModel.exportFrames(to: destinationDirectory, sourceURL: outputURL)
+                isSaving = false
+                SaveService.shared.handleSavedFile(url: savedDirectory, type: .gif)
+            } catch {
+                isSaving = false
+                SaveService.shared.showError("Could not save the GIF frames: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func saveCurrentFrame() {
+        guard let frame = viewModel.currentFrameCGImage else {
+            SaveService.shared.showError("Could not access the current frame.")
+            return
+        }
+
+        let outputURL = SaveService.shared.generateURL(for: .screenshot, stemSuffix: "Frame")
+        do {
+            try ScreenshotCapture.saveImage(frame, to: outputURL)
+            SaveService.shared.handleSavedFile(url: outputURL, type: .screenshot)
+        } catch {
+            SaveService.shared.showError("Could not save the current frame: \(error.localizedDescription)")
+        }
+    }
+
+    private func copyCurrentFrame() {
+        guard let frame = viewModel.currentFrameCGImage else {
+            SaveService.shared.showError("Could not access the current frame.")
+            return
+        }
+
+        let image = NSImage(cgImage: frame, size: .zero)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        if !pasteboard.writeObjects([image]) {
+            SaveService.shared.showError("Could not copy the current frame to the clipboard.")
+        }
+    }
+
+    private func destinationDirectoryForFrames() -> URL {
+        let stem = outputURL.deletingPathExtension().lastPathComponent
+        return outputURL.deletingLastPathComponent()
+            .appendingPathComponent("\(stem) Frames", isDirectory: true)
+    }
+
+    private func formatDuration(_ seconds: Double) -> String {
+        String(format: "%.1fs", seconds)
     }
 }
 
@@ -320,7 +429,28 @@ private struct GifTrimSlider: View {
                     .offset(x: playheadX - 1)
                     .allowsHitTesting(false)
             }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        seekPlayhead(to: value.location.x, usable: usable)
+                    }
+                    .onEnded { value in
+                        seekPlayhead(to: value.location.x, usable: usable)
+                    }
+            )
         }
+    }
+
+    private func seekPlayhead(to x: CGFloat, usable: CGFloat) {
+        guard totalFrames > 0, !draggingStart, !draggingEnd else { return }
+        if totalFrames == 1 {
+            onSeek(0)
+            return
+        }
+        let normalized = min(max(0, x - handleWidth), usable) / usable
+        let frame = Int((normalized * CGFloat(totalFrames - 1)).rounded())
+        onSeek(frame)
     }
 
     private func trimHandle(color: Color) -> some View {
@@ -369,6 +499,11 @@ private class GifTrimmerViewModel: ObservableObject {
         return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
     }
 
+    var currentFrameCGImage: CGImage? {
+        guard currentFrameIndex >= 0, currentFrameIndex < gifData.frames.count else { return nil }
+        return gifData.frames[currentFrameIndex]
+    }
+
     private var playbackTimer: Timer?
 
     init(gifData: GifCaptureData) {
@@ -378,6 +513,16 @@ private class GifTrimmerViewModel: ObservableObject {
 
     func seekTo(frame: Int) {
         currentFrameIndex = max(0, min(frame, totalFrames - 1))
+    }
+
+    func stepFrame(by offset: Int) {
+        guard totalFrames > 0 else { return }
+        stopPlayback()
+        seekTo(frame: currentFrameIndex + offset)
+    }
+
+    var currentDurationSeconds: Double {
+        Double(currentFrameIndex) * effectiveFrameDelay
     }
 
     func togglePlayback() {
@@ -475,6 +620,21 @@ private class GifTrimmerViewModel: ObservableObject {
 
         guard CGImageDestinationFinalize(destination) else { return nil }
         return url
+    }
+
+    func exportFrames(to directoryURL: URL, sourceURL: URL) throws -> URL {
+        stopPlayback()
+
+        let frameDigits = max(3, String(max(1, totalFrames)).count)
+        let stem = sourceURL.deletingPathExtension().lastPathComponent
+
+        for (index, frame) in gifData.frames.enumerated() {
+            let fileName = String(format: "%@ Frame %0*d.png", stem, frameDigits, index + 1)
+            let frameURL = directoryURL.appendingPathComponent(fileName)
+            try ScreenshotCapture.saveImage(frame, to: frameURL)
+        }
+
+        return directoryURL
     }
 
     private func downscale(_ image: CGImage, to size: CGSize) -> CGImage? {

@@ -187,17 +187,6 @@ private struct VideoTrimmerView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Button(action: { viewModel.exportCurrentFrame() }) {
-                    Label("Save Frame", systemImage: "square.and.arrow.down")
-                }
-                .help("Export the current frame using your screenshot save settings.")
-
-                Button(action: { viewModel.copyCurrentFrame() }) {
-                    Label("Copy Frame", systemImage: "doc.on.doc")
-                }
-                .help("Copy the current frame image to the clipboard.")
-                .disabled(viewModel.duration <= 0)
-
                 Spacer()
             }
             .font(.caption)
@@ -215,25 +204,40 @@ private struct VideoTrimmerView: View {
 
                 Spacer()
 
-                Button("Cancel") {
+                Menu {
+                    Button("Save Frame", systemImage: "square.and.arrow.down") {
+                        viewModel.exportCurrentFrame()
+                    }
+
+                    Button("Copy Frame", systemImage: "doc.on.doc") {
+                        viewModel.copyCurrentFrame()
+                    }
+
+                    Divider()
+
+                    Button("Save Without Trimming", systemImage: "film") {
+                        SaveService.shared.handleSavedFile(url: videoURL, type: .video)
+                    }
+
+                    Button("Save Trimmed", systemImage: "scissors") {
+                        viewModel.exportTrimmed { resultURL in
+                            guard let resultURL else { return }
+                            SaveService.shared.handleSavedFile(url: resultURL, type: .video)
+                        }
+                    }
+                } label: {
+                    Label("Save", systemImage: "square.and.arrow.down")
+                }
+                .help("Save the current frame or export the video.")
+                .disabled(viewModel.duration <= 0 || viewModel.isExporting)
+
+                Button("Done") {
                     viewModel.cleanup()
                     onDone(nil)
                 }
                 .keyboardShortcut(.cancelAction)
-
-                Button("Save Without Trimming") {
-                    viewModel.cleanup()
-                    onDone(videoURL)
-                }
-
-                Button("Save Trimmed") {
-                    viewModel.cleanup()
-                    viewModel.exportTrimmed { resultURL in
-                        onDone(resultURL)
-                    }
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(viewModel.isExporting)
+                .tint(.accentColor)
+                .buttonStyle(.borderedProminent)
             }
             .padding()
         }
