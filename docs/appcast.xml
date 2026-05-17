@@ -11,24 +11,24 @@
         <item>
             
             
-            <title>1.4.0</title>
+            <title>1.4.0.1</title>
             
             
-            <pubDate>Sun, 17 May 2026 15:50:52 +0000</pubDate>
+            <pubDate>Sun, 17 May 2026 16:56:44 +0000</pubDate>
             
             
-            <sparkle:version>32</sparkle:version>
+            <sparkle:version>33</sparkle:version>
             
             
-            <sparkle:shortVersionString>1.4.0</sparkle:shortVersionString>
+            <sparkle:shortVersionString>1.4.0.1</sparkle:shortVersionString>
             
             
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             
             
-            <description><![CDATA[<h3>What's Changed</h3><ul><li>Release v1.4.0</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v1.3.4...v1.4.0">Full Changelog</a></p>]]></description>
-            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v1.4.0</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.4.0/TinyClips-v1.4.0.zip" length="3127663" type="application/octet-stream" sparkle:edSignature="kuCTwhu2D6yKzPWj9Eo2WZJF7/Iq8gfXw2h7xryh6miQ4GaM0a1ZVesmFengKdMHfDdOlNY613biziRZqZItBg=="/>
+            <description><![CDATA[<h3>What's Changed</h3><ul><li>Update CHANGELOG for v1.4.0.1</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v1.4.0...v1.4.0.1">Full Changelog</a></p>]]></description>
+            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v1.4.0.1</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.4.0.1/TinyClips-v1.4.0.1.zip" length="3130325" type="application/octet-stream" sparkle:edSignature="UcL16AJHHdpWuEcXssP4bIl9JdeGqHnBJXKI5CRqZvbDsy/ydaBGj0xgvp6KddCh0+xaqBVbWlPsq/BTcH/VAg=="/>
             
         
         </item>
