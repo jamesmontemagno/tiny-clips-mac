@@ -1064,7 +1064,7 @@ class CaptureManager: ObservableObject {
 
         dismissRegionIndicator()
 
-        if mode != .screen, CaptureSettings.shared.showRegionIndicator {
+        if mode == .region, CaptureSettings.shared.showRegionIndicator {
             let panel = RegionIndicatorPanel(region: target.region)
             panel.show()
             regionIndicatorPanel = panel
