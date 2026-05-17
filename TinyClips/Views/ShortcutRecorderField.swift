@@ -43,6 +43,7 @@ struct ShortcutRecorderField: View {
                 }
                 .buttonStyle(.bordered)
                 .accessibilityHint("Cancels recording and keeps the current shortcut.")
+                .help("Cancel shortcut recording.")
             } else {
                 Text(current.displayString)
                     .font(.system(.body, design: .monospaced))
@@ -57,6 +58,7 @@ struct ShortcutRecorderField: View {
                 }
                 .buttonStyle(.bordered)
                 .accessibilityHint("Click to record a new keyboard shortcut.")
+                .help("Record a new shortcut.")
 
                 if isCustom {
                     Button("Reset") {
@@ -65,6 +67,7 @@ struct ShortcutRecorderField: View {
                     }
                     .buttonStyle(.bordered)
                     .accessibilityHint("Resets this shortcut to its default value.")
+                    .help("Reset to the default shortcut.")
                 }
             }
         }

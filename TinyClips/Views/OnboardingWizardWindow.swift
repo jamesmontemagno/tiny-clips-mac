@@ -113,17 +113,20 @@ private struct OnboardingWizardView: View {
                     Button("Back") {
                         previousStep()
                     }
+                    .help("Go to the previous step.")
                 }
 
                 Button("Skip") {
                     showSkipConfirmation = true
                 }
                 .keyboardShortcut(.cancelAction)
+                .help("Skip setup for now.")
 
                 Button(primaryButtonTitle) {
                     handlePrimaryAction()
                 }
                 .keyboardShortcut(.defaultAction)
+                .help(isLastStep ? "Finish setup." : "Continue to the next step.")
             }
         }
         .padding(20)
@@ -132,9 +135,11 @@ private struct OnboardingWizardView: View {
         }
         .alert("Skip setup?", isPresented: $showSkipConfirmation) {
             Button("Cancel", role: .cancel) {}
+                .help("Stay in setup.")
             Button("Skip Setup", role: .destructive) {
                 onSkip()
             }
+            .help("Close setup and use TinyClips with current settings.")
         } message: {
             Text("You can run setup later from Settings.")
         }
@@ -201,14 +206,17 @@ private struct OnboardingWizardView: View {
                 Button("Allow Screen Recording") {
                     requestScreenPermission()
                 }
+                .help("Request Screen Recording access.")
 
                 Button("Re-check") {
                     recheckScreenPermission()
                 }
+                .help("Check Screen Recording access again.")
 
                 Button("Open System Settings") {
                     PermissionManager.shared.openScreenRecordingSettings()
                 }
+                .help("Open Screen Recording settings.")
             }
 
             HStack(alignment: .top, spacing: 8) {
@@ -237,10 +245,12 @@ private struct OnboardingWizardView: View {
                 Button(microphoneGranted ? "Re-check" : "Continue") {
                     requestMicrophonePermission()
                 }
+                .help(microphoneGranted ? "Check microphone access again." : "Continue without microphone access.")
 
                 Button("Open Microphone Settings") {
                     PermissionManager.shared.openMicrophoneSettings()
                 }
+                .help("Open microphone settings.")
             }
 
             Divider()
@@ -256,10 +266,12 @@ private struct OnboardingWizardView: View {
                 Button(notificationsGranted ? "Re-check" : "Allow Notifications") {
                     requestNotificationPermission()
                 }
+                .help(notificationsGranted ? "Check notification access again." : "Request notification access.")
 
                 Button("Open Notifications Settings") {
                     PermissionManager.shared.openNotificationSettings()
                 }
+                .help("Open notification settings.")
             }
         }
     }

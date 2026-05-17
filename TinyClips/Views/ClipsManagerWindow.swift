@@ -1125,6 +1125,7 @@ private struct ClipsManagerContentView: View {
                 .frame(width: 64)
                 .accessibilityLabel("View mode")
                 .accessibilityValue(viewModel.viewMode == .grid ? "Grid" : "List")
+                .help("Switch between grid and list views.")
 
                 Button {
                     viewModel.load()
@@ -1142,6 +1143,7 @@ private struct ClipsManagerContentView: View {
                             viewModel.clearSelection()
                         }
                     }
+                    .help(viewModel.selectionMode ? "Exit selection mode." : "Select multiple clips.")
                 }
 
                 if isPro {

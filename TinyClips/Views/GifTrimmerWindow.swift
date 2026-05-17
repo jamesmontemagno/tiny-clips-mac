@@ -94,6 +94,7 @@ private struct GifTrimmerView: View {
                 Button(action: { viewModel.stepFrame(by: -1) }) {
                     Text("<")
                 }
+                .accessibilityLabel("Previous frame")
                 .help("Move to the previous frame.")
 
                 Text("Frame \(viewModel.currentFrameIndex + 1) of \(max(1, viewModel.totalFrames))")
@@ -104,6 +105,7 @@ private struct GifTrimmerView: View {
                 Button(action: { viewModel.stepFrame(by: 1) }) {
                     Text(">")
                 }
+                .accessibilityLabel("Next frame")
                 .help("Move to the next frame.")
 
                 Spacer(minLength: 8)
@@ -194,6 +196,8 @@ private struct GifTrimmerView: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(width: 120)
+                .accessibilityLabel("Playback speed")
+                .help("Choose the GIF playback speed.")
                 Spacer()
             }
             .font(.caption)
@@ -208,6 +212,7 @@ private struct GifTrimmerView: View {
                 Button(action: { viewModel.togglePlayback() }) {
                     Label("Preview", systemImage: viewModel.isPlaying ? "pause.fill" : "play.fill")
                 }
+                .help(viewModel.isPlaying ? "Pause the preview." : "Play the selected frames.")
 
                 Spacer()
 
@@ -215,29 +220,35 @@ private struct GifTrimmerView: View {
                     Button("Save Frame", systemImage: "square.and.arrow.down") {
                         saveCurrentFrame()
                     }
+                    .help("Save the current frame as an image.")
 
                     Button("Copy Frame", systemImage: "doc.on.doc") {
                         copyCurrentFrame()
                     }
+                    .help("Copy the current frame to the clipboard.")
 
                     Divider()
 
                     Button("Save All Frames", systemImage: "photo.stack") {
                         saveAllFrames()
                     }
+                    .help("Save every frame as separate images.")
 
                     Button("Save Trimmed", systemImage: "scissors") {
                         saveTrimmedGif()
                     }
+                    .help("Export a GIF using the selected frame range.")
                     .keyboardShortcut(.defaultAction)
                 } label: {
                     Label("Save", systemImage: "square.and.arrow.down")
                 }
+                .help("Save the current frame or export the GIF.")
 
                 Button("Done") {
                     onDone(nil)
                 }
                 .keyboardShortcut(.cancelAction)
+                .help("Close the trimmer.")
                 .tint(.accentColor)
                 .buttonStyle(.borderedProminent)
             }

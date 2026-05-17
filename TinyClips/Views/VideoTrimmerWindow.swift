@@ -78,6 +78,7 @@ private struct VideoTrimmerView: View {
                 Button(action: { viewModel.stepFrame(by: -1) }) {
                     Text("<")
                 }
+                .accessibilityLabel("Previous frame")
                 .help("Move to the previous frame (Left Arrow).")
 
                 Text("Frame \(viewModel.currentFrameNumber) of \(max(1, viewModel.totalFrameCount))")
@@ -88,6 +89,7 @@ private struct VideoTrimmerView: View {
                 Button(action: { viewModel.stepFrame(by: 1) }) {
                     Text(">")
                 }
+                .accessibilityLabel("Next frame")
                 .help("Move to the next frame (Right Arrow).")
 
                 Spacer(minLength: 8)
@@ -179,7 +181,8 @@ private struct VideoTrimmerView: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(width: 120)
-                .help("Changing speed affects export playback rate. Audio is only kept at 1x.")
+                .accessibilityLabel("Playback speed")
+                .help("Choose the export playback speed. Audio is kept only at 1x.")
 
                 if viewModel.speed != 1.0 {
                     Text("Audio will be removed on export")
@@ -201,6 +204,7 @@ private struct VideoTrimmerView: View {
                 Button(action: { viewModel.previewTrimmed() }) {
                     Label("Preview", systemImage: viewModel.isPlaying ? "pause.fill" : "play.fill")
                 }
+                .help(viewModel.isPlaying ? "Pause the trimmed preview." : "Play the trimmed preview.")
 
                 Spacer()
 
@@ -208,16 +212,19 @@ private struct VideoTrimmerView: View {
                     Button("Save Frame", systemImage: "square.and.arrow.down") {
                         viewModel.exportCurrentFrame()
                     }
+                    .help("Save the current frame as an image.")
 
                     Button("Copy Frame", systemImage: "doc.on.doc") {
                         viewModel.copyCurrentFrame()
                     }
+                    .help("Copy the current frame to the clipboard.")
 
                     Divider()
 
                     Button("Save Without Trimming", systemImage: "film") {
                         SaveService.shared.handleSavedFile(url: videoURL, type: .video)
                     }
+                    .help("Save the original video without trimming.")
 
                     Button("Save Trimmed", systemImage: "scissors") {
                         viewModel.exportTrimmed { resultURL in
@@ -225,6 +232,7 @@ private struct VideoTrimmerView: View {
                             SaveService.shared.handleSavedFile(url: resultURL, type: .video)
                         }
                     }
+                    .help("Export only the selected trimmed segment.")
                 } label: {
                     Label("Save", systemImage: "square.and.arrow.down")
                 }
@@ -236,6 +244,7 @@ private struct VideoTrimmerView: View {
                     onDone(nil)
                 }
                 .keyboardShortcut(.cancelAction)
+                .help("Close the trimmer.")
                 .tint(.accentColor)
                 .buttonStyle(.borderedProminent)
             }
