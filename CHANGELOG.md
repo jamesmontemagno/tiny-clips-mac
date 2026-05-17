@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v1.4.0 - 2026-05-17
 
 ### Fixed
 - Window video and GIF recording now use the selected window bounds with the existing region recording path.
