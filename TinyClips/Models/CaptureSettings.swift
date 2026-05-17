@@ -3,7 +3,6 @@ import SwiftUI
 import AppKit
 import ScreenCaptureKit
 import UniformTypeIdentifiers
-import Security
 
 // MARK: - Capture Region
 
@@ -53,6 +52,30 @@ struct CaptureRegion: Sendable {
         }
         return SCContentFilter(display: display, excludingApplications: excludedApps, exceptingWindows: [])
     }
+}
+
+struct CaptureTarget {
+    let region: CaptureRegion
+
+    init(region: CaptureRegion) {
+        self.region = region
+    }
+
+    func prepare() async throws -> PreparedCaptureTarget {
+        PreparedCaptureTarget(
+            filter: try await region.makeFilter(),
+            config: region.makeStreamConfig(),
+            pixelWidth: region.pixelWidth,
+            pixelHeight: region.pixelHeight
+        )
+    }
+}
+
+struct PreparedCaptureTarget {
+    let filter: SCContentFilter
+    let config: SCStreamConfiguration
+    let pixelWidth: Int
+    let pixelHeight: Int
 }
 
 // MARK: - Capture Type

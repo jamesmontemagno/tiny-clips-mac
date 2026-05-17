@@ -6,6 +6,13 @@ import ScreenCaptureKit
 @MainActor
 class WindowSelector {
     private static var activeSelector: WindowSelectorController?
+    private static let systemChromeBundleIdentifiers: Set<String> = [
+        "com.apple.WindowManager",
+        "com.apple.controlcenter",
+        "com.apple.dock",
+        "com.apple.notificationcenterui",
+        "com.apple.systemuiserver",
+    ]
 
     static func selectWindow() async -> SCWindow? {
         let windows: [SCWindow]
@@ -13,9 +20,13 @@ class WindowSelector {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
             let includeTinyClips = CaptureSettings.shared.includeTinyClipsInCapture
             windows = content.windows.filter { w in
-                let isTinyClipsWindow = w.owningApplication?.bundleIdentifier == Bundle.main.bundleIdentifier
+                guard let bundleIdentifier = w.owningApplication?.bundleIdentifier else { return false }
+                let isTinyClipsWindow = bundleIdentifier == Bundle.main.bundleIdentifier
+                let isSystemChrome = Self.systemChromeBundleIdentifiers.contains(bundleIdentifier)
                 return w.frame.width >= 50 && w.frame.height >= 50
+                    && w.windowLayer == 0
                     && (includeTinyClips || !isTinyClipsWindow)
+                    && !isSystemChrome
                     && w.isOnScreen
             }
         } catch {
@@ -42,6 +53,8 @@ private class WindowSelectorController {
     private let completion: (SCWindow?) -> Void
     private var hoveredWindow: SCWindow?
     private let primaryScreenHeight: CGFloat
+    private var localMonitor: Any?
+    private var globalMonitor: Any?
 
     init(windows: [SCWindow], completion: @escaping (SCWindow?) -> Void) {
         self.scWindows = windows
@@ -71,6 +84,7 @@ private class WindowSelectorController {
                 self?.updateHoveredWindow(at: NSEvent.mouseLocation)
             }
             view.onMouseDown = { [weak self] in
+                self?.updateHoveredWindow(at: NSEvent.mouseLocation)
                 self?.selectHoveredWindow()
             }
             view.onCancel = { [weak self] in
@@ -84,6 +98,27 @@ private class WindowSelectorController {
 
         // Show highlight for window under cursor at launch
         updateHoveredWindow(at: NSEvent.mouseLocation)
+
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 {
+                self?.finish(with: nil)
+                return nil
+            }
+            return event
+        }
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 {
+                self?.finish(with: nil)
+            }
+        }
+
+        NSApp.activate()
+        overlayWindows.first?.window.makeKey()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            NSApp.activate()
+            self?.overlayWindows.first?.window.makeKeyAndOrderFront(nil)
+        }
     }
 
     private func updateHoveredWindow(at globalPoint: NSPoint) {
@@ -128,6 +163,14 @@ private class WindowSelectorController {
     }
 
     private func finish(with window: SCWindow?) {
+        if let monitor = localMonitor {
+            NSEvent.removeMonitor(monitor)
+            localMonitor = nil
+        }
+        if let monitor = globalMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalMonitor = nil
+        }
         for (w, _) in overlayWindows {
             w.orderOut(nil)
         }
@@ -168,15 +211,33 @@ private class WindowSelectionView: NSView {
         bounds.fill()
 
         if let frame = highlightFrame {
-            // Clear the selected window area
-            NSColor.clear.setFill()
-            frame.fill(using: .copy)
+            let highlightPath = NSBezierPath(
+                roundedRect: frame.insetBy(dx: 2, dy: 2),
+                xRadius: 16,
+                yRadius: 16
+            )
 
-            // Draw white border
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current?.compositingOperation = .copy
+            NSColor.clear.setFill()
+            highlightPath.fill()
+            NSGraphicsContext.restoreGraphicsState()
+
+            NSGraphicsContext.saveGraphicsState()
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.white.withAlphaComponent(0.55)
+            shadow.shadowBlurRadius = 14
+            shadow.shadowOffset = .zero
+            shadow.set()
+
             NSColor.white.setStroke()
-            let path = NSBezierPath(roundedRect: frame.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4)
-            path.lineWidth = 2.0
-            path.stroke()
+            highlightPath.lineWidth = 4
+            highlightPath.stroke()
+            NSGraphicsContext.restoreGraphicsState()
+
+            NSColor.white.withAlphaComponent(0.8).setStroke()
+            highlightPath.lineWidth = 1
+            highlightPath.stroke()
         }
     }
 
@@ -210,4 +271,5 @@ private class WindowSelectionView: NSView {
 
 private class WindowOverlayWindow: NSWindow {
     override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 }

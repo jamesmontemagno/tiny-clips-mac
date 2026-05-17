@@ -28,4 +28,3 @@ struct TinyClipsApp: App {
         .defaultSize(width: 720, height: 460)
     }
 }
-

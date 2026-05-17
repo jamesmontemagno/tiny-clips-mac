@@ -23,7 +23,7 @@ class CaptureManager: ObservableObject {
     private var startPanel: StartRecordingPanel?
     private var stopPanel: StopRecordingPanel?
     private var regionIndicatorPanel: RegionIndicatorPanel?
-    private var pendingRecordingRegion: CaptureRegion?
+    private var pendingRecordingTarget: CaptureTarget?
     private var pendingRecordingType: CaptureType?
     private var pendingRecordingCountdownEnabled: Bool = true
     private var pendingRecordingCountdownDuration: Int = 3
@@ -314,7 +314,7 @@ class CaptureManager: ObservableObject {
     }
 
     private func beginVideoRecording(
-        region: CaptureRegion,
+        target: CaptureTarget,
         systemAudio: Bool,
         microphone: Bool,
         selectedMicrophoneID: String,
@@ -360,17 +360,17 @@ class CaptureManager: ObservableObject {
                         }
                     }
                     self.videoRecorder = recorder
-                    self.activeRecordingRegion = region
+                    self.activeRecordingRegion = target.region
                     self.isRecording = true
                     self.activeMouseClickCaptureEnabledOverride = mouseClicksEnabled
-                    self.startMouseClickMonitoringIfNeeded(for: .video, region: region)
+                    self.startMouseClickMonitoringIfNeeded(for: .video, region: target.region)
                     self.recordingMicrophoneEnabled = false
                     self.microphoneWarningMessage = nil
                     self.microphoneLevel = 0
                     self.activeMicrophoneName = nil
 
                     try await recorder.start(
-                        region: region,
+                        target: target,
                         outputURL: url,
                         recordSystemAudio: systemAudio,
                         recordMicrophone: microphone,
@@ -417,7 +417,7 @@ class CaptureManager: ObservableObject {
         }
     }
 
-    private func beginGifRecording(region: CaptureRegion, mouseClicksEnabled: Bool, countdownEnabled: Bool, countdownDuration: Int) {
+    private func beginGifRecording(target: CaptureTarget, mouseClicksEnabled: Bool, countdownEnabled: Bool, countdownDuration: Int) {
         resetRecordingAudioStatus()
         let doRecord = { [weak self] in
             guard let self else { return }
@@ -429,12 +429,12 @@ class CaptureManager: ObservableObject {
                 do {
                     let writer = GifWriter()
                     self.gifWriter = writer
-                    self.activeRecordingRegion = region
+                    self.activeRecordingRegion = target.region
                     self.isRecording = true
                     self.activeMouseClickCaptureEnabledOverride = mouseClicksEnabled
-                    self.startMouseClickMonitoringIfNeeded(for: .gif, region: region)
+                    self.startMouseClickMonitoringIfNeeded(for: .gif, region: target.region)
 
-                    try await writer.start(region: region)
+                    try await writer.start(target: target)
                     self.showStopPanel()
                 } catch {
                     _ = self.stopMouseClickMonitoring()
@@ -692,7 +692,7 @@ class CaptureManager: ObservableObject {
         countdownWindow = nil
         dismissRegionIndicator()
 
-        pendingRecordingRegion = nil
+        pendingRecordingTarget = nil
         pendingRecordingType = nil
 
         _ = stopMouseClickMonitoring()
@@ -785,21 +785,21 @@ class CaptureManager: ObservableObject {
             onStart: { [weak self] systemAudio, mic, selectedMicrophoneID, mouseClicksEnabled in
                 guard
                     let self,
-                    let region = self.pendingRecordingRegion,
+                    let target = self.pendingRecordingTarget,
                     let type = self.pendingRecordingType
                 else { return }
 
                 let countdownEnabled = self.pendingRecordingCountdownEnabled
                 let countdownDuration = self.pendingRecordingCountdownDuration
 
-                self.pendingRecordingRegion = nil
+                self.pendingRecordingTarget = nil
                 self.pendingRecordingType = nil
                 self.dismissStartPanel()
 
                 switch type {
                 case .video:
                     self.beginVideoRecording(
-                        region: region,
+                        target: target,
                         systemAudio: systemAudio,
                         microphone: mic,
                         selectedMicrophoneID: selectedMicrophoneID,
@@ -809,7 +809,7 @@ class CaptureManager: ObservableObject {
                     )
                 case .gif:
                     self.beginGifRecording(
-                        region: region,
+                        target: target,
                         mouseClicksEnabled: mouseClicksEnabled,
                         countdownEnabled: countdownEnabled,
                         countdownDuration: countdownDuration
@@ -819,7 +819,7 @@ class CaptureManager: ObservableObject {
                 }
             },
             onCancel: { [weak self] in
-                self?.pendingRecordingRegion = nil
+                self?.pendingRecordingTarget = nil
                 self?.pendingRecordingType = nil
                 self?.dismissStartPanel()
                 self?.dismissRegionIndicator()
@@ -1050,22 +1050,22 @@ class CaptureManager: ObservableObject {
         countdownDuration: Int,
         shouldReturnToPicker: Bool
     ) async {
-        guard let region = await chooseCaptureRegion(for: mode) else {
+        guard let target = await chooseCaptureTarget(for: mode) else {
             if shouldReturnToPicker {
                 showRecordingPicker(for: type)
             }
             return
         }
 
-        pendingRecordingRegion = region
+        pendingRecordingTarget = target
         pendingRecordingType = type
         pendingRecordingCountdownEnabled = countdownEnabled
         pendingRecordingCountdownDuration = countdownDuration
 
         dismissRegionIndicator()
 
-        if mode == .region, CaptureSettings.shared.showRegionIndicator {
-            let panel = RegionIndicatorPanel(region: region)
+        if mode != .screen, CaptureSettings.shared.showRegionIndicator {
+            let panel = RegionIndicatorPanel(region: target.region)
             panel.show()
             regionIndicatorPanel = panel
         }
@@ -1073,10 +1073,11 @@ class CaptureManager: ObservableObject {
         showStartPanel()
     }
 
-    private func chooseCaptureRegion(for mode: CapturePickerMode) async -> CaptureRegion? {
+    private func chooseCaptureTarget(for mode: CapturePickerMode) async -> CaptureTarget? {
         switch mode {
         case .region:
-            return await RegionSelector.selectRegion()
+            guard let region = await RegionSelector.selectRegion() else { return nil }
+            return CaptureTarget(region: region)
         case .screen:
             let needsPicker = NSScreen.screens.count > 1 && !CaptureSettings.shared.alwaysCaptureMainDisplay
             let screen: NSScreen?
@@ -1086,19 +1087,25 @@ class CaptureManager: ObservableObject {
                 screen = screenUnderMouseCursor() ?? NSScreen.main
             }
             guard let screen else { return nil }
-            return CaptureRegion.fullScreen(for: screen)
+            guard let region = CaptureRegion.fullScreen(for: screen) else { return nil }
+            return CaptureTarget(region: region)
         case .window:
-            guard let window = await WindowSelector.selectWindow() else { return nil }
-            return captureRegion(for: window)
+            guard let window = await WindowSelector.selectWindow(),
+                  let region = captureRegion(for: window)
+            else {
+                return nil
+            }
+            return CaptureTarget(region: region)
         }
     }
 
     private func captureRegion(for window: SCWindow) -> CaptureRegion? {
-        let windowRect = appKitRect(fromSCFrame: window.frame)
+        let screens = NSScreen.screens
+        let windowRect = appKitRect(fromSCFrame: window.frame, screens: screens)
         let windowCenter = NSPoint(x: windowRect.midX, y: windowRect.midY)
 
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(windowCenter) })
-            ?? NSScreen.screens.first(where: { $0.frame.intersects(windowRect) })
+        guard let screen = screens.first(where: { $0.frame.contains(windowCenter) })
+            ?? screens.first(where: { $0.frame.intersects(windowRect) })
         else {
             return nil
         }
@@ -1107,20 +1114,25 @@ class CaptureManager: ObservableObject {
             return nil
         }
 
-        let localX = windowRect.minX - screen.frame.minX
-        let localY = screen.frame.maxY - windowRect.maxY
+        let clippedWindowRect = windowRect.intersection(screen.frame)
+        guard !clippedWindowRect.isNull, !clippedWindowRect.isEmpty else {
+            return nil
+        }
+
+        let localX = clippedWindowRect.minX - screen.frame.minX
+        let localY = screen.frame.maxY - clippedWindowRect.maxY
 
         return CaptureRegion(
-            sourceRect: CGRect(x: localX, y: localY, width: windowRect.width, height: windowRect.height),
+            sourceRect: CGRect(x: localX, y: localY, width: clippedWindowRect.width, height: clippedWindowRect.height),
             displayID: displayID,
             scaleFactor: screen.backingScaleFactor
         )
     }
 
-    private func appKitRect(fromSCFrame scFrame: CGRect) -> CGRect {
-        let primaryScreenTop = NSScreen.screens.first?.frame.maxY ?? 0
+    private func appKitRect(fromSCFrame scFrame: CGRect, screens: [NSScreen]) -> CGRect {
+        let primaryScreenTop = screens.first?.frame.maxY ?? 0
         return CGRect(
-            x: scFrame.origin.x,
+            x: scFrame.minX,
             y: primaryScreenTop - scFrame.maxY,
             width: scFrame.width,
             height: scFrame.height

@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 ### Fixed
+- Window video and GIF recording now use the selected window bounds with the existing region recording path.
 - Processing indicator after recording stops now reliably appears and animates. Replaced the custom spinner (which failed to animate in borderless `NSPanel` + `NSHostingView`) with the system `ProgressView`. Added a spring fade-in entrance and a smooth window-level fade-in via `NSAnimationContext`.
 - Eliminated the blank gap between the processing indicator dismissing and the trimmer window appearing by moving `dismissProcessingIndicator()` to after `showTrimmer`/`showGifTrimmer` is called.
 

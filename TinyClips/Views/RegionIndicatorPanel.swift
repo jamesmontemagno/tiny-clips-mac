@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 
 class RegionIndicatorPanel: NSPanel {
+    private static let borderInset: CGFloat = 3
+
     convenience init(region: CaptureRegion) {
         self.init(
             contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
@@ -40,7 +42,7 @@ class RegionIndicatorPanel: NSPanel {
             y: screenY,
             width: region.sourceRect.width,
             height: region.sourceRect.height
-        )
+        ).insetBy(dx: -Self.borderInset, dy: -Self.borderInset)
         
         setFrame(panelFrame, display: true)
     }

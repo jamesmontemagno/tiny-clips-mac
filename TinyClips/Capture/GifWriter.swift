@@ -11,9 +11,10 @@ class GifWriter: NSObject, @unchecked Sendable {
     private let processingQueue = DispatchQueue(label: "com.tinyclips.gif-processing")
     private let ciContext = CIContext()
 
-    func start(region: CaptureRegion) async throws {
-        let filter = try await region.makeFilter()
-        let config = region.makeStreamConfig()
+    func start(target: CaptureTarget) async throws {
+        let preparedTarget = try await target.prepare()
+        let filter = preparedTarget.filter
+        let config = preparedTarget.config
 
         let settings = CaptureSettings.shared
         let fps = settings.gifFrameRate
