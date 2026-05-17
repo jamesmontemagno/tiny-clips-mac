@@ -591,7 +591,15 @@ class CaptureManager: ObservableObject {
                                 outputURL: keyboardOutputURL,
                                 style: videoKeyboardOverlayStyle,
                                 displayMode: videoKeyboardDisplayMode,
-                                customKeys: videoKeyboardCustomKeys
+                                customKeys: videoKeyboardCustomKeys,
+                                onProgress: { [weak self] overlayProgress in
+                                    guard let self else { return }
+                                    let normalized = min(max(overlayProgress, 0), 1)
+                                    let mapped = 0.73 + (normalized * 0.12)
+                                    Task { @MainActor in
+                                        self.updateProcessingProgress(mapped, status: "Applying keyboard overlays...")
+                                    }
+                                }
                             )
                             updateProcessingProgress(0.85, status: "Finalizing...")
                         }
@@ -1365,7 +1373,8 @@ class CaptureManager: ObservableObject {
         outputURL: URL,
         style: KeyboardOverlayStyle,
         displayMode: KeyboardOverlayDisplayMode,
-        customKeys: Set<String>
+        customKeys: Set<String>,
+        onProgress: ((Double) -> Void)? = nil
     ) async throws -> URL {
         try await Task.detached(priority: .userInitiated) {
             try await KeyboardOverlayProcessor.overlayOnVideo(
@@ -1375,7 +1384,8 @@ class CaptureManager: ObservableObject {
                 outputURL: outputURL,
                 style: style,
                 displayMode: displayMode,
-                customKeys: customKeys
+                customKeys: customKeys,
+                onProgress: onProgress
             )
         }.value
     }

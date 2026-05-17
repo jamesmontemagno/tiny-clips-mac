@@ -319,7 +319,7 @@ private struct GifTrimmerView: View {
 
         let outputURL = SaveService.shared.generateURL(for: .screenshot, stemSuffix: "Frame")
         do {
-            try ScreenshotCapture.saveImage(frame, to: outputURL)
+            _ = try ScreenshotCapture.saveImage(frame, to: outputURL)
             SaveService.shared.handleSavedFile(url: outputURL, type: .screenshot)
         } catch {
             SaveService.shared.showError("Could not save the current frame: \(error.localizedDescription)")
@@ -642,7 +642,7 @@ private class GifTrimmerViewModel: ObservableObject {
         for (index, frame) in gifData.frames.enumerated() {
             let fileName = String(format: "%@ Frame %0*d.png", stem, frameDigits, index + 1)
             let frameURL = directoryURL.appendingPathComponent(fileName)
-            try ScreenshotCapture.saveImage(frame, to: frameURL)
+            _ = try ScreenshotCapture.saveImage(frame, to: frameURL)
         }
 
         return directoryURL

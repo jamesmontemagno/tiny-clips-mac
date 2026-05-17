@@ -23,15 +23,8 @@ class StartRecordingPanel: NSPanel {
         self.isMovableByWindowBackground = true
 
         let settings = CaptureSettings.shared
-        let allowsMouseClickToggle: Bool
-        let allowsKeyboardOverlayToggle: Bool
-    #if APPSTORE
-        allowsMouseClickToggle = StoreService.shared.isPro
-        allowsKeyboardOverlayToggle = StoreService.shared.isPro
-    #else
-        allowsMouseClickToggle = true
-        allowsKeyboardOverlayToggle = true
-    #endif
+        let allowsMouseClickToggle = isProEnabled()
+        let allowsKeyboardOverlayToggle = isProEnabled()
         let defaultMouseClicksEnabled = allowsMouseClickToggle
             ? settings.shouldShowMouseClickVisuals(for: captureType)
             : false
@@ -60,6 +53,14 @@ class StartRecordingPanel: NSPanel {
         let fittingSize = hostingView.fittingSize
         self.setContentSize(fittingSize)
         self.contentView = hostingView
+    }
+
+    private func isProEnabled() -> Bool {
+    #if APPSTORE
+        StoreService.shared.isPro
+    #else
+        true
+    #endif
     }
 
     func show(at position: NSPoint? = nil) {

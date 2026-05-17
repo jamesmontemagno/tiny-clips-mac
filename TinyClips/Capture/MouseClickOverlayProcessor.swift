@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import Carbon.HIToolbox
 import CoreGraphics
 import CoreText
 import ImageIO
@@ -74,37 +75,41 @@ enum MouseClickOverlayProcessor {
         }
 
         let asset = AVURLAsset(url: sourceURL)
-        guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+        guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
             return sourceURL
         }
+        let assetDuration = try await asset.load(.duration)
+        let videoPreferredTransform = try await videoTrack.load(.preferredTransform)
 
         let composition = AVMutableComposition()
         guard let compositionVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
             return sourceURL
         }
 
-        try compositionVideoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: asset.duration), of: videoTrack, at: .zero)
-        compositionVideoTrack.preferredTransform = videoTrack.preferredTransform
+        try compositionVideoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: assetDuration), of: videoTrack, at: .zero)
+        compositionVideoTrack.preferredTransform = videoPreferredTransform
 
-        for audioTrack in asset.tracks(withMediaType: .audio) {
+        for audioTrack in try await asset.loadTracks(withMediaType: .audio) {
             if let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
-                try compositionAudioTrack.insertTimeRange(CMTimeRange(start: .zero, duration: asset.duration), of: audioTrack, at: .zero)
+                try compositionAudioTrack.insertTimeRange(CMTimeRange(start: .zero, duration: assetDuration), of: audioTrack, at: .zero)
             }
         }
 
-        let transformedSize = videoTrack.naturalSize.applying(videoTrack.preferredTransform)
+        let naturalSize = try await videoTrack.load(.naturalSize)
+        let transformedSize = naturalSize.applying(videoPreferredTransform)
         let renderSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.renderSize = renderSize
-        let sourceTimescale = max(30, Int32(videoTrack.nominalFrameRate.rounded(.up)))
+        let nominalFrameRate = try await videoTrack.load(.nominalFrameRate)
+        let sourceTimescale = max(30, Int32(nominalFrameRate.rounded(.up)))
         videoComposition.frameDuration = CMTime(value: 1, timescale: sourceTimescale)
 
         let instruction = AVMutableVideoCompositionInstruction()
-        instruction.timeRange = CMTimeRange(start: .zero, duration: asset.duration)
+        instruction.timeRange = CMTimeRange(start: .zero, duration: assetDuration)
 
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionVideoTrack)
-        layerInstruction.setTransform(videoTrack.preferredTransform, at: .zero)
+        layerInstruction.setTransform(videoPreferredTransform, at: .zero)
         instruction.layerInstructions = [layerInstruction]
         videoComposition.instructions = [instruction]
 
@@ -118,7 +123,7 @@ enum MouseClickOverlayProcessor {
 
         let clickColor = style.color.cgColor
 
-        for event in mappedEvents where event.timeOffset <= asset.duration.seconds {
+        for event in mappedEvents where event.timeOffset <= assetDuration.seconds {
             let ringLayer = CAShapeLayer()
             let diameter = style.size
             ringLayer.path = CGPath(ellipseIn: CGRect(x: 0, y: 0, width: diameter, height: diameter), transform: nil)
@@ -163,44 +168,8 @@ enum MouseClickOverlayProcessor {
         exportSession.videoComposition = videoComposition
         exportSession.shouldOptimizeForNetworkUse = true
 
-        // Poll export progress so callers can keep UI feedback moving.
-        let progressTask = Task.detached(priority: .utility) {
-            while !Task.isCancelled {
-                let status = exportSession.status
-                if status == .completed || status == .failed || status == .cancelled {
-                    break
-                }
-                onProgress?(Double(exportSession.progress))
-                try? await Task.sleep(nanoseconds: 150_000_000)
-            }
-        }
-
-        // Protect against export sessions that get stuck in waiting/exporting.
-        let timeoutSeconds = max(30.0, min(300.0, asset.duration.seconds * 2.0 + 10.0))
-        let timeoutTask = Task.detached(priority: .utility) {
-            try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
-            if exportSession.status == .waiting || exportSession.status == .exporting {
-                exportSession.cancelExport()
-            }
-        }
-
-        defer {
-            progressTask.cancel()
-            timeoutTask.cancel()
-        }
-
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            exportSession.exportAsynchronously {
-                switch exportSession.status {
-                case .completed:
-                    continuation.resume(returning: ())
-                case .failed, .cancelled:
-                    continuation.resume(throwing: exportSession.error ?? CaptureError.saveFailed)
-                default:
-                    continuation.resume(throwing: CaptureError.saveFailed)
-                }
-            }
-        }
+        try await exportSession.export(to: outputURL, as: .mp4)
+        onProgress?(1.0)
 
         if FileManager.default.fileExists(atPath: outputURL.path) {
             try? FileManager.default.removeItem(at: sourceURL)
@@ -411,9 +380,7 @@ final class KeyboardEventMonitor {
     }
 
     private func recordKeyDown(_ event: NSEvent) {
-        let keyDisplay = HotKeyBinding.keyCodeToDisplayString(Int(event.keyCode))
-            ?? event.charactersIgnoringModifiers?.uppercased()
-            ?? "?"
+        let keyDisplay = keyDisplay(for: event)
         let keyToken = normalizedToken(from: keyDisplay)
         let flags = event.modifierFlags.intersection([.command, .shift, .option, .control])
         let label = formattedLabel(modifiers: flags, keyDisplay: keyDisplay)
@@ -461,6 +428,53 @@ final class KeyboardEventMonitor {
         return parts.joined(separator: " + ")
     }
 
+    private func keyDisplay(for event: NSEvent) -> String {
+        if let mapped = HotKeyBinding.keyCodeToDisplayString(Int(event.keyCode)), mapped != "?" {
+            return mapped
+        }
+
+        if let characters = event.charactersIgnoringModifiers?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !characters.isEmpty {
+            return characters.uppercased()
+        }
+
+        return fallbackKeyDisplay(for: Int(event.keyCode))
+    }
+
+    private func fallbackKeyDisplay(for keyCode: Int) -> String {
+        switch keyCode {
+        case kVK_Return: return "Return"
+        case kVK_Tab: return "Tab"
+        case kVK_Space: return "Space"
+        case kVK_Delete: return "Delete"
+        case kVK_ForwardDelete: return "Forward Delete"
+        case kVK_Escape: return "Escape"
+        case kVK_LeftArrow: return "Left Arrow"
+        case kVK_RightArrow: return "Right Arrow"
+        case kVK_UpArrow: return "Up Arrow"
+        case kVK_DownArrow: return "Down Arrow"
+        case kVK_PageUp: return "Page Up"
+        case kVK_PageDown: return "Page Down"
+        case kVK_Home: return "Home"
+        case kVK_End: return "End"
+        case kVK_Help: return "Help"
+        case kVK_F1: return "F1"
+        case kVK_F2: return "F2"
+        case kVK_F3: return "F3"
+        case kVK_F4: return "F4"
+        case kVK_F5: return "F5"
+        case kVK_F6: return "F6"
+        case kVK_F7: return "F7"
+        case kVK_F8: return "F8"
+        case kVK_F9: return "F9"
+        case kVK_F10: return "F10"
+        case kVK_F11: return "F11"
+        case kVK_F12: return "F12"
+        default: return "Key \(keyCode)"
+        }
+    }
+
     private func normalizedToken(from value: String) -> String {
         value
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -491,46 +505,55 @@ enum KeyboardOverlayProcessor {
         outputURL: URL,
         style: KeyboardOverlayStyle,
         displayMode: KeyboardOverlayDisplayMode,
-        customKeys: Set<String>
+        customKeys: Set<String>,
+        onProgress: ((Double) -> Void)? = nil
     ) async throws -> URL {
         _ = region
+        onProgress?(0.1)
         let filteredEvents = filterEvents(events, displayMode: displayMode, customKeys: customKeys)
         guard !filteredEvents.isEmpty else {
+            onProgress?(1.0)
             return sourceURL
         }
 
         let asset = AVURLAsset(url: sourceURL)
-        guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+        guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
+            onProgress?(1.0)
             return sourceURL
         }
+        let assetDuration = try await asset.load(.duration)
+        let videoPreferredTransform = try await videoTrack.load(.preferredTransform)
+        onProgress?(0.25)
 
         let composition = AVMutableComposition()
         guard let compositionVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
             return sourceURL
         }
 
-        try compositionVideoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: asset.duration), of: videoTrack, at: .zero)
-        compositionVideoTrack.preferredTransform = videoTrack.preferredTransform
+        try compositionVideoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: assetDuration), of: videoTrack, at: .zero)
+        compositionVideoTrack.preferredTransform = videoPreferredTransform
 
-        for audioTrack in asset.tracks(withMediaType: .audio) {
+        for audioTrack in try await asset.loadTracks(withMediaType: .audio) {
             if let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
-                try compositionAudioTrack.insertTimeRange(CMTimeRange(start: .zero, duration: asset.duration), of: audioTrack, at: .zero)
+                try compositionAudioTrack.insertTimeRange(CMTimeRange(start: .zero, duration: assetDuration), of: audioTrack, at: .zero)
             }
         }
 
-        let transformedSize = videoTrack.naturalSize.applying(videoTrack.preferredTransform)
+        let naturalSize = try await videoTrack.load(.naturalSize)
+        let transformedSize = naturalSize.applying(videoPreferredTransform)
         let renderSize = CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.renderSize = renderSize
-        let sourceTimescale = max(30, Int32(videoTrack.nominalFrameRate.rounded(.up)))
+        let nominalFrameRate = try await videoTrack.load(.nominalFrameRate)
+        let sourceTimescale = max(30, Int32(nominalFrameRate.rounded(.up)))
         videoComposition.frameDuration = CMTime(value: 1, timescale: sourceTimescale)
 
         let instruction = AVMutableVideoCompositionInstruction()
-        instruction.timeRange = CMTimeRange(start: .zero, duration: asset.duration)
+        instruction.timeRange = CMTimeRange(start: .zero, duration: assetDuration)
 
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: compositionVideoTrack)
-        layerInstruction.setTransform(videoTrack.preferredTransform, at: .zero)
+        layerInstruction.setTransform(videoPreferredTransform, at: .zero)
         instruction.layerInstructions = [layerInstruction]
         videoComposition.instructions = [instruction]
 
@@ -542,7 +565,8 @@ enum KeyboardOverlayProcessor {
         videoLayer.frame = CGRect(origin: .zero, size: renderSize)
         parentLayer.addSublayer(videoLayer)
 
-        for event in filteredEvents where event.timeOffset <= asset.duration.seconds {
+        onProgress?(0.55)
+        for event in filteredEvents where event.timeOffset <= assetDuration.seconds {
             let eventLayer = makeVideoEventLayer(label: event.label, renderSize: renderSize, style: style)
             let animation = makeVideoAnimation(style: style)
             animation.beginTime = AVCoreAnimationBeginTimeAtZero + event.timeOffset
@@ -561,22 +585,13 @@ enum KeyboardOverlayProcessor {
         exportSession.videoComposition = videoComposition
         exportSession.shouldOptimizeForNetworkUse = true
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            exportSession.exportAsynchronously {
-                switch exportSession.status {
-                case .completed:
-                    continuation.resume(returning: ())
-                case .failed, .cancelled:
-                    continuation.resume(throwing: exportSession.error ?? CaptureError.saveFailed)
-                default:
-                    continuation.resume(throwing: CaptureError.saveFailed)
-                }
-            }
-        }
+        onProgress?(0.8)
+        try await exportSession.export(to: outputURL, as: .mp4)
 
         if FileManager.default.fileExists(atPath: outputURL.path) {
             try? FileManager.default.removeItem(at: sourceURL)
         }
+        onProgress?(1.0)
         return outputURL
     }
 
@@ -664,7 +679,8 @@ enum KeyboardOverlayProcessor {
         textLayer.alignmentMode = .center
         textLayer.foregroundColor = contrastingTextColor(for: style.color).cgColor
         textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
-        textLayer.font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+        textLayer.font = CTFontCreateWithName(font.fontName as CFString, font.pointSize, nil)
         textLayer.fontSize = fontSize
         textLayer.string = label
         container.addSublayer(textLayer)

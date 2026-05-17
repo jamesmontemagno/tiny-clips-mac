@@ -182,7 +182,14 @@ struct KeyboardOverlaySettingsSection: View {
         shapeRaw: Binding<String>,
         soundEffects: Binding<Bool>
     ) -> some View {
-        ColorPicker("Overlay color", selection: color, supportsOpacity: false)
+        ColorPicker(
+            "Overlay color",
+            selection: Binding(
+                get: { Color(nsColor: color.wrappedValue) },
+                set: { color.wrappedValue = NSColor($0) }
+            ),
+            supportsOpacity: false
+        )
             .help("Choose keyboard overlay background color.")
             .accessibilityHint("Sets the keyboard overlay color.")
         HStack {
