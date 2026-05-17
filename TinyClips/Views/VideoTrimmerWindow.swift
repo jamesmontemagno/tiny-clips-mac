@@ -3,6 +3,7 @@ import SwiftUI
 import AVFoundation
 import AVKit
 import ImageIO
+import Carbon.HIToolbox
 
 class VideoTrimmerWindow: NSWindow, NSWindowDelegate {
     private var onComplete: ((URL?) -> Void)?
@@ -50,6 +51,7 @@ private struct VideoTrimmerView: View {
 
     @StateObject private var viewModel: TrimmerViewModel
     @State private var keyMonitor: Any?
+    @State private var trimmerWindow: NSWindow?
 
     init(videoURL: URL, onDone: @escaping (URL?) -> Void) {
         self.videoURL = videoURL
@@ -124,8 +126,9 @@ private struct VideoTrimmerView: View {
                     value: Binding(
                         get: { viewModel.trimStart },
                         set: { newValue in
-                            viewModel.trimStart = min(max(0, newValue), maxStart)
-                            viewModel.seek(to: viewModel.trimStart)
+                            let clamped = min(max(0, newValue), maxStart)
+                            viewModel.trimStart = clamped
+                            viewModel.seek(to: max(viewModel.currentTime, clamped))
                         }
                     ),
                     in: 0...maxStart,
@@ -254,16 +257,21 @@ private struct VideoTrimmerView: View {
 
     private func installKeyMonitor() {
         guard keyMonitor == nil else { return }
+        trimmerWindow = NSApp.keyWindow
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.window?.title == "Trim Video" else { return event }
+            guard event.window === trimmerWindow else { return event }
+            if let firstResponder = event.window?.firstResponder,
+               firstResponder is NSText || firstResponder is NSTextView {
+                return event
+            }
             let relevantModifiers = event.modifierFlags.intersection([.command, .option, .control])
             guard relevantModifiers.isEmpty else { return event }
 
-            switch event.keyCode {
-            case 123:
+            switch Int(event.keyCode) {
+            case kVK_LeftArrow:
                 viewModel.stepFrame(by: -1)
                 return nil
-            case 124:
+            case kVK_RightArrow:
                 viewModel.stepFrame(by: 1)
                 return nil
             default:
@@ -273,6 +281,7 @@ private struct VideoTrimmerView: View {
     }
 
     private func removeKeyMonitor() {
+        trimmerWindow = nil
         if let keyMonitor {
             NSEvent.removeMonitor(keyMonitor)
             self.keyMonitor = nil
@@ -414,7 +423,7 @@ private class TrimmerViewModel: ObservableObject {
 
     var totalFrameCount: Int {
         guard duration > 0, frameStepDuration > 0 else { return 0 }
-        return max(1, Int((duration / frameStepDuration).rounded(.down)) + 1)
+        return max(1, Int((duration / frameStepDuration).rounded(.up)))
     }
 
     var currentFrameNumber: Int {
@@ -519,17 +528,20 @@ private class TrimmerViewModel: ObservableObject {
 
         Task {
             do {
-                let generator = AVAssetImageGenerator(asset: asset)
-                generator.appliesPreferredTrackTransform = true
-                generator.requestedTimeToleranceBefore = .zero
-                generator.requestedTimeToleranceAfter = .zero
+                let actualTime = try await Task.detached(priority: .userInitiated) { [asset] in
+                    let generator = AVAssetImageGenerator(asset: asset)
+                    generator.appliesPreferredTrackTransform = true
+                    generator.requestedTimeToleranceBefore = .zero
+                    generator.requestedTimeToleranceAfter = .zero
 
-                var actualTime = CMTime.zero
-                let image = try generator.copyCGImage(at: requestedTime, actualTime: &actualTime)
-                try Self.saveImage(image, to: outputURL)
+                    var actualTime = CMTime.zero
+                    let image = try generator.copyCGImage(at: requestedTime, actualTime: &actualTime)
+                    try ScreenshotCapture.saveImage(image, to: outputURL)
+                    return actualTime
+                }.value
 
                 await MainActor.run {
-                    self.currentTime = actualTime.seconds
+                    self.seek(to: actualTime.seconds)
                     self.isExporting = false
                     SaveService.shared.handleSavedFile(url: outputURL, type: .screenshot)
                 }
@@ -597,29 +609,6 @@ private class TrimmerViewModel: ObservableObject {
                 self.isExporting = false
                 completion(nil)
             }
-        }
-    }
-
-    private static func saveImage(_ image: CGImage, to outputURL: URL) throws {
-        let settings = CaptureSettings.shared
-        let imageType = settings.imageFormat.utType
-        var destinationProperties: [CFString: Any] = [:]
-        if settings.imageFormat == .jpeg {
-            destinationProperties[kCGImageDestinationLossyCompressionQuality] = settings.jpegQuality
-        }
-
-        guard let destination = CGImageDestinationCreateWithURL(
-            outputURL as CFURL,
-            imageType.identifier as CFString,
-            1,
-            nil
-        ) else {
-            throw CaptureError.saveFailed
-        }
-
-        CGImageDestinationAddImage(destination, image, destinationProperties as CFDictionary)
-        guard CGImageDestinationFinalize(destination) else {
-            throw CaptureError.saveFailed
         }
     }
 }

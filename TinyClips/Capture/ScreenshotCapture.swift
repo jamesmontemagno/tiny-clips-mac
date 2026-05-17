@@ -43,7 +43,7 @@ struct ScreenshotCapture {
 
     // MARK: - Helpers
 
-    private static func saveImage(_ image: CGImage, to outputURL: URL) throws -> URL {
+    static func saveImage(_ image: CGImage, to outputURL: URL) throws -> URL {
         let settings = CaptureSettings.shared
         let imageType = settings.imageFormat.utType
         var destinationProperties: [CFString: Any] = [:]
