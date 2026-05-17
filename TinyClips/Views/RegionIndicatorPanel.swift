@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 class RegionIndicatorPanel: NSPanel {
-    private static let borderInset: CGFloat = 3
+    private static let borderInset: CGFloat = 4
 
     convenience init(region: CaptureRegion) {
         self.init(
