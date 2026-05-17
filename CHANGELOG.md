@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## v1.4.0.1 - 2026-05-17
+
+### Fixed
+- Keyboard overlay processing now emits staged progress updates to the processing indicator window.
+- Modernized AVFoundation APIs in mouse click overlay processor: replaced deprecated `tracks(withMediaType:)`, property access, and `exportAsynchronously` with async/await equivalents (`loadTracks`, `load(.duration)`, etc.).
+- Deprecated AVAssetImageGenerator API in video trimmer window updated to use `generateCGImageAsynchronously(for:)`.
+- Eliminated unused result warnings in trimmer frame-save operations.
+- Resolved "will never be executed" warning in StartRecordingPanel by moving target-conditional logic into compile-time branches.
+
 ## v1.4.0 - 2026-05-17
 
 ### Fixed
