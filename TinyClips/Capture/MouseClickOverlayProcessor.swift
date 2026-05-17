@@ -495,7 +495,10 @@ final class KeyboardEventMonitor {
 private struct FilteredKeyboardOverlayEvent: Sendable {
     let timeOffset: TimeInterval
     let label: String
+    let duration: TimeInterval
 }
+
+private let keyboardChordChainGap: TimeInterval = 0.6
 
 enum KeyboardOverlayProcessor {
     static func overlayOnVideo(
@@ -510,7 +513,7 @@ enum KeyboardOverlayProcessor {
     ) async throws -> URL {
         _ = region
         onProgress?(0.1)
-        let filteredEvents = filterEvents(events, displayMode: displayMode, customKeys: customKeys)
+        let filteredEvents = filterEvents(events, displayMode: displayMode, customKeys: customKeys, baseDuration: style.duration)
         guard !filteredEvents.isEmpty else {
             onProgress?(1.0)
             return sourceURL
@@ -568,7 +571,7 @@ enum KeyboardOverlayProcessor {
         onProgress?(0.55)
         for event in filteredEvents where event.timeOffset <= assetDuration.seconds {
             let eventLayer = makeVideoEventLayer(label: event.label, renderSize: renderSize, style: style)
-            let animation = makeVideoAnimation(style: style)
+            let animation = makeVideoAnimation(style: style, duration: event.duration)
             animation.beginTime = AVCoreAnimationBeginTimeAtZero + event.timeOffset
             eventLayer.add(animation, forKey: "keyboard-overlay-anim")
             parentLayer.addSublayer(eventLayer)
@@ -604,7 +607,7 @@ enum KeyboardOverlayProcessor {
         customKeys: Set<String>
     ) -> GifCaptureData {
         _ = region
-        let filteredEvents = filterEvents(events, displayMode: displayMode, customKeys: customKeys)
+        let filteredEvents = filterEvents(events, displayMode: displayMode, customKeys: customKeys, baseDuration: style.duration)
         guard !filteredEvents.isEmpty else {
             return gifData
         }
@@ -623,80 +626,183 @@ enum KeyboardOverlayProcessor {
     private static func filterEvents(
         _ events: [KeyboardOverlayEvent],
         displayMode: KeyboardOverlayDisplayMode,
-        customKeys: Set<String>
+        customKeys: Set<String>,
+        baseDuration: TimeInterval
     ) -> [FilteredKeyboardOverlayEvent] {
         let normalizedCustom = Set(customKeys.map { $0.uppercased() })
-        return events.compactMap { event in
+        let passes: [KeyboardOverlayEvent] = events.compactMap { event in
             switch displayMode {
             case .allKeys:
-                return .init(timeOffset: event.timeOffset, label: event.label)
+                return event
             case .nonModifierKeys:
-                return event.isModifierOnly ? nil : .init(timeOffset: event.timeOffset, label: event.label)
+                return event.isModifierOnly ? nil : event
             case .customSubset:
                 guard !normalizedCustom.isEmpty, normalizedCustom.contains(event.keyToken.uppercased()) else {
                     return nil
                 }
-                return .init(timeOffset: event.timeOffset, label: event.label)
+                return event
             }
         }
+        return coalesceChords(passes, baseDuration: baseDuration)
+    }
+
+    private static func coalesceChords(
+        _ events: [KeyboardOverlayEvent],
+        baseDuration: TimeInterval
+    ) -> [FilteredKeyboardOverlayEvent] {
+        guard !events.isEmpty else { return [] }
+
+        var output: [FilteredKeyboardOverlayEvent] = []
+        var current: [KeyboardOverlayEvent] = []
+
+        func flush() {
+            guard let first = current.first, let last = current.last else { return }
+            let label: String
+            if let lastKeyDown = current.last(where: { !$0.isModifierOnly }) {
+                // The key-down label already contains its modifier glyphs.
+                label = lastKeyDown.label
+            } else {
+                // Pure modifier-only chord (held without a terminal key).
+                label = current.map(\.label).joined(separator: " + ")
+            }
+            let span = max(0, last.timeOffset - first.timeOffset)
+            output.append(
+                FilteredKeyboardOverlayEvent(
+                    timeOffset: first.timeOffset,
+                    label: label,
+                    duration: span + baseDuration
+                )
+            )
+            current.removeAll(keepingCapacity: true)
+        }
+
+        for event in events {
+            guard let prev = current.last else {
+                current.append(event)
+                continue
+            }
+            let withinGap = (event.timeOffset - prev.timeOffset) <= keyboardChordChainGap
+            // Two consecutive non-modifier keys split into separate chords so typing
+            // sequences (e.g. "abc") show as discrete bubbles instead of one merged label.
+            let bothTerminal = !event.isModifierOnly && current.contains(where: { !$0.isModifierOnly })
+            if withinGap && !bothTerminal {
+                current.append(event)
+            } else {
+                flush()
+                current.append(event)
+            }
+        }
+        flush()
+        return output
     }
 
     private static func makeVideoEventLayer(label: String, renderSize: CGSize, style: KeyboardOverlayStyle) -> CALayer {
-        let fontSize = max(12, style.fontSize)
-        let paddingX = max(12, fontSize * 0.55)
-        let paddingY = max(6, fontSize * 0.35)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold)
-        ]
-        let textSize = NSAttributedString(string: label, attributes: attributes).size()
-
-        let backgroundRect = CGRect(
-            x: 0,
-            y: 0,
-            width: textSize.width + (paddingX * 2),
-            height: textSize.height + (paddingY * 2)
-        )
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let bubble = renderKeyboardBubbleImage(label: label, style: style, alpha: 1.0, scale: scale)
 
         let container = CALayer()
-        container.frame = positionedRectFlipped(itemSize: backgroundRect.size, canvasSize: renderSize, position: style.position)
+        container.frame = positionedRectFlipped(itemSize: bubble.pointSize, canvasSize: renderSize, position: style.position)
+        container.contentsGravity = .resizeAspect
+        container.contents = bubble.image
+        container.contentsScale = scale
         container.opacity = 0
-
-        let background = CALayer()
-        background.frame = CGRect(origin: .zero, size: backgroundRect.size)
-        background.backgroundColor = style.color.withAlphaComponent(style.shapeStyle == .minimal ? 0.6 : 0.82).cgColor
-        background.cornerRadius = style.shapeStyle == .capsule
-            ? backgroundRect.height / 2
-            : (style.shapeStyle == .minimal ? 6 : 10)
-        container.addSublayer(background)
-
-        let textLayer = CATextLayer()
-        textLayer.frame = CGRect(
-            x: paddingX,
-            y: max(0, (backgroundRect.height - textSize.height) / 2),
-            width: textSize.width,
-            height: textSize.height + 2
-        )
-        textLayer.alignmentMode = .center
-        textLayer.foregroundColor = contrastingTextColor(for: style.color).cgColor
-        textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
-        let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
-        textLayer.font = CTFontCreateWithName(font.fontName as CFString, font.pointSize, nil)
-        textLayer.fontSize = fontSize
-        textLayer.string = label
-        container.addSublayer(textLayer)
-
         return container
     }
 
-    private static func makeVideoAnimation(style: KeyboardOverlayStyle) -> CAAnimationGroup {
+    private struct KeyboardBubbleImage {
+        let image: CGImage
+        let pointSize: CGSize
+    }
+
+    private static func renderKeyboardBubbleImage(
+        label: String,
+        style: KeyboardOverlayStyle,
+        alpha: CGFloat,
+        scale: CGFloat
+    ) -> KeyboardBubbleImage {
+        let fontSize = max(12, style.fontSize)
+        let paddingX = max(12, fontSize * 0.55)
+        let paddingY = max(6, fontSize * 0.35)
+        let textColor = contrastingTextColor(for: style.color).withAlphaComponent(alpha)
+        let attributed = keyboardOverlayAttributedString(label: label, fontSize: fontSize, color: textColor)
+        let textSize = attributed.size()
+
+        let bubblePointSize = CGSize(
+            width: ceil(textSize.width + (paddingX * 2)),
+            height: ceil(textSize.height + (paddingY * 2))
+        )
+        let pixelWidth = max(1, Int((bubblePointSize.width * scale).rounded(.up)))
+        let pixelHeight = max(1, Int((bubblePointSize.height * scale).rounded(.up)))
+
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: pixelWidth,
+            height: pixelHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else {
+            return KeyboardBubbleImage(image: blankImage(), pointSize: bubblePointSize)
+        }
+
+        context.scaleBy(x: scale, y: scale)
+
+        let bubbleRect = CGRect(origin: .zero, size: bubblePointSize)
+        let cornerRadius: CGFloat
+        switch style.shapeStyle {
+        case .capsule: cornerRadius = bubbleRect.height / 2
+        case .minimal: cornerRadius = 6
+        case .roundedRect: cornerRadius = 10
+        }
+
+        let bgAlpha = (style.shapeStyle == .minimal ? 0.6 : 0.82) * alpha
+        context.setFillColor(style.color.withAlphaComponent(bgAlpha).cgColor)
+        context.addPath(CGPath(roundedRect: bubbleRect, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil))
+        context.fillPath()
+
+        // Draw the attributed string via AppKit so font metrics & color match what was measured.
+        let textOrigin = CGPoint(
+            x: paddingX + max(0, (bubblePointSize.width - (paddingX * 2) - textSize.width) / 2),
+            y: paddingY
+        )
+        let textRect = CGRect(origin: textOrigin, size: textSize)
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        attributed.draw(in: textRect)
+        NSGraphicsContext.restoreGraphicsState()
+
+        let cgImage = context.makeImage() ?? blankImage()
+        return KeyboardBubbleImage(image: cgImage, pointSize: bubblePointSize)
+    }
+
+    private static func blankImage() -> CGImage {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let ctx = CGContext(
+            data: nil,
+            width: 1,
+            height: 1,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        )!
+        return ctx.makeImage()!
+    }
+
+    private static func makeVideoAnimation(style: KeyboardOverlayStyle, duration: TimeInterval) -> CAAnimationGroup {
         let group = CAAnimationGroup()
-        group.duration = style.duration
+        group.duration = duration
         group.isRemovedOnCompletion = false
         group.fillMode = .both
 
+        let fadeIn = min(0.15, max(0.05, 0.12 / duration))
+        let fadeOutStart = 1 - min(0.35, max(0.1, 0.3 / duration))
         let opacity = CAKeyframeAnimation(keyPath: "opacity")
-        opacity.values = [0, 1, 0]
-        opacity.keyTimes = [0, 0.15, 1]
+        opacity.values = [0, 1, 1, 0]
+        opacity.keyTimes = [0, NSNumber(value: fadeIn), NSNumber(value: fadeOutStart), 1]
 
         let transform = CAKeyframeAnimation(keyPath: "transform")
         switch style.animationStyle {
@@ -743,54 +849,48 @@ enum KeyboardOverlayProcessor {
 
         context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
 
-        guard let event = events.last(where: { frameTime >= $0.timeOffset && frameTime <= ($0.timeOffset + style.duration) }) else {
+        guard let event = events.last(where: { frameTime >= $0.timeOffset && frameTime <= ($0.timeOffset + $0.duration) }) else {
             return context.makeImage() ?? image
         }
 
         let elapsed = frameTime - event.timeOffset
-        let progress = max(0, min(1, elapsed / style.duration))
-        let alpha = max(0, 1 - progress)
+        let duration = max(0.0001, event.duration)
+        let progress = max(0, min(1, elapsed / duration))
+        let fadeIn = min(0.15, max(0.05, 0.12 / duration))
+        let fadeOutStart = 1 - min(0.35, max(0.1, 0.3 / duration))
+        let alpha: CGFloat
+        if progress < fadeIn {
+            alpha = CGFloat(progress / fadeIn)
+        } else if progress > fadeOutStart {
+            alpha = CGFloat(max(0, (1 - progress) / max(0.0001, 1 - fadeOutStart)))
+        } else {
+            alpha = 1
+        }
 
-        let fontSize = max(12, style.fontSize)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
-            .foregroundColor: contrastingTextColor(for: style.color).withAlphaComponent(alpha)
-        ]
-        let attributed = NSAttributedString(string: event.label, attributes: attributes)
-        let textSize = attributed.size()
-
-        let paddingX = max(12, fontSize * 0.55)
-        let paddingY = max(6, fontSize * 0.35)
-        let bubbleSize = CGSize(width: textSize.width + (paddingX * 2), height: textSize.height + (paddingY * 2))
-        var drawRect = positionedRect(itemSize: bubbleSize, canvasSize: CGSize(width: image.width, height: image.height), position: style.position)
+        let bubble = renderKeyboardBubbleImage(label: event.label, style: style, alpha: alpha, scale: 1.0)
+        var drawRect = positionedRect(
+            itemSize: bubble.pointSize,
+            canvasSize: CGSize(width: image.width, height: image.height),
+            position: style.position
+        )
 
         if style.animationStyle == .slide {
             drawRect.origin.y += (1 - progress) * 8
         }
 
-        let path = CGPath(roundedRect: drawRect, cornerWidth: style.shapeStyle == .capsule ? drawRect.height / 2 : (style.shapeStyle == .minimal ? 6 : 10), cornerHeight: style.shapeStyle == .capsule ? drawRect.height / 2 : (style.shapeStyle == .minimal ? 6 : 10), transform: nil)
-        context.setFillColor(style.color.withAlphaComponent((style.shapeStyle == .minimal ? 0.6 : 0.82) * alpha).cgColor)
-        context.addPath(path)
-        context.fillPath()
-
-        let textRect = CGRect(
-            x: drawRect.minX + paddingX,
-            y: drawRect.minY + ((drawRect.height - textSize.height) / 2),
-            width: textSize.width,
-            height: textSize.height
-        )
-
-        let line = CTLineCreateWithAttributedString(attributed)
-        context.saveGState()
-        context.textMatrix = .identity
-        context.textPosition = CGPoint(
-            x: textRect.minX,
-            y: textRect.minY + max(1, (textRect.height - fontSize) / 2)
-        )
-        CTLineDraw(line, context)
-        context.restoreGState()
-
+        context.draw(bubble.image, in: drawRect)
         return context.makeImage() ?? image
+    }
+
+    private static func keyboardOverlayAttributedString(label: String, fontSize: CGFloat, color: NSColor) -> NSAttributedString {
+        let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+        return NSAttributedString(
+            string: label,
+            attributes: [
+                .font: font,
+                .foregroundColor: color
+            ]
+        )
     }
 
     private static func positionedRect(itemSize: CGSize, canvasSize: CGSize, position: KeyboardOverlayPosition) -> CGRect {
