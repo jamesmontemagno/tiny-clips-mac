@@ -5,17 +5,6 @@ struct ScreenshotSettingsSection: View {
 
     var body: some View {
         Section("Capture Settings") {
-            Toggle("Show capture picker before screenshot", isOn: $settings.showScreenshotCapturePicker)
-                .help("When disabled, screenshots go straight to region selection.")
-                .onChange(of: settings.showScreenshotCapturePicker) { _, isEnabled in
-                    if !isEnabled {
-                        settings.showScreenshotCapturePickerAfterCapture = false
-                    }
-                }
-
-            Toggle("Show capture picker after screenshot", isOn: $settings.showScreenshotCapturePickerAfterCapture)
-                .help("Reopen the capture picker after each screenshot so you can quickly take another.")
-                .disabled(!settings.showScreenshotCapturePicker)
 
             Picker("Default format:", selection: $settings.screenshotFormat) {
                 ForEach(ImageFormat.allCases, id: \.rawValue) { format in
@@ -42,6 +31,20 @@ struct ScreenshotSettingsSection: View {
                 Text("25%").tag(25)
             }
             .help("Resize the saved screenshot relative to captured pixels.")
+        }
+        
+        Section("Picker Settings") {
+            Toggle("Show capture picker BEFORE screenshot", isOn: $settings.showScreenshotCapturePicker)
+                .help("When disabled, screenshots go straight to region selection.")
+                .onChange(of: settings.showScreenshotCapturePicker) { _, isEnabled in
+                    if !isEnabled {
+                        settings.showScreenshotCapturePickerAfterCapture = false
+                    }
+                }
+            
+            Toggle("Show capture picker AFTER screenshot", isOn: $settings.showScreenshotCapturePickerAfterCapture)
+                .help("Reopen the capture picker after each screenshot so you can quickly take another.")
+                .disabled(!settings.showScreenshotCapturePicker)
         }
 
         Section("After Capture") {

@@ -8,8 +8,6 @@ struct GifSettingsSection: View {
 
     var body: some View {
         Section("Capture Settings") {
-            Toggle("Show capture picker before recording", isOn: $settings.showGifCapturePicker)
-                .help("When disabled, GIF recording goes straight to region selection.")
 
             HStack {
                 Text("Frame rate:")
@@ -78,6 +76,11 @@ struct GifSettingsSection: View {
 #endif
                 }
             }
+        }
+        
+        Section("Before Capture") {
+            Toggle("Show capture picker before recording", isOn: $settings.showGifCapturePicker)
+                .help("When disabled, GIF recording goes straight to region selection.")
         }
 
         Section("After Capture") {

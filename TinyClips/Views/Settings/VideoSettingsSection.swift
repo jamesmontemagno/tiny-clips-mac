@@ -8,8 +8,6 @@ struct VideoSettingsSection: View {
 
     var body: some View {
         Section("Capture Settings") {
-            Toggle("Show capture picker before recording", isOn: $settings.showVideoCapturePicker)
-                .help("When disabled, video recording goes straight to region selection.")
 
             Picker("Frame rate:", selection: $settings.videoFrameRate) {
                 Text("24 fps").tag(24)
@@ -61,6 +59,12 @@ struct VideoSettingsSection: View {
 #endif
                 }
             }
+        }
+        
+        Section("Before Capture") {
+            Toggle("Show capture picker before recording", isOn: $settings.showVideoCapturePicker)
+                .help("When disabled, video recording goes straight to region selection.")
+
         }
 
         Section("After Capture") {

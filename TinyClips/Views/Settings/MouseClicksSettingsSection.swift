@@ -18,8 +18,8 @@ struct MouseClicksSettingsSection: View {
 
     @ViewBuilder
     private var mouseClicksControls: some View {
-        Section {
-            Text("Tune the saved click pulse for recordings. GIF can mirror Video settings when desired. Adding click effects will add more processing time at the end of recording.")
+        Section("Mouse Click Effects") {
+            Text("Tune the saved click pulse for recordings. Adding click effects will add more processing time at the end of recording.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -46,12 +46,10 @@ struct MouseClicksSettingsSection: View {
             )
         }
 
-        Section("Behavior") {
-            Toggle("Use Video click settings for GIF", isOn: $settings.gifMouseClicksUseVideoSettings)
-                .help("When enabled, GIF click visuals mirror Video settings.")
-        }
-
         Section("GIF") {
+            Toggle("Use Video click settings", isOn: $settings.gifMouseClicksUseVideoSettings)
+                .help("When enabled, GIF click visuals mirror Video settings.")
+
             if settings.gifMouseClicksUseVideoSettings {
                 Text("GIF click visuals mirror Video settings.")
                     .font(.caption2)
