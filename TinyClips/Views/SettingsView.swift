@@ -131,12 +131,21 @@ struct SettingsView: View {
         } message: {
             Text("TinyClips may briefly close the Settings window when switching out of Dock mode.")
         }
-        .onAppear(perform: refreshMicrophones)
+        .onAppear {
+            PerformanceSignposts.endSettingsOpenIfNeeded()
+            refreshMicrophonesIfNeeded()
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            if newTab == .video {
+                PerformanceSignposts.markVideoTabOpened()
+            }
+            refreshMicrophonesIfNeeded()
+        }
         .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasConnectedNotification)) { _ in
-            refreshMicrophones()
+            refreshMicrophonesIfNeeded()
         }
         .onReceive(NotificationCenter.default.publisher(for: AVCaptureDevice.wasDisconnectedNotification)) { _ in
-            refreshMicrophones()
+            refreshMicrophonesIfNeeded()
         }
     }
 
@@ -251,12 +260,19 @@ struct SettingsView: View {
     }
 
     private func refreshMicrophones() {
-        availableMicrophones = MicrophoneDeviceCatalog.availableOptions()
+        availableMicrophones = PerformanceSignposts.measureMicrophoneEnumeration {
+            MicrophoneDeviceCatalog.availableOptions()
+        }
         guard !settings.selectedMicrophoneID.isEmpty else { return }
         if availableMicrophones.contains(where: { $0.id == settings.selectedMicrophoneID }) {
             return
         }
         settings.selectedMicrophoneID = ""
+    }
+
+    private func refreshMicrophonesIfNeeded() {
+        guard selectedTab == .video else { return }
+        refreshMicrophones()
     }
 
     private var gifMouseClickToggleBinding: Binding<Bool> {

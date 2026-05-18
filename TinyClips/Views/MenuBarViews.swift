@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 #if APPSTORE
 import StoreKit
 #endif
@@ -75,6 +76,7 @@ struct MenuBarContentView: View {
         }
 
         Button("Settings…") {
+            PerformanceSignposts.beginSettingsOpen()
             openWindow(id: "settings-window")
             bringSettingsWindowToFront()
         }
@@ -191,5 +193,40 @@ struct MenuBarLabelView: View {
     var body: some View {
         Image(systemName: captureManager.isRecording ? "record.circle.fill" : "camera.viewfinder")
             .foregroundStyle(captureManager.isRecording ? .red : .primary)
+    }
+}
+
+// MARK: - Performance Signposts
+
+enum PerformanceSignposts {
+    private static let signposter = OSSignposter(subsystem: Bundle.main.bundleIdentifier ?? "com.tinyclips.app", category: "Performance")
+    private static let stateQueue = DispatchQueue(label: "com.tinyclips.performance-signposts")
+    private static var pendingSettingsOpenState: OSSignpostIntervalState?
+
+    static func beginSettingsOpen() {
+        let state = signposter.beginInterval("SettingsOpen")
+        stateQueue.sync {
+            pendingSettingsOpenState = state
+        }
+    }
+
+    static func endSettingsOpenIfNeeded() {
+        let state: OSSignpostIntervalState? = stateQueue.sync {
+            defer { pendingSettingsOpenState = nil }
+            return pendingSettingsOpenState
+        }
+
+        guard let state else { return }
+        signposter.endInterval("SettingsOpen", state)
+    }
+
+    static func markVideoTabOpened() {
+        signposter.emitEvent("VideoSettingsTabOpened")
+    }
+
+    static func measureMicrophoneEnumeration<T>(_ operation: () -> T) -> T {
+        let state = signposter.beginInterval("MicrophoneEnumeration")
+        defer { signposter.endInterval("MicrophoneEnumeration", state) }
+        return operation()
     }
 }
