@@ -37,6 +37,7 @@ class CaptureManager: ObservableObject {
     private var processingIndicatorShownAt: Date?
     private var isStoppingRecording = false
     private var stopRecordingTask: Task<Void, Never>?
+    private var videoAutoStopTask: Task<Void, Never>?
     private var recordingSessionCounter: UInt64 = 0
     private var activeRecordingSessionID: UInt64?
     private var finalizingSessionID: UInt64?
@@ -324,6 +325,7 @@ class CaptureManager: ObservableObject {
         microphone: Bool,
         selectedMicrophoneID: String,
         mouseClicksEnabled: Bool,
+        timeLimitMinutes: Int,
         countdownEnabled: Bool,
         countdownDuration: Int
     ) {
@@ -387,7 +389,9 @@ class CaptureManager: ObservableObject {
                     self.debugRecordingLifecycle("Video session \(sessionID) started")
                     self.recordingMicrophoneEnabled = recorder.isMicrophoneCaptureActive
                     self.showStopPanel()
+                    self.scheduleVideoAutoStopIfNeeded(timeLimitMinutes: timeLimitMinutes, sessionID: sessionID)
                 } catch {
+                    self.cancelVideoAutoStopTask()
                     _ = self.stopMouseClickMonitoring()
                     self.activeMouseClickCaptureEnabledOverride = nil
                     self.resetRecordingAudioStatus()
@@ -482,6 +486,7 @@ class CaptureManager: ObservableObject {
         guard isRecording || videoRecorder != nil || gifWriter != nil else { return }
 
         isStoppingRecording = true
+        cancelVideoAutoStopTask()
 
         dismissStopPanel()
         dismissRegionIndicator()
@@ -834,7 +839,7 @@ class CaptureManager: ObservableObject {
     private func showStartPanel() {
         let panel = StartRecordingPanel(
             captureType: pendingRecordingType ?? .video,
-            onStart: { [weak self] systemAudio, mic, selectedMicrophoneID, mouseClicksEnabled in
+            onStart: { [weak self] systemAudio, mic, selectedMicrophoneID, mouseClicksEnabled, videoTimeLimitMinutes in
                 guard
                     let self,
                     let target = self.pendingRecordingTarget,
@@ -856,6 +861,7 @@ class CaptureManager: ObservableObject {
                         microphone: mic,
                         selectedMicrophoneID: selectedMicrophoneID,
                         mouseClicksEnabled: mouseClicksEnabled,
+                        timeLimitMinutes: videoTimeLimitMinutes,
                         countdownEnabled: countdownEnabled,
                         countdownDuration: countdownDuration
                     )
@@ -965,6 +971,26 @@ class CaptureManager: ObservableObject {
         activeMicrophoneName = nil
         microphoneLevel = 0
         microphoneWarningMessage = nil
+    }
+
+    private func scheduleVideoAutoStopIfNeeded(timeLimitMinutes: Int, sessionID: UInt64) {
+        cancelVideoAutoStopTask()
+
+        guard timeLimitMinutes > 0 else { return }
+        let durationInNanoseconds = UInt64(timeLimitMinutes) * 60 * 1_000_000_000
+
+        videoAutoStopTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: durationInNanoseconds)
+            guard !Task.isCancelled else { return }
+            guard self.isRecording, self.videoRecorder != nil, self.activeRecordingSessionID == sessionID else { return }
+            self.stopRecording()
+        }
+    }
+
+    private func cancelVideoAutoStopTask() {
+        videoAutoStopTask?.cancel()
+        videoAutoStopTask = nil
     }
 
     private func showCountdownThen(

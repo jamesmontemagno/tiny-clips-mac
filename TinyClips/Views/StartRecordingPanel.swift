@@ -2,10 +2,10 @@ import AppKit
 import SwiftUI
 
 class StartRecordingPanel: NSPanel {
-    private var onStart: ((Bool, Bool, String, Bool) -> Void)?
+    private var onStart: ((Bool, Bool, String, Bool, Int) -> Void)?
     private var onCancel: (() -> Void)?
 
-    convenience init(captureType: CaptureType, onStart: @escaping (Bool, Bool, String, Bool) -> Void, onCancel: @escaping () -> Void) {
+    convenience init(captureType: CaptureType, onStart: @escaping (Bool, Bool, String, Bool, Int) -> Void, onCancel: @escaping () -> Void) {
         self.init(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 44),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -34,13 +34,16 @@ class StartRecordingPanel: NSPanel {
         let defaultMouseClicksEnabled = settings.shouldShowMouseClickVisuals(for: captureType)
     #endif
         let hostingView = NSHostingView(rootView: StartRecordingView(
+            captureType: captureType,
             systemAudio: settings.recordAudio,
             microphone: settings.recordMicrophone,
             selectedMicrophoneID: settings.selectedMicrophoneID,
             mouseClicksEnabled: defaultMouseClicksEnabled,
+            selectedVideoTimeLimitMinutes: settings.videoRecordingTimeLimitMinutes,
             allowsMouseClickToggle: allowsMouseClickToggle,
-            onStart: { [weak self] systemAudio, mic, mouseClicksEnabled in
-            self?.onStart?(systemAudio, mic.enabled, mic.deviceID, mouseClicksEnabled)
+            onStart: { [weak self] systemAudio, mic, mouseClicksEnabled, videoTimeLimitMinutes in
+                CaptureSettings.shared.videoRecordingTimeLimitMinutes = videoTimeLimitMinutes
+                self?.onStart?(systemAudio, mic.enabled, mic.deviceID, mouseClicksEnabled, videoTimeLimitMinutes)
                 self?.onStart = nil
                 self?.onCancel = nil
             },
@@ -79,14 +82,20 @@ private struct StartRecordingView: View {
         let deviceID: String
     }
 
+    let captureType: CaptureType
     @State var systemAudio: Bool
     @State var microphone: Bool
     @State var selectedMicrophoneID: String
     @State var mouseClicksEnabled: Bool
+    @State var selectedVideoTimeLimitMinutes: Int
     let allowsMouseClickToggle: Bool
     private let microphones = MicrophoneDeviceCatalog.availableOptions()
-    let onStart: (Bool, MicrophoneState, Bool) -> Void
+    let onStart: (Bool, MicrophoneState, Bool, Int) -> Void
     let onCancel: () -> Void
+
+    private var videoTimeLimitLabel: String {
+        selectedVideoTimeLimitMinutes == 0 ? "Unlimited" : "\(selectedVideoTimeLimitMinutes)m"
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -155,13 +164,47 @@ private struct StartRecordingView: View {
                 .help("Choose microphone input device.")
             }
 
+            if captureType == .video {
+                Menu {
+                    Button("Unlimited") {
+                        selectedVideoTimeLimitMinutes = 0
+                    }
+                    Divider()
+                    ForEach([1, 3, 5, 10, 15, 30, 45, 60], id: \.self) { minutes in
+                        Button("\(minutes) minute\(minutes == 1 ? "" : "s")") {
+                            selectedVideoTimeLimitMinutes = minutes
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "hourglass")
+                            .font(.system(size: 11))
+                        Text(videoTimeLimitLabel)
+                            .font(.system(size: 12, weight: .medium))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9))
+                    }
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(.primary.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Auto-stop recording time limit")
+                .accessibilityLabel("Recording time limit")
+                .accessibilityValue(videoTimeLimitLabel)
+                .accessibilityHint("Choose when recording should automatically stop.")
+            }
+
             Divider()
                 .frame(height: 20)
                 .overlay(.primary.opacity(0.2))
 
             // Start button
             Button {
-                onStart(systemAudio, .init(enabled: microphone, deviceID: selectedMicrophoneID), mouseClicksEnabled)
+                onStart(systemAudio, .init(enabled: microphone, deviceID: selectedMicrophoneID), mouseClicksEnabled, selectedVideoTimeLimitMinutes)
             } label: {
                 HStack(spacing: 5) {
                     Circle()

@@ -272,6 +272,7 @@ class CaptureSettings: ObservableObject {
     @AppStorage("jpegQuality") var jpegQuality: Double = 0.85
     @AppStorage("videoCountdownEnabled") var videoCountdownEnabled: Bool = true
     @AppStorage("videoCountdownDuration") var videoCountdownDuration: Int = 3
+    @AppStorage("videoRecordingTimeLimitMinutes") var videoRecordingTimeLimitMinutes: Int = 0
     @AppStorage("gifCountdownEnabled") var gifCountdownEnabled: Bool = true
     @AppStorage("gifCountdownDuration") var gifCountdownDuration: Int = 3
     @AppStorage("screenshotCountdownEnabled") var screenshotCountdownEnabled: Bool = false
@@ -420,6 +421,7 @@ class CaptureSettings: ObservableObject {
             "showScreenshotCapturePicker", "showScreenshotCapturePickerAfterCapture", "showVideoCapturePicker", "showGifCapturePicker",
             "screenshotFormat", "screenshotScale", "jpegQuality",
             "videoCountdownEnabled", "videoCountdownDuration",
+            "videoRecordingTimeLimitMinutes",
             "gifCountdownEnabled", "gifCountdownDuration",
             "screenshotCountdownEnabled", "screenshotCountdownDuration",
             "hasCompletedOnboarding", "alwaysCaptureMainDisplay", "showRegionIndicator",
