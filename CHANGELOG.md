@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## v1.4.0.2 - 2026-05-23
+
 ### Added
 - Video recording start controls now include a time-limit picker (default: Unlimited) that can automatically stop recording after the selected number of minutes.
 
