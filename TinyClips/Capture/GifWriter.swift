@@ -4,6 +4,7 @@ import CoreImage
 import ImageIO
 
 class GifWriter: NSObject, @unchecked Sendable {
+    private let writerID = UUID().uuidString
     private var stream: SCStream?
     private var frames: [CGImage] = []
     private var frameDelay: Double = 0.1
@@ -12,6 +13,7 @@ class GifWriter: NSObject, @unchecked Sendable {
     private let ciContext = CIContext()
 
     func start(target: CaptureTarget) async throws {
+        debugLifecycle("start requested")
         let preparedTarget = try await target.prepare()
         let filter = preparedTarget.filter
         let config = preparedTarget.config
@@ -31,11 +33,14 @@ class GifWriter: NSObject, @unchecked Sendable {
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: processingQueue)
         try await stream.startCapture()
         self.stream = stream
+        debugLifecycle("stream started")
     }
 
     func stop(outputURL: URL) async throws {
+        debugLifecycle("stop requested (write to file)")
         try await stream?.stopCapture()
         stream = nil
+        debugLifecycle("stream stopped")
 
         let capturedFrames = processingQueue.sync { self.frames }
         guard !capturedFrames.isEmpty else {
@@ -46,8 +51,10 @@ class GifWriter: NSObject, @unchecked Sendable {
     }
 
     func stopAndReturnData() async throws -> GifCaptureData {
+        debugLifecycle("stop requested (return data)")
         try await stream?.stopCapture()
         stream = nil
+        debugLifecycle("stream stopped")
 
         let capturedFrames = processingQueue.sync { self.frames }
         guard !capturedFrames.isEmpty else {
@@ -113,6 +120,12 @@ class GifWriter: NSObject, @unchecked Sendable {
         context.interpolationQuality = .high
         context.draw(image, in: CGRect(origin: .zero, size: size))
         return context.makeImage()
+    }
+
+    private func debugLifecycle(_ message: String) {
+#if DEBUG
+        print("[GifWriter \(writerID)] \(message)")
+#endif
     }
 }
 

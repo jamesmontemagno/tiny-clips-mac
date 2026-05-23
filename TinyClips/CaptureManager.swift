@@ -36,6 +36,10 @@ class CaptureManager: ObservableObject {
     private var processingIndicatorWindow: ProcessingIndicatorWindow?
     private var processingIndicatorShownAt: Date?
     private var isStoppingRecording = false
+    private var stopRecordingTask: Task<Void, Never>?
+    private var recordingSessionCounter: UInt64 = 0
+    private var activeRecordingSessionID: UInt64?
+    private var finalizingSessionID: UInt64?
     private var onboardingWindow: OnboardingWizardWindow?
     private var guideWindow: GuideWindow?
     private var screenPickerWindow: ScreenPickerWindow?
@@ -339,6 +343,9 @@ class CaptureManager: ObservableObject {
 
                 do {
                     let recorder = VideoRecorder()
+                    let sessionID = self.nextRecordingSessionID()
+                    self.activeRecordingSessionID = sessionID
+                    self.debugRecordingLifecycle("Starting video session \(sessionID)")
                     recorder.onMicrophoneLevel = { [weak self] level in
                         DispatchQueue.main.async {
                             self?.microphoneLevel = level
@@ -377,6 +384,7 @@ class CaptureManager: ObservableObject {
                         recordMicrophone: microphone,
                         selectedMicrophoneID: selectedMicrophoneID
                     )
+                    self.debugRecordingLifecycle("Video session \(sessionID) started")
                     self.recordingMicrophoneEnabled = recorder.isMicrophoneCaptureActive
                     self.showStopPanel()
                 } catch {
@@ -386,6 +394,8 @@ class CaptureManager: ObservableObject {
                     self.isRecording = false
                     self.activeRecordingRegion = nil
                     self.dismissRegionIndicator()
+                    self.activeRecordingSessionID = nil
+                    self.debugRecordingLifecycle("Video session failed to start: \(error.localizedDescription)")
                     SaveService.shared.showError("Video recording failed: \(error.localizedDescription)")
                 }
             }
@@ -429,6 +439,9 @@ class CaptureManager: ObservableObject {
             Task {
                 do {
                     let writer = GifWriter()
+                    let sessionID = self.nextRecordingSessionID()
+                    self.activeRecordingSessionID = sessionID
+                    self.debugRecordingLifecycle("Starting GIF session \(sessionID)")
                     self.gifWriter = writer
                     self.activeRecordingRegion = target.region
                     self.isRecording = true
@@ -436,6 +449,7 @@ class CaptureManager: ObservableObject {
                     self.startMouseClickMonitoringIfNeeded(for: .gif, region: target.region)
 
                     try await writer.start(target: target)
+                    self.debugRecordingLifecycle("GIF session \(sessionID) started")
                     self.showStopPanel()
                 } catch {
                     _ = self.stopMouseClickMonitoring()
@@ -443,6 +457,8 @@ class CaptureManager: ObservableObject {
                     self.isRecording = false
                     self.activeRecordingRegion = nil
                     self.dismissRegionIndicator()
+                    self.activeRecordingSessionID = nil
+                    self.debugRecordingLifecycle("GIF session failed to start: \(error.localizedDescription)")
                     SaveService.shared.showError("GIF recording failed: \(error.localizedDescription)")
                 }
             }
@@ -472,35 +488,51 @@ class CaptureManager: ObservableObject {
         resetRecordingAudioStatus()
         activeRecordingRegion = nil
         isRecording = false
+        let stoppingSessionID = activeRecordingSessionID
+        activeRecordingSessionID = nil
+        finalizingSessionID = stoppingSessionID
+        debugRecordingLifecycle("Stopping session \(stoppingSessionID.map(String.init) ?? "unknown")")
 
-        Task {
-            await stopRecordingFlow()
+        let task = Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            await self.stopRecordingFlow(stoppingSessionID: stoppingSessionID)
         }
+        stopRecordingTask = task
     }
 
-    private func stopRecordingFlow() async {
-        defer { isStoppingRecording = false }
+    private func stopRecordingFlow(stoppingSessionID: UInt64?) async {
+        defer {
+            isStoppingRecording = false
+            if finalizingSessionID == stoppingSessionID {
+                finalizingSessionID = nil
+            }
+            stopRecordingTask = nil
+            debugRecordingLifecycle("Finished finalizing session \(stoppingSessionID.map(String.init) ?? "unknown")")
+        }
         defer { activeMouseClickCaptureEnabledOverride = nil }
+
+        let videoRecorderAtStop = videoRecorder
+        let gifWriterAtStop = gifWriter
 
         let capturedMouseClickData = stopMouseClickMonitoring()
         let shortVideoIndicatorBypassThreshold: TimeInterval = 120
 
         let stoppedRecordingType: CaptureType?
-        if videoRecorder != nil {
+        if videoRecorderAtStop != nil {
             stoppedRecordingType = .video
-        } else if gifWriter != nil {
+        } else if gifWriterAtStop != nil {
             stoppedRecordingType = .gif
         } else {
             stoppedRecordingType = nil
         }
 
         let shouldShowProcessingIndicator: Bool = {
-            guard let videoRecorder, gifWriter == nil else { return true }
+            guard let videoRecorderAtStop, gifWriterAtStop == nil else { return true }
             let mouseClicksEnabled = shouldCaptureMouseClicks(for: .video)
             if mouseClicksEnabled {
                 return true
             }
-            return videoRecorder.currentRecordingDuration >= shortVideoIndicatorBypassThreshold
+            return videoRecorderAtStop.currentRecordingDuration >= shortVideoIndicatorBypassThreshold
         }()
 
         if shouldShowProcessingIndicator {
@@ -518,7 +550,7 @@ class CaptureManager: ObservableObject {
 
         var savedVideoURL: URL?
 
-        if let recorder = videoRecorder {
+        if let recorder = videoRecorderAtStop {
             do {
                 updateProcessingProgress(0.15, status: "Exporting video...")
                 savedVideoURL = try await recorder.stop()
@@ -561,10 +593,14 @@ class CaptureManager: ObservableObject {
                 }
             }
             updateProcessingProgress(1.0, status: "Done")
-            videoRecorder = nil
+            if videoRecorder === recorder {
+                videoRecorder = nil
+            } else {
+                debugRecordingLifecycle("Skipped clearing stale video recorder reference")
+            }
         }
 
-        if let writer = gifWriter {
+        if let writer = gifWriterAtStop {
             let url = SaveService.shared.generateURL(for: .gif)
             do {
                 let settings = CaptureSettings.shared
@@ -655,7 +691,11 @@ class CaptureManager: ObservableObject {
             } catch {
                 SaveService.shared.showError("GIF save failed: \(error.localizedDescription)")
             }
-            gifWriter = nil
+            if gifWriter === writer {
+                gifWriter = nil
+            } else {
+                debugRecordingLifecycle("Skipped clearing stale GIF writer reference")
+            }
         }
 
         if let stoppedRecordingType {
@@ -686,6 +726,11 @@ class CaptureManager: ObservableObject {
     }
 
     private func prepareForNewCaptureRequest() async {
+        if let stopRecordingTask {
+            debugRecordingLifecycle("Waiting for ongoing finalize before new capture")
+            await stopRecordingTask.value
+        }
+
         dismissScreenshotPicker()
         dismissRecordingPicker()
         dismissStartPanel()
@@ -699,11 +744,17 @@ class CaptureManager: ObservableObject {
         _ = stopMouseClickMonitoring()
 
         if isStoppingRecording {
+            debugRecordingLifecycle("Capture request blocked while finalize in progress")
             return
         }
 
         if videoRecorder != nil || gifWriter != nil || isRecording {
-            await stopRecordingFlow()
+            isStoppingRecording = true
+            let stoppingSessionID = activeRecordingSessionID
+            activeRecordingSessionID = nil
+            finalizingSessionID = stoppingSessionID
+            debugRecordingLifecycle("Stopping existing session before new capture")
+            await stopRecordingFlow(stoppingSessionID: stoppingSessionID)
         } else {
             dismissStopPanel()
         }
@@ -1201,6 +1252,17 @@ class CaptureManager: ObservableObject {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("TinyClips-\(UUID().uuidString)")
             .appendingPathExtension(fileExtension)
+    }
+
+    private func nextRecordingSessionID() -> UInt64 {
+        recordingSessionCounter += 1
+        return recordingSessionCounter
+    }
+
+    private func debugRecordingLifecycle(_ message: String) {
+#if DEBUG
+        print("[CaptureManager] \(message)")
+#endif
     }
 
     // Bridges synchronous CPU-heavy work to a background queue so it does not

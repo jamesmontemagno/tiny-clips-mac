@@ -27,6 +27,7 @@ enum MicrophoneDeviceCatalog {
 }
 
 class VideoRecorder: NSObject, @unchecked Sendable {
+    private let recorderID = UUID().uuidString
     private let microphoneSignalThreshold = 0.01
     private let microphoneSignalTimeoutSeconds: TimeInterval = 2
     private var stream: SCStream?
@@ -67,6 +68,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         recordMicrophone: Bool,
         selectedMicrophoneID: String
     ) async throws {
+        debugLifecycle("start requested")
         let preparedTarget = try await target.prepare()
         let filter = preparedTarget.filter
         let config = preparedTarget.config
@@ -135,6 +137,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
             try await stream.startCapture()
             recordingStartedAtUptime = ProcessInfo.processInfo.systemUptime
             self.stream = stream
+            debugLifecycle("stream started")
 
             if recordMicrophone {
                 let micGranted = await AVCaptureDevice.requestAccess(for: .audio)
@@ -147,6 +150,7 @@ class VideoRecorder: NSObject, @unchecked Sendable {
                 }
             }
         } catch {
+            debugLifecycle("start failed: \(error.localizedDescription)")
             await resetAfterFailedStart(removeOutputFile: true)
             throw error
         }
@@ -295,12 +299,14 @@ class VideoRecorder: NSObject, @unchecked Sendable {
 
     func stop() async throws -> URL {
         defer { recordingStartedAtUptime = nil }
+        debugLifecycle("stop requested")
 
         // Stop mic capture first
         stopMicrophoneCapture()
 
         try await stream?.stopCapture()
         stream = nil
+        debugLifecycle("stream stopped")
 
         guard let writer, let videoInput, let outputURL else {
             throw CaptureError.saveFailed
@@ -322,8 +328,10 @@ class VideoRecorder: NSObject, @unchecked Sendable {
                 capturedMicAudioInput?.markAsFinished()
                 capturedWriter.finishWriting {
                     if capturedWriter.status == .completed {
+                        self.debugLifecycle("finishWriting completed")
                         continuation.resume(returning: outputURL)
                     } else {
+                        self.debugLifecycle("finishWriting failed: \(capturedWriter.error?.localizedDescription ?? "unknown error")")
                         continuation.resume(throwing: capturedWriter.error ?? CaptureError.saveFailed)
                     }
                 }
@@ -368,6 +376,12 @@ class VideoRecorder: NSObject, @unchecked Sendable {
         }
         outputURL = nil
         recordingStartedAtUptime = nil
+    }
+
+    private func debugLifecycle(_ message: String) {
+#if DEBUG
+        print("[VideoRecorder \(recorderID)] \(message)")
+#endif
     }
 }
 
