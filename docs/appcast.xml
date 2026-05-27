@@ -11,24 +11,24 @@
         <item>
             
             
-            <title>1.4.0.2</title>
+            <title>1.4.0.3</title>
             
             
-            <pubDate>Sat, 23 May 2026 20:54:09 +0000</pubDate>
+            <pubDate>Wed, 27 May 2026 21:16:33 +0000</pubDate>
             
             
-            <sparkle:version>34</sparkle:version>
+            <sparkle:version>35</sparkle:version>
             
             
-            <sparkle:shortVersionString>1.4.0.2</sparkle:shortVersionString>
+            <sparkle:shortVersionString>1.4.0.3</sparkle:shortVersionString>
             
             
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             
             
-            <description><![CDATA[<h3>What's Changed</h3><ul><li>Update CHANGELOG for v1.4.0.2 release</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v1.4.0.1...v1.4.0.2">Full Changelog</a></p>]]></description>
-            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v1.4.0.2</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.4.0.2/TinyClips-v1.4.0.2.zip" length="3151024" type="application/octet-stream" sparkle:edSignature="yJ3GqNQCUSDputR6AlZo9Ze5zVx0S8wmZBolhTzkevtJZ0xAN2Xbk5srPc76+0dC9AF2Q7IrwCsETXx4csxUAw=="/>
+            <description><![CDATA[<h3>What's Changed</h3><ul><li>chore: update CHANGELOG for v1.4.0.3 release</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v1.4.0.2...v1.4.0.3">Full Changelog</a></p>]]></description>
+            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v1.4.0.3</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.4.0.3/TinyClips-v1.4.0.3.zip" length="3151026" type="application/octet-stream" sparkle:edSignature="Jwt6HMMjj0If94hOmbGqWS7xu5Zfe+nLD31VzgcEYwDoCC2ezMMPY/9jh5RAUYVasWkGBS4zw/QWqSbnZUcLAg=="/>
             
         
         </item>
