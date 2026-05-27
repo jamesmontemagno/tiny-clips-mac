@@ -11,24 +11,24 @@
         <item>
             
             
-            <title>1.4.0.1</title>
+            <title>1.4.0.2</title>
             
             
-            <pubDate>Sun, 17 May 2026 16:56:44 +0000</pubDate>
+            <pubDate>Sat, 23 May 2026 20:54:09 +0000</pubDate>
             
             
-            <sparkle:version>33</sparkle:version>
+            <sparkle:version>34</sparkle:version>
             
             
-            <sparkle:shortVersionString>1.4.0.1</sparkle:shortVersionString>
+            <sparkle:shortVersionString>1.4.0.2</sparkle:shortVersionString>
             
             
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             
             
-            <description><![CDATA[<h3>What's Changed</h3><ul><li>Update CHANGELOG for v1.4.0.1</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v1.4.0...v1.4.0.1">Full Changelog</a></p>]]></description>
-            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v1.4.0.1</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.4.0.1/TinyClips-v1.4.0.1.zip" length="3130325" type="application/octet-stream" sparkle:edSignature="UcL16AJHHdpWuEcXssP4bIl9JdeGqHnBJXKI5CRqZvbDsy/ydaBGj0xgvp6KddCh0+xaqBVbWlPsq/BTcH/VAg=="/>
+            <description><![CDATA[<h3>What's Changed</h3><ul><li>Update CHANGELOG for v1.4.0.2 release</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v1.4.0.1...v1.4.0.2">Full Changelog</a></p>]]></description>
+            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v1.4.0.2</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.4.0.2/TinyClips-v1.4.0.2.zip" length="3151024" type="application/octet-stream" sparkle:edSignature="yJ3GqNQCUSDputR6AlZo9Ze5zVx0S8wmZBolhTzkevtJZ0xAN2Xbk5srPc76+0dC9AF2Q7IrwCsETXx4csxUAw=="/>
             
         
         </item>
