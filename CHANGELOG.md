@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## v1.4.0.3 - 2026-05-27
+
+### Added
+- Release pipeline automation for Homebrew cask version and SHA updates.
+
 ## v1.4.0.2 - 2026-05-23
 
 ### Added
