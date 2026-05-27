@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Video recording start controls now include a time-limit picker (default: Unlimited) that can automatically stop recording after the selected number of minutes.
+- Homebrew cask support with release pipeline automation to keep `Casks/tiny-clips.rb` version and SHA in sync on each tagged release.
 
 ## v1.4.0.1 - 2026-05-17
 

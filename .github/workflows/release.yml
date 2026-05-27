@@ -417,11 +417,21 @@ jobs:
         run: |
           cp $RUNNER_TEMP/appcast.xml docs/appcast.xml
 
-      - name: Commit Updated Appcast
+      - name: Update Homebrew Cask
+        run: |
+          RELEASE_VERSION="${{ env.RELEASE_TAG }}"
+          RELEASE_VERSION="${RELEASE_VERSION#v}"
+          RELEASE_SHA=$(shasum -a 256 "$RUNNER_TEMP/${{ env.PRODUCT_NAME }}-${{ env.RELEASE_TAG }}.zip" | awk '{print $1}')
+          sed -i '' "s/version \".*\"/version \"$RELEASE_VERSION\"/" Casks/tiny-clips.rb
+          sed -i '' "s/sha256 \".*\"/sha256 \"$RELEASE_SHA\"/" Casks/tiny-clips.rb
+
+      - name: Commit release metadata
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Update appcast.xml for ${{ env.RELEASE_TAG }}"
-          file_pattern: docs/appcast.xml
+          commit_message: "Update release metadata for ${{ env.RELEASE_TAG }}"
+          file_pattern: |
+            docs/appcast.xml
+            Casks/tiny-clips.rb
           branch: main
 
       - name: Cleanup keychain

@@ -31,6 +31,13 @@ A lightweight macOS menu bar app for capturing screenshots (PNG), video (MP4), a
 
 ## Installation
 
+### Homebrew
+
+```bash
+brew tap jamesmontemagno/tiny-clips-mac
+brew install --cask tiny-clips
+```
+
 ### Download
 
 Download the latest release from the [Releases](https://github.com/jamesmontemagno/tiny-clips-mac/releases) page.
