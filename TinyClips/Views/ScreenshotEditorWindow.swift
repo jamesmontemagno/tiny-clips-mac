@@ -86,6 +86,7 @@ private struct Annotation: Identifiable {
     var points: [CGPoint] // for pencil
     var fontSize: CGFloat = 16 // for text annotations
     var redactionBlurPreset: RedactionBlurPreset = .medium
+    var arrowStyle: ArrowStyle = .straight
 }
 
 private typealias LinePoints = (start: CGPoint, end: CGPoint)
@@ -146,6 +147,46 @@ private enum RedactionBlurPreset: String, CaseIterable, Identifiable {
     }
 }
 
+private enum ArrowStyle: String, CaseIterable, Identifiable {
+    case straight
+    case curvedLeft
+    case curvedRight
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .straight: return "Straight"
+        case .curvedLeft: return "Curved Left"
+        case .curvedRight: return "Curved Right"
+        }
+    }
+
+    var curvatureSign: CGFloat {
+        switch self {
+        case .straight: return 0
+        case .curvedLeft: return -1
+        case .curvedRight: return 1
+        }
+    }
+}
+
+private enum ExportBackgroundStyle: String, CaseIterable, Identifiable {
+    case transparent
+    case solid
+    case gradient
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .transparent: return "Transparent"
+        case .solid: return "Solid"
+        case .gradient: return "Gradient"
+        }
+    }
+}
+
 private func redactionBrightness(for row: Int, column: Int, preset: RedactionBlurPreset) -> Double {
     let phase = Double((row + column) % preset.cycleLength)
     return min(0.82, preset.baseBrightness + phase * preset.contrastStep)
@@ -190,6 +231,17 @@ private func drawCheckerboardRedaction(in context: CGContext, rect: CGRect, pres
             context.fill(blockRect)
         }
     }
+}
+
+private func arrowControlPoint(start: CGPoint, end: CGPoint, style: ArrowStyle) -> CGPoint {
+    let mid = CGPoint(x: (start.x + end.x) * 0.5, y: (start.y + end.y) * 0.5)
+    guard style != .straight else { return mid }
+    let dx = end.x - start.x
+    let dy = end.y - start.y
+    let length = max(1, hypot(dx, dy))
+    let normal = CGPoint(x: -dy / length, y: dx / length)
+    let magnitude = max(20, length * 0.25) * style.curvatureSign
+    return CGPoint(x: mid.x + normal.x * magnitude, y: mid.y + normal.y * magnitude)
 }
 
 // MARK: - Editor View
@@ -284,27 +336,32 @@ private struct ScreenshotEditorView: View {
         )
     }
 
+    private var arrowStyleBinding: Binding<ArrowStyle> {
+        Binding(
+            get: {
+                viewModel.selectedArrowStyle() ?? viewModel.selectedArrowStylePreset
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedArrowStyle(newValue) {
+                    viewModel.selectedArrowStylePreset = newValue
+                }
+            }
+        )
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            // Toolbar
-            toolbar
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+        HStack(spacing: 0) {
+            sidebar
+                .frame(width: 300)
+                .background(.thinMaterial)
 
             Divider()
 
-            // Canvas
             GeometryReader { geo in
                 CanvasView(viewModel: viewModel, containerSize: geo.size)
             }
             .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
             .clipped()
-
-            Divider()
-
-            // Bottom bar
-            bottomBar
-                .padding(12)
         }
         .disabled(isSaving)
         .overlay {
@@ -314,82 +371,81 @@ private struct ScreenshotEditorView: View {
         }
     }
 
-    private var toolbar: some View {
-        HStack(spacing: 2) {
+    private var sidebar: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Tools")
+                    .font(.headline)
+
+                toolGrid
+
+                Button {
+                    viewModel.undo()
+                } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
+                }
+                .disabled(viewModel.annotations.isEmpty)
+                .keyboardShortcut("z", modifiers: .command)
+
+                Divider()
+
+                Text("Style")
+                    .font(.headline)
+                styleControls
+
+                Divider()
+
+                Text("Background")
+                    .font(.headline)
+                backgroundControls
+
+                Divider()
+
+                Text("Export")
+                    .font(.headline)
+                exportControls
+            }
+            .padding(14)
+        }
+    }
+
+    private var toolGrid: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 80), spacing: 8)], spacing: 8) {
             ForEach(EditTool.allCases, id: \.self) { tool in
                 Button {
                     viewModel.selectedTool = tool
                 } label: {
-                    VStack(spacing: 2) {
+                    VStack(spacing: 4) {
                         Image(systemName: tool.rawValue)
                             .font(.system(size: 14))
-                            .frame(width: 28, height: 22)
                         Text(tool.label)
-                            .font(.system(size: 9))
+                            .font(.system(size: 11))
                     }
-                    .frame(width: 52, height: 42)
-                    .contentShape(Rectangle())
+                    .frame(maxWidth: .infinity, minHeight: 52)
                     .background(viewModel.selectedTool == tool ? Color.accentColor.opacity(0.2) : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(tool.label) tool")
-                .accessibilityValue(viewModel.selectedTool == tool ? "Selected" : "Not selected")
-                .help("Use the \(tool.label.lowercased()) tool.")
+            }
+        }
+    }
+
+    private var styleControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let primaryColorLabel {
+                ColorPicker(primaryColorLabel, selection: primaryColorBinding, supportsOpacity: true)
             }
 
-            Spacer()
+            if showsFillColorPicker {
+                ColorPicker("Fill", selection: $viewModel.selectedFillColor, supportsOpacity: true)
+            }
 
-            if let primaryColorLabel {
-                HStack(spacing: 16) {
-                    VStack(spacing: 1) {
-                        ColorPicker("", selection: primaryColorBinding, supportsOpacity: true)
-                            .labelsHidden()
-                            .frame(width: 28)
-                            .accessibilityLabel("\(primaryColorLabel) color")
-                            .accessibilityHint("Adjusts the color used by the selected annotation tool.")
-                            .help("Choose the \(primaryColorLabel.lowercased()) color.")
-                        Text(primaryColorLabel)
-                            .font(.system(size: 8))
-                            .foregroundStyle(.secondary)
-                            .accessibilityHidden(true)
-                    }
-
-                    if showsFillColorPicker {
-                        VStack(spacing: 1) {
-                            ColorPicker("", selection: $viewModel.selectedFillColor, supportsOpacity: true)
-                                .labelsHidden()
-                                .frame(width: 28)
-                                .accessibilityLabel("Fill color")
-                                .accessibilityHint("Selects the fill color for rectangle and circle shapes. Use transparent for no fill.")
-                                .help("Choose the fill color.")
-                            Text("Fill")
-                                .font(.system(size: 8))
-                                .foregroundStyle(.secondary)
-                                .accessibilityHidden(true)
-                        }
-                    }
-
-                    if showsNumberTextColorPicker {
-                        VStack(spacing: 1) {
-                            ColorPicker("", selection: numberTextColorBinding, supportsOpacity: true)
-                                .labelsHidden()
-                                .frame(width: 28)
-                                .accessibilityLabel("Text color")
-                                .accessibilityHint("Sets the numeral color inside the number badge.")
-                                .help("Choose the number text color.")
-                            Text("Text")
-                                .font(.system(size: 8))
-                                .foregroundStyle(.secondary)
-                                .accessibilityHidden(true)
-                        }
-                    }
-                }
-                .padding(.trailing, 8)
+            if showsNumberTextColorPicker {
+                ColorPicker("Text", selection: numberTextColorBinding, supportsOpacity: true)
             }
 
             if viewModel.showsLineWidthControl {
-                Picker("", selection: $viewModel.lineWidth) {
+                Picker("Stroke", selection: $viewModel.lineWidth) {
                     Text("1 px").tag(CGFloat(1))
                     Text("2 px").tag(CGFloat(2))
                     Text("4 px").tag(CGFloat(4))
@@ -397,15 +453,18 @@ private struct ScreenshotEditorView: View {
                     Text("8 px").tag(CGFloat(8))
                     Text("10 px").tag(CGFloat(10))
                 }
-                .labelsHidden()
-                .frame(width: 96)
-                .accessibilityLabel("Line width")
-                .accessibilityValue("\(Int(viewModel.lineWidth)) pixels")
-                .help("Choose the line width.")
+            }
+
+            if viewModel.showsArrowStyleControl {
+                Picker("Arrow", selection: arrowStyleBinding) {
+                    ForEach(ArrowStyle.allCases) { style in
+                        Text(style.label).tag(style)
+                    }
+                }
             }
 
             if viewModel.showsNumberSizeControl {
-                Picker("", selection: numberSizeBinding) {
+                Picker("Number size", selection: numberSizeBinding) {
                     Text("20%").tag(CGFloat(0.2))
                     Text("30%").tag(CGFloat(0.3))
                     Text("40%").tag(CGFloat(0.4))
@@ -421,43 +480,59 @@ private struct ScreenshotEditorView: View {
                     Text("175%").tag(CGFloat(1.75))
                     Text("200%").tag(CGFloat(2.0))
                 }
-                .labelsHidden()
-                .frame(width: 96)
-                .accessibilityLabel("Number size")
-                .accessibilityValue("\(Int(numberSizeBinding.wrappedValue * 100)) percent")
-                .help("Choose the number badge size.")
             }
 
             if viewModel.showsRedactionPresetControl {
-                Picker("", selection: blurPresetBinding) {
+                Picker("Redaction", selection: blurPresetBinding) {
                     ForEach(RedactionBlurPreset.allCases) { preset in
                         Text(preset.label).tag(preset)
                     }
                 }
-                .labelsHidden()
-                .frame(width: 110)
-                .accessibilityLabel("Redaction pixelation strength")
-                .accessibilityValue(blurPresetBinding.wrappedValue.label)
-                .help("Choose the redaction pixelation strength.")
             }
-
-            // Undo
-            Button {
-                viewModel.undo()
-            } label: {
-                Image(systemName: "arrow.uturn.backward")
-            }
-            .disabled(viewModel.annotations.isEmpty)
-            .keyboardShortcut("z", modifiers: .command)
-            .accessibilityLabel("Undo")
-            .accessibilityHint("Removes the last annotation.")
-            .help("Undo the last annotation.")
         }
     }
 
-    private var bottomBar: some View {
-        HStack {
-            // Image info & save options
+    private var backgroundControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("Type", selection: $viewModel.backgroundStyle) {
+                ForEach(ExportBackgroundStyle.allCases) { style in
+                    Text(style.label).tag(style)
+                }
+            }
+
+            if viewModel.backgroundStyle != .transparent {
+                ColorPicker("Color", selection: $viewModel.backgroundColor, supportsOpacity: true)
+            }
+
+            if viewModel.backgroundStyle == .gradient {
+                ColorPicker("Color 2", selection: $viewModel.backgroundSecondaryColor, supportsOpacity: true)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Padding: \(Int(viewModel.canvasPadding)) px")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Slider(value: $viewModel.canvasPadding, in: 0...160, step: 2)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Corners: \(Int(viewModel.canvasCornerRadius)) px")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Slider(value: $viewModel.canvasCornerRadius, in: 0...60, step: 1)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Shadow: \(Int(viewModel.canvasShadowRadius))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Slider(value: $viewModel.canvasShadowRadius, in: 0...40, step: 1)
+            }
+        }
+    }
+
+    private var exportControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
             if let img = viewModel.originalImage {
                 let rep = img.representations.first
                 Text("\(Int(rep?.pixelsWide ?? 0)) × \(Int(rep?.pixelsHigh ?? 0))")
@@ -465,15 +540,13 @@ private struct ScreenshotEditorView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Picker("Format:", selection: $viewModel.saveFormat) {
+            Picker("Format", selection: $viewModel.saveFormat) {
                 ForEach(ImageFormat.allCases, id: \.self) { format in
                     Text(format.label).tag(format)
                 }
             }
-            .frame(width: 140)
-            .help("Choose the file format for saving.")
 
-            Picker("Scale:", selection: $viewModel.saveScale) {
+            Picker("Scale", selection: $viewModel.saveScale) {
                 Text("100%").tag(100)
                 Text("90%").tag(90)
                 Text("80%").tag(80)
@@ -484,40 +557,31 @@ private struct ScreenshotEditorView: View {
                 Text("30%").tag(30)
                 Text("25%").tag(25)
             }
-            .frame(width: 120)
-            .help("Choose the export scale.")
 
             if viewModel.saveFormat == .jpeg {
-                Slider(value: $viewModel.saveJpegQuality, in: 0.1...1.0, step: 0.05)
-                    .frame(width: 80)
-                    .accessibilityLabel("JPEG quality")
-                    .help("Adjust JPEG quality.")
-                Text("\(Int(viewModel.saveJpegQuality * 100))%")
-                    .font(.caption)
-                    .monospacedDigit()
-                    .frame(width: 32, alignment: .trailing)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("JPEG: \(Int(viewModel.saveJpegQuality * 100))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Slider(value: $viewModel.saveJpegQuality, in: 0.1...1.0, step: 0.05)
+                }
             }
 
-            Spacer()
+            HStack {
+                Button("Discard") { onDone(nil) }
+                    .keyboardShortcut(.cancelAction)
 
-            Button("Discard") {
-                onDone(nil)
-            }
-            .keyboardShortcut(.cancelAction)
-            .help("Close without saving changes.")
+                Button {
+                    viewModel.copyToClipboard()
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
 
-            Button {
-                viewModel.copyToClipboard()
-            } label: {
-                Label("Copy", systemImage: "doc.on.doc")
-            }
-            .help("Copy the edited image to the clipboard.")
+                Spacer()
 
-            Button("Save") {
-                saveImage()
+                Button("Save") { saveImage() }
+                    .keyboardShortcut(.defaultAction)
             }
-            .keyboardShortcut(.defaultAction)
-            .help("Save the edited image.")
         }
     }
 
@@ -576,6 +640,29 @@ private struct CanvasView: View {
             Color(nsColor: .controlBackgroundColor)
 
             if let image = viewModel.originalImage {
+                let backgroundWidth = imageSize.width + (viewModel.canvasPadding * 2)
+                let backgroundHeight = imageSize.height + (viewModel.canvasPadding * 2)
+
+                if viewModel.backgroundStyle == .solid {
+                    RoundedRectangle(cornerRadius: viewModel.canvasCornerRadius)
+                        .fill(viewModel.backgroundColor)
+                        .frame(width: backgroundWidth, height: backgroundHeight)
+                        .shadow(color: .black.opacity(0.25), radius: viewModel.canvasShadowRadius)
+                        .position(x: containerSize.width / 2, y: containerSize.height / 2)
+                } else if viewModel.backgroundStyle == .gradient {
+                    RoundedRectangle(cornerRadius: viewModel.canvasCornerRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: [viewModel.backgroundColor, viewModel.backgroundSecondaryColor],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: backgroundWidth, height: backgroundHeight)
+                        .shadow(color: .black.opacity(0.25), radius: viewModel.canvasShadowRadius)
+                        .position(x: containerSize.width / 2, y: containerSize.height / 2)
+                }
+
                 // Image
                 Image(nsImage: image)
                     .resizable()
@@ -752,26 +839,38 @@ private struct CanvasView: View {
             let linePoints = viewModel.scaledLinePoints(for: annotation, imageSize: imageSize, origin: origin)
             let start = linePoints.start
             let end = linePoints.end
-            let angle = atan2(end.y - start.y, end.x - start.x)
             let headLength = max(18, lineWidth * 4.0)
             let headAngle: CGFloat = .pi / 6
+            let control = arrowControlPoint(start: start, end: end, style: annotation.arrowStyle)
+            let tipAngle: CGFloat
+            switch annotation.arrowStyle {
+            case .straight:
+                tipAngle = atan2(end.y - start.y, end.x - start.x)
+            case .curvedLeft, .curvedRight:
+                tipAngle = atan2(end.y - control.y, end.x - control.x)
+            }
 
             let wing1 = CGPoint(
-                x: end.x - headLength * cos(angle - headAngle),
-                y: end.y - headLength * sin(angle - headAngle)
+                x: end.x - headLength * cos(tipAngle - headAngle),
+                y: end.y - headLength * sin(tipAngle - headAngle)
             )
             let wing2 = CGPoint(
-                x: end.x - headLength * cos(angle + headAngle),
-                y: end.y - headLength * sin(angle + headAngle)
+                x: end.x - headLength * cos(tipAngle + headAngle),
+                y: end.y - headLength * sin(tipAngle + headAngle)
             )
             // Shaft ends at the base of the filled arrowhead
             let shaftEnd = CGPoint(
-                x: end.x - headLength * cos(headAngle) * cos(angle),
-                y: end.y - headLength * cos(headAngle) * sin(angle)
+                x: end.x - headLength * cos(headAngle) * cos(tipAngle),
+                y: end.y - headLength * cos(headAngle) * sin(tipAngle)
             )
             var linePath = Path()
             linePath.move(to: start)
-            linePath.addLine(to: shaftEnd)
+            switch annotation.arrowStyle {
+            case .straight:
+                linePath.addLine(to: shaftEnd)
+            case .curvedLeft, .curvedRight:
+                linePath.addQuadCurve(to: shaftEnd, control: control)
+            }
             context.stroke(linePath, with: .color(color), lineWidth: lineWidth)
 
             // Filled triangular arrowhead
@@ -857,6 +956,13 @@ private class EditorViewModel: ObservableObject {
     @Published var numberSizeMultiplier: CGFloat = 1.0
     @Published var numberTextColor: Color = .white
     @Published var redactionBlurPreset: RedactionBlurPreset = .medium
+    @Published var selectedArrowStylePreset: ArrowStyle = .straight
+    @Published var backgroundStyle: ExportBackgroundStyle = .transparent
+    @Published var backgroundColor: Color = Color(red: 0.96, green: 0.96, blue: 0.98)
+    @Published var backgroundSecondaryColor: Color = Color(red: 0.84, green: 0.90, blue: 0.99)
+    @Published var canvasPadding: CGFloat = 0
+    @Published var canvasCornerRadius: CGFloat = 0
+    @Published var canvasShadowRadius: CGFloat = 0
 
     private var pencilPoints: [CGPoint] = []
     private var imagePixelSize: CGSize = .zero
@@ -940,12 +1046,14 @@ private class EditorViewModel: ObservableObject {
             return .zero
         }
         let imageAspect = image.size.width / image.size.height
-        _ = containerSize.width / containerSize.height
+        let effectivePadding = max(0, canvasPadding)
+        let availableWidth = max(1, containerSize.width - (effectivePadding * 2))
+        let availableHeight = max(1, containerSize.height - (effectivePadding * 2))
 
         // Cap at native pixel dimensions to prevent upscaling blur on Retina
         let screenScale = NSScreen.main?.backingScaleFactor ?? 2.0
-        let maxWidth = min(containerSize.width * 0.95, imagePixelSize.width / screenScale)
-        let maxHeight = min(containerSize.height * 0.95, imagePixelSize.height / screenScale)
+        let maxWidth = min(availableWidth * 0.95, imagePixelSize.width / screenScale)
+        let maxHeight = min(availableHeight * 0.95, imagePixelSize.height / screenScale)
 
         if maxWidth / maxHeight < imageAspect {
             return CGSize(width: maxWidth, height: maxWidth / imageAspect)
@@ -1026,6 +1134,10 @@ private class EditorViewModel: ObservableObject {
         inspectorTool == .blur
     }
 
+    var showsArrowStyleControl: Bool {
+        inspectorTool == .arrow
+    }
+
     var inspectorTool: EditTool {
         if selectedTool == .move,
            let index = selectedAnnotationIndex,
@@ -1033,6 +1145,22 @@ private class EditorViewModel: ObservableObject {
             return annotations[index].tool
         }
         return selectedTool
+    }
+
+    func selectedArrowStyle() -> ArrowStyle? {
+        guard let index = selectedAnnotationIndex, annotations.indices.contains(index), annotations[index].tool == .arrow else {
+            return nil
+        }
+        return annotations[index].arrowStyle
+    }
+
+    @discardableResult
+    func updateSelectedArrowStyle(_ style: ArrowStyle) -> Bool {
+        guard let index = selectedAnnotationIndex, annotations.indices.contains(index), annotations[index].tool == .arrow else {
+            return false
+        }
+        annotations[index].arrowStyle = style
+        return true
     }
 
     func handleDrag(start: CGPoint, current: CGPoint) {
@@ -1132,7 +1260,8 @@ private class EditorViewModel: ObservableObject {
                 lineWidth: lineWidth,
                 text: "",
                 points: (selectedTool == .arrow || selectedTool == .line) ? [start, current] : [],
-                redactionBlurPreset: redactionBlurPreset
+                redactionBlurPreset: redactionBlurPreset,
+                arrowStyle: selectedArrowStylePreset
             )
         }
     }
@@ -1178,7 +1307,8 @@ private class EditorViewModel: ObservableObject {
                     lineWidth: lineWidth,
                     text: "",
                     points: (selectedTool == .arrow || selectedTool == .line) ? [start, end] : [],
-                    redactionBlurPreset: redactionBlurPreset
+                    redactionBlurPreset: redactionBlurPreset,
+                    arrowStyle: selectedArrowStylePreset
                 ))
             }
             currentAnnotation = nil
@@ -1348,7 +1478,8 @@ private class EditorViewModel: ObservableObject {
             text: textEditValue,
             points: [],
             fontSize: textFontSize,
-            redactionBlurPreset: redactionBlurPreset
+            redactionBlurPreset: redactionBlurPreset,
+            arrowStyle: selectedArrowStylePreset
         ))
         textEditPosition = nil
         textEditValue = ""
@@ -1380,7 +1511,8 @@ private class EditorViewModel: ObservableObject {
             lineWidth: lineWidth,
             text: "\(nextNumberLabel)",
             points: [],
-            redactionBlurPreset: redactionBlurPreset
+            redactionBlurPreset: redactionBlurPreset,
+            arrowStyle: selectedArrowStylePreset
         ))
         nextNumberLabel += 1
     }
@@ -1483,8 +1615,9 @@ private class EditorViewModel: ObservableObject {
             cropPixelRect = CGRect(origin: .zero, size: imagePixelSize)
         }
 
-        let outputW = Int(cropPixelRect.width)
-        let outputH = Int(cropPixelRect.height)
+        let exportPadding = max(0, Int(canvasPadding))
+        let outputW = Int(cropPixelRect.width) + (exportPadding * 2)
+        let outputH = Int(cropPixelRect.height) + (exportPadding * 2)
         guard outputW > 0 && outputH > 0 else { return nil }
 
         guard let result = NSBitmapImageRep(
@@ -1508,8 +1641,36 @@ private class EditorViewModel: ObservableObject {
         NSGraphicsContext.current = nsContext
         defer { NSGraphicsContext.restoreGraphicsState() }
 
+        if backgroundStyle != .transparent {
+            let fullRect = CGRect(x: 0, y: 0, width: outputW, height: outputH)
+            if backgroundStyle == .solid {
+                context.setFillColor(NSColor(backgroundColor).cgColor)
+                if canvasCornerRadius > 0 {
+                    let bgPath = CGPath(roundedRect: fullRect, cornerWidth: canvasCornerRadius, cornerHeight: canvasCornerRadius, transform: nil)
+                    context.addPath(bgPath)
+                    context.fillPath()
+                } else {
+                    context.fill(fullRect)
+                }
+            } else {
+                let colors = [NSColor(backgroundColor).cgColor, NSColor(backgroundSecondaryColor).cgColor] as CFArray
+                let colorSpace = CGColorSpaceCreateDeviceRGB()
+                if let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0, 1]) {
+                    if canvasCornerRadius > 0 {
+                        let bgPath = CGPath(roundedRect: fullRect, cornerWidth: canvasCornerRadius, cornerHeight: canvasCornerRadius, transform: nil)
+                        context.saveGState()
+                        context.addPath(bgPath)
+                        context.clip()
+                        context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: outputH), end: CGPoint(x: outputW, y: 0), options: [])
+                        context.restoreGState()
+                    } else {
+                        context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: outputH), end: CGPoint(x: outputW, y: 0), options: [])
+                    }
+                }
+            }
+        }
+
         // Draw the original image (cropped)
-        let drawRect = CGRect(x: 0, y: 0, width: outputW, height: outputH)
         let sourceCGImage = original.cgImage(forProposedRect: nil, context: nil, hints: nil)
         if let cgImage = sourceCGImage {
             let cropCGRect = CGRect(
@@ -1519,23 +1680,38 @@ private class EditorViewModel: ObservableObject {
                 height: cropPixelRect.height
             )
             if let croppedCG = cgImage.cropping(to: cropCGRect) {
-                context.draw(croppedCG, in: drawRect)
+                let imageRect = CGRect(
+                    x: exportPadding,
+                    y: exportPadding,
+                    width: Int(cropPixelRect.width),
+                    height: Int(cropPixelRect.height)
+                )
+                context.draw(croppedCG, in: imageRect)
             }
         }
 
         // Draw annotations
         for annotation in annotations {
-            drawAnnotationCG(annotation, in: context, cropOrigin: cropPixelRect.origin, outputSize: CGSize(width: outputW, height: outputH), fullSize: imagePixelSize, sourceCGImage: sourceCGImage)
+            drawAnnotationCG(
+                annotation,
+                in: context,
+                cropOrigin: cropPixelRect.origin,
+                outputSize: CGSize(width: outputW, height: outputH),
+                fullSize: imagePixelSize,
+                contentOffset: CGPoint(x: exportPadding, y: exportPadding),
+                sourceCGImage: sourceCGImage
+            )
         }
 
         return result
     }
 
-    private func drawAnnotationCG(_ annotation: Annotation, in ctx: CGContext, cropOrigin: CGPoint, outputSize: CGSize, fullSize: CGSize, sourceCGImage: CGImage? = nil) {
+    private func drawAnnotationCG(_ annotation: Annotation, in ctx: CGContext, cropOrigin: CGPoint, outputSize: CGSize, fullSize: CGSize, contentOffset: CGPoint, sourceCGImage: CGImage? = nil) {
+        let imageOutputHeight = outputSize.height - (contentOffset.y * 2)
         // Convert normalized rect to pixel coords relative to crop
         let pixelRect = CGRect(
-            x: (annotation.rect.origin.x * fullSize.width) - cropOrigin.x,
-            y: outputSize.height - ((annotation.rect.origin.y * fullSize.height) - cropOrigin.y + annotation.rect.height * fullSize.height), // flip Y
+            x: (annotation.rect.origin.x * fullSize.width) - cropOrigin.x + contentOffset.x,
+            y: imageOutputHeight - ((annotation.rect.origin.y * fullSize.height) - cropOrigin.y + annotation.rect.height * fullSize.height) + contentOffset.y, // flip Y
             width: annotation.rect.width * fullSize.width,
             height: annotation.rect.height * fullSize.height
         )
@@ -1566,32 +1742,44 @@ private class EditorViewModel: ObservableObject {
         case .arrow:
             let line = linePoints(for: annotation)
             let start = CGPoint(
-                x: (line.start.x * fullSize.width) - cropOrigin.x,
-                y: outputSize.height - ((line.start.y * fullSize.height) - cropOrigin.y)
+                x: (line.start.x * fullSize.width) - cropOrigin.x + contentOffset.x,
+                y: imageOutputHeight - ((line.start.y * fullSize.height) - cropOrigin.y) + contentOffset.y
             )
             let end = CGPoint(
-                x: (line.end.x * fullSize.width) - cropOrigin.x,
-                y: outputSize.height - ((line.end.y * fullSize.height) - cropOrigin.y)
+                x: (line.end.x * fullSize.width) - cropOrigin.x + contentOffset.x,
+                y: imageOutputHeight - ((line.end.y * fullSize.height) - cropOrigin.y) + contentOffset.y
             )
-            let angle = atan2(end.y - start.y, end.x - start.x)
             let headLength = max(26, strokeWidth * 5.0)
             let headAngle: CGFloat = .pi / 6
+            let control = arrowControlPoint(start: start, end: end, style: annotation.arrowStyle)
+            let tipAngle: CGFloat
+            switch annotation.arrowStyle {
+            case .straight:
+                tipAngle = atan2(end.y - start.y, end.x - start.x)
+            case .curvedLeft, .curvedRight:
+                tipAngle = atan2(end.y - control.y, end.x - control.x)
+            }
 
             let wing1 = CGPoint(
-                x: end.x - headLength * cos(angle - headAngle),
-                y: end.y - headLength * sin(angle - headAngle)
+                x: end.x - headLength * cos(tipAngle - headAngle),
+                y: end.y - headLength * sin(tipAngle - headAngle)
             )
             let wing2 = CGPoint(
-                x: end.x - headLength * cos(angle + headAngle),
-                y: end.y - headLength * sin(angle + headAngle)
+                x: end.x - headLength * cos(tipAngle + headAngle),
+                y: end.y - headLength * sin(tipAngle + headAngle)
             )
             // Shaft ends at the base of the filled arrowhead
             let shaftEnd = CGPoint(
-                x: end.x - headLength * cos(headAngle) * cos(angle),
-                y: end.y - headLength * cos(headAngle) * sin(angle)
+                x: end.x - headLength * cos(headAngle) * cos(tipAngle),
+                y: end.y - headLength * cos(headAngle) * sin(tipAngle)
             )
             ctx.move(to: start)
-            ctx.addLine(to: shaftEnd)
+            switch annotation.arrowStyle {
+            case .straight:
+                ctx.addLine(to: shaftEnd)
+            case .curvedLeft, .curvedRight:
+                ctx.addQuadCurve(to: shaftEnd, control: control)
+            }
             ctx.strokePath()
 
             // Filled triangular arrowhead
@@ -1605,12 +1793,12 @@ private class EditorViewModel: ObservableObject {
         case .line:
             let line = linePoints(for: annotation)
             let start = CGPoint(
-                x: (line.start.x * fullSize.width) - cropOrigin.x,
-                y: outputSize.height - ((line.start.y * fullSize.height) - cropOrigin.y)
+                x: (line.start.x * fullSize.width) - cropOrigin.x + contentOffset.x,
+                y: imageOutputHeight - ((line.start.y * fullSize.height) - cropOrigin.y) + contentOffset.y
             )
             let end = CGPoint(
-                x: (line.end.x * fullSize.width) - cropOrigin.x,
-                y: outputSize.height - ((line.end.y * fullSize.height) - cropOrigin.y)
+                x: (line.end.x * fullSize.width) - cropOrigin.x + contentOffset.x,
+                y: imageOutputHeight - ((line.end.y * fullSize.height) - cropOrigin.y) + contentOffset.y
             )
             ctx.move(to: start)
             ctx.addLine(to: end)
@@ -1620,8 +1808,8 @@ private class EditorViewModel: ObservableObject {
             if annotation.points.count > 1 {
                 let scaledPoints = annotation.points.map { pt in
                     CGPoint(
-                        x: (pt.x * fullSize.width) - cropOrigin.x,
-                        y: outputSize.height - ((pt.y * fullSize.height) - cropOrigin.y)
+                        x: (pt.x * fullSize.width) - cropOrigin.x + contentOffset.x,
+                        y: imageOutputHeight - ((pt.y * fullSize.height) - cropOrigin.y) + contentOffset.y
                     )
                 }
                 ctx.move(to: scaledPoints[0])
