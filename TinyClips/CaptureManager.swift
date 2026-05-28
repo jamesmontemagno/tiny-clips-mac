@@ -597,6 +597,30 @@ class CaptureManager: ObservableObject {
                     SaveService.shared.showError("Mouse click overlay failed for video: \(error.localizedDescription)")
                 }
             }
+
+            if CaptureSettings.shared.showBrandingOverlay, let currentURL = savedVideoURL {
+                do {
+                    let brandingOutputURL = videoShouldSaveImmediately
+                        ? SaveService.shared.generateURL(for: .video)
+                        : temporaryURL(fileExtension: "mp4")
+                    savedVideoURL = try await Self.overlayBrandingVideoOffMain(
+                        sourceURL: currentURL,
+                        outputURL: brandingOutputURL,
+                        onProgress: { [weak self] overlayProgress in
+                            guard let self else { return }
+                            let normalized = min(max(overlayProgress, 0), 1)
+                            let mapped = 0.85 + (normalized * 0.1)
+                            Task { @MainActor in
+                                self.updateProcessingProgress(mapped, status: "Applying branding...")
+                            }
+                        }
+                    )
+                    updateProcessingProgress(0.95, status: "Finalizing...")
+                } catch {
+                    SaveService.shared.showError("Branding overlay failed for video: \(error.localizedDescription)")
+                }
+            }
+
             updateProcessingProgress(1.0, status: "Done")
             if videoRecorder === recorder {
                 videoRecorder = nil
@@ -631,6 +655,13 @@ class CaptureManager: ObservableObject {
                                 events: events,
                                 style: overlayStyle
                             )
+                        }
+                    }
+
+                    if settings.showBrandingOverlay {
+                        let inputGifData = gifData
+                        gifData = await Self.runOffMain {
+                            BrandingOverlayProcessor.applyToGifData(inputGifData)
                         }
                     }
 
@@ -686,6 +717,30 @@ class CaptureManager: ObservableObject {
                             }
                         } catch {
                             SaveService.shared.showError("Mouse click overlay failed for GIF: \(error.localizedDescription)")
+                        }
+                    }
+
+                    if settings.showBrandingOverlay {
+                        do {
+                            let tempURL = temporaryURL(fileExtension: "gif")
+                            defer { try? FileManager.default.removeItem(at: tempURL) }
+
+                            try await Self.runOffMainThrowing {
+                                let gifData = try MouseClickOverlayProcessor.loadGifCaptureData(from: url)
+                                let processedGifData = BrandingOverlayProcessor.applyToGifData(gifData)
+                                try GifWriter.writeGIF(
+                                    frames: processedGifData.frames,
+                                    frameDelay: processedGifData.frameDelay,
+                                    maxWidth: processedGifData.maxWidth,
+                                    to: tempURL
+                                )
+                            }
+
+                            if FileManager.default.fileExists(atPath: tempURL.path) {
+                                _ = try FileManager.default.replaceItemAt(url, withItemAt: tempURL)
+                            }
+                        } catch {
+                            SaveService.shared.showError("Branding overlay failed for GIF: \(error.localizedDescription)")
                         }
                     }
 
@@ -1328,6 +1383,20 @@ class CaptureManager: ObservableObject {
                 events: events,
                 outputURL: outputURL,
                 style: style,
+                onProgress: onProgress
+            )
+        }.value
+    }
+
+    nonisolated private static func overlayBrandingVideoOffMain(
+        sourceURL: URL,
+        outputURL: URL,
+        onProgress: ((Double) -> Void)? = nil
+    ) async throws -> URL {
+        try await Task.detached(priority: .userInitiated) {
+            try await BrandingOverlayProcessor.overlayOnVideo(
+                sourceURL: sourceURL,
+                outputURL: outputURL,
                 onProgress: onProgress
             )
         }.value

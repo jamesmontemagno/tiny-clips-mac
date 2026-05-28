@@ -91,6 +91,8 @@ struct GeneralSettingsSection: View {
                 .help("Skip the display picker when multiple monitors are connected")
             Toggle("Include TinyClips in captures", isOn: $settings.includeTinyClipsInCapture)
                 .help("For developer/demo use. When enabled, TinyClips windows can appear in screenshots, recordings, and window selection.")
+            Toggle("Show 'Captured on Tiny Clips' overlay", isOn: $settings.showBrandingOverlay)
+                .help("Adds a 'Captured on Tiny Clips' watermark to the bottom-right corner of screenshots, recordings, and GIFs.")
             Button("Reset All Settings to Defaults…") {
                 resetAllSettings()
             }

@@ -51,6 +51,10 @@ struct ScreenshotCapture {
             destinationProperties[kCGImageDestinationLossyCompressionQuality] = settings.jpegQuality
         }
 
+        let imageToSave = settings.showBrandingOverlay
+            ? BrandingOverlayProcessor.applyToImage(image)
+            : image
+
         guard let destination = CGImageDestinationCreateWithURL(
             outputURL as CFURL,
             imageType.identifier as CFString,
@@ -59,7 +63,7 @@ struct ScreenshotCapture {
         ) else {
             throw CaptureError.saveFailed
         }
-        CGImageDestinationAddImage(destination, image, destinationProperties as CFDictionary)
+        CGImageDestinationAddImage(destination, imageToSave, destinationProperties as CFDictionary)
         guard CGImageDestinationFinalize(destination) else {
             throw CaptureError.saveFailed
         }

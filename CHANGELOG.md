@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+- "Captured on Tiny Clips" branding overlay: a global setting (off by default) that burns a semi-transparent watermark into the bottom-right corner of screenshots, video recordings, and GIFs.
+
 ## v1.4.0.3 - 2026-05-27
 
 ### Added
