@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import CoreGraphics
+import CoreText
 import QuartzCore
 
 // MARK: - Branding Overlay Processor
@@ -143,85 +144,104 @@ enum BrandingOverlayProcessor {
 
     // MARK: - Private helpers
 
-    /// Adds static CALayer sublayers for the branding badge to `parentLayer`.
+    /// Adds the branding badge as a single image-backed CALayer.
+    ///
+    /// We render the entire pill (background + text) into a CGImage rather than
+    /// using CATextLayer, because AVVideoCompositionCoreAnimationTool frequently
+    /// fails to render CATextLayer text reliably.
     ///
     /// `parentLayer.isGeometryFlipped = true`, so (0,0) is the top-left corner and
     /// (renderSize.width, renderSize.height) is the bottom-right corner.
     private static func addBrandingLayer(to parentLayer: CALayer, renderSize: CGSize) {
-        let (bgRect, paddingH, bgHeight) = badgeGeometry(for: renderSize.height)
-
-        // Position badge at the bottom-right.
-        let bgX = renderSize.width - bgRect.width - bgRect.origin.x
-        let bgY = renderSize.height - bgRect.height - bgRect.origin.y
-        let finalBgRect = CGRect(x: bgX, y: bgY, width: bgRect.width, height: bgHeight)
-
-        let backgroundLayer = CALayer()
-        backgroundLayer.frame = finalBgRect
-        backgroundLayer.backgroundColor = NSColor.black.withAlphaComponent(0.5).cgColor
-        backgroundLayer.cornerRadius = bgHeight / 3
-        parentLayer.addSublayer(backgroundLayer)
-
+        let scale: CGFloat = 2.0
         let fontSize = badgeFontSize(for: renderSize.height)
-        let font = NSFont.systemFont(ofSize: fontSize, weight: .medium)
-        let attrString = NSAttributedString(
-            string: overlayText,
-            attributes: [.font: font, .foregroundColor: NSColor.white]
-        )
-        let textSize = attrString.size()
+        let ctFont = makeBadgeFont(size: fontSize)
+        let textSize = measureBadgeText(font: ctFont)
+        let (bgWidth, bgHeight, _, margin) = badgePillSize(textSize: textSize, fontSize: fontSize)
 
-        // Center text vertically within the background pill.
-        let textX = bgX + paddingH
-        let textY = bgY + (bgHeight - textSize.height) / 2
-        let textLayerFrame = CGRect(x: textX, y: textY, width: textSize.width, height: textSize.height)
+        guard let badgeImage = renderBadgeImage(width: bgWidth, height: bgHeight, fontSize: fontSize, scale: scale) else {
+            return
+        }
 
-        let textLayer = CATextLayer()
-        textLayer.string = attrString
-        textLayer.frame = textLayerFrame
-        textLayer.contentsScale = 2.0
-        textLayer.isWrapped = false
-        parentLayer.addSublayer(textLayer)
+        let bgX = renderSize.width - bgWidth - margin
+        let bgY = renderSize.height - bgHeight - margin
+
+        let badgeLayer = CALayer()
+        badgeLayer.frame = CGRect(x: bgX, y: bgY, width: bgWidth, height: bgHeight)
+        badgeLayer.contents = badgeImage
+        badgeLayer.contentsScale = scale
+        badgeLayer.contentsGravity = .resize
+        parentLayer.addSublayer(badgeLayer)
     }
 
-    /// Draws the branding badge directly into a CGContext.
+    /// Renders the full pill+text badge to a CGImage at `scale` density.
+    private static func renderBadgeImage(width: CGFloat, height: CGFloat, fontSize: CGFloat, scale: CGFloat) -> CGImage? {
+        let pixelWidth = Int(ceil(width * scale))
+        let pixelHeight = Int(ceil(height * scale))
+        guard pixelWidth > 0, pixelHeight > 0 else { return nil }
+
+        guard let context = CGContext(
+            data: nil,
+            width: pixelWidth,
+            height: pixelHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else { return nil }
+
+        context.scaleBy(x: scale, y: scale)
+        drawBadge(in: context, rect: CGRect(x: 0, y: 0, width: width, height: height), fontSize: fontSize)
+        return context.makeImage()
+    }
+
+    /// Draws the branding badge directly into a CGContext using Core Text
+    /// (thread-safe, unlike NSString/TextKit which silently no-ops off main).
     ///
     /// CGContext uses a bottom-left origin (y=0 at bottom), so the badge is placed
     /// with a small margin from the right and bottom edges.
     private static func drawTextOverlay(in context: CGContext, width: Int, height: Int) {
-        let (bgRect, paddingH, bgHeight) = badgeGeometry(for: CGFloat(height))
+        let fontSize = badgeFontSize(for: CGFloat(height))
+        let ctFont = makeBadgeFont(size: fontSize)
+        let textSize = measureBadgeText(font: ctFont)
+        let (bgWidth, bgHeight, _, margin) = badgePillSize(textSize: textSize, fontSize: fontSize)
 
-        // CGContext: y=0 is bottom. Place badge in the bottom-right corner.
-        let bgX = CGFloat(width) - bgRect.width - bgRect.origin.x
-        let bgY = bgRect.origin.y  // margin from bottom edge
-        let finalBgRect = CGRect(x: bgX, y: bgY, width: bgRect.width, height: bgHeight)
+        let bgRect = CGRect(x: CGFloat(width) - bgWidth - margin, y: margin, width: bgWidth, height: bgHeight)
+        drawBadge(in: context, rect: bgRect, fontSize: fontSize)
+    }
 
-        // Draw rounded-rect background.
-        let cornerRadius = bgHeight / 3
-        let path = CGPath(roundedRect: finalBgRect, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil)
+    /// Shared primitive: draws the pill background and centered text into `rect`.
+    private static func drawBadge(in context: CGContext, rect: CGRect, fontSize: CGFloat) {
+        let ctFont = makeBadgeFont(size: fontSize)
+        let (_, _, paddingH, _) = badgePillSize(textSize: measureBadgeText(font: ctFont), fontSize: fontSize)
+
+        // Background pill.
+        let cornerRadius = rect.height / 3
+        let path = CGPath(roundedRect: rect, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil)
         context.setFillColor(NSColor.black.withAlphaComponent(0.5).cgColor)
         context.addPath(path)
         context.fillPath()
 
-        // Draw text using a flipped coordinate system (NSAttributedString expects top-left origin).
+        // Text.
+        let attributes: [NSAttributedString.Key: Any] = [
+            kCTFontAttributeName as NSAttributedString.Key: ctFont,
+            kCTForegroundColorAttributeName as NSAttributedString.Key: NSColor.white.cgColor,
+        ]
+        let attrString = NSAttributedString(string: overlayText, attributes: attributes)
+        let line = CTLineCreateWithAttributedString(attrString)
+
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        _ = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+
+        let textX = rect.minX + paddingH
+        let baselineY = rect.minY + (rect.height - (ascent + descent)) / 2 + descent
+
         context.saveGState()
-        context.translateBy(x: 0, y: CGFloat(height))
-        context.scaleBy(x: 1, y: -1)
-
-        // In flipped coords: y=0 is top, y=height is bottom.
-        // Original bgY (from bottom) maps to flippedBgTop = height - bgY - bgHeight.
-        let flippedBgTop = CGFloat(height) - bgY - bgHeight
-        let fontSize = badgeFontSize(for: CGFloat(height))
-        let font = NSFont.systemFont(ofSize: fontSize, weight: .medium)
-        let attrString = NSAttributedString(
-            string: overlayText,
-            attributes: [.font: font, .foregroundColor: NSColor.white]
-        )
-        let textSize = attrString.size()
-
-        // Center text vertically within the pill.
-        let textX = bgX + paddingH
-        let textY = flippedBgTop + (bgHeight - textSize.height) / 2
-        attrString.draw(in: CGRect(x: textX, y: textY, width: textSize.width, height: textSize.height))
-
+        context.textMatrix = .identity
+        context.textPosition = CGPoint(x: textX, y: baselineY)
+        CTLineDraw(line, context)
         context.restoreGState()
     }
 
@@ -232,24 +252,38 @@ enum BrandingOverlayProcessor {
         max(12.0, min(28.0, imageHeight / 50.0))
     }
 
-    /// Returns `(bgRect with origin=margin, paddingH, bgHeight)` for the given image height.
-    /// `bgRect.origin` encodes the margin from the edge; actual placement x/y is computed by callers.
-    private static func badgeGeometry(for imageHeight: CGFloat) -> (bgRect: CGRect, paddingH: CGFloat, bgHeight: CGFloat) {
-        let fontSize = badgeFontSize(for: imageHeight)
-        let font = NSFont.systemFont(ofSize: fontSize, weight: .medium)
-        let textSize = NSAttributedString(
-            string: overlayText,
-            attributes: [.font: font, .foregroundColor: NSColor.white]
-        ).size()
+    private static func makeBadgeFont(size: CGFloat) -> CTFont {
+        CTFontCreateUIFontForLanguage(.system, size, nil)
+            ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
+    }
 
+    private static func measureBadgeText(font: CTFont) -> CGSize {
+        let attrString = NSAttributedString(string: overlayText, attributes: [
+            kCTFontAttributeName as NSAttributedString.Key: font,
+        ])
+        let line = CTLineCreateWithAttributedString(attrString)
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        let width = CGFloat(CTLineGetTypographicBounds(line, &ascent, &descent, &leading))
+        return CGSize(width: ceil(width), height: ceil(ascent + descent))
+    }
+
+    private static func badgePillSize(
+        textSize: CGSize,
+        fontSize: CGFloat
+    ) -> (width: CGFloat, height: CGFloat, paddingH: CGFloat, margin: CGFloat) {
         let paddingH = fontSize * 0.7
         let paddingV = fontSize * 0.45
         let margin = fontSize
+        return (textSize.width + paddingH * 2, textSize.height + paddingV * 2, paddingH, margin)
+    }
 
-        let bgWidth = textSize.width + paddingH * 2
-        let bgHeight = textSize.height + paddingV * 2
-
-        // origin encodes the margin (distance from the nearest edge)
+    private static func badgeGeometry(for imageHeight: CGFloat) -> (bgRect: CGRect, paddingH: CGFloat, bgHeight: CGFloat) {
+        let fontSize = badgeFontSize(for: imageHeight)
+        let ctFont = makeBadgeFont(size: fontSize)
+        let textSize = measureBadgeText(font: ctFont)
+        let (bgWidth, bgHeight, paddingH, margin) = badgePillSize(textSize: textSize, fontSize: fontSize)
         let bgRect = CGRect(x: margin, y: margin, width: bgWidth, height: bgHeight)
         return (bgRect, paddingH, bgHeight)
     }

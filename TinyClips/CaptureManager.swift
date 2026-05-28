@@ -537,6 +537,9 @@ class CaptureManager: ObservableObject {
             if mouseClicksEnabled {
                 return true
             }
+            if CaptureSettings.shared.showBrandingOverlay {
+                return true
+            }
             return videoRecorderAtStop.currentRecordingDuration >= shortVideoIndicatorBypassThreshold
         }()
 

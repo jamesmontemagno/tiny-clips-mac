@@ -23,6 +23,17 @@ class StartRecordingPanel: NSPanel {
         self.isMovableByWindowBackground = true
 
         let settings = CaptureSettings.shared
+        let availableMicrophones = MicrophoneDeviceCatalog.availableOptions()
+        let resolvedMicrophoneID: String = {
+            let saved = settings.selectedMicrophoneID
+            guard !saved.isEmpty, availableMicrophones.contains(where: { $0.id == saved }) else {
+                if !saved.isEmpty {
+                    settings.selectedMicrophoneID = ""
+                }
+                return ""
+            }
+            return saved
+        }()
         let allowsMouseClickToggle: Bool
     #if APPSTORE
         allowsMouseClickToggle = StoreService.shared.isPro
@@ -37,7 +48,8 @@ class StartRecordingPanel: NSPanel {
             captureType: captureType,
             systemAudio: settings.recordAudio,
             microphone: settings.recordMicrophone,
-            selectedMicrophoneID: settings.selectedMicrophoneID,
+            selectedMicrophoneID: resolvedMicrophoneID,
+            availableMicrophones: availableMicrophones,
             mouseClicksEnabled: defaultMouseClicksEnabled,
             selectedVideoTimeLimitMinutes: settings.videoRecordingTimeLimitMinutes,
             allowsMouseClickToggle: allowsMouseClickToggle,
@@ -86,10 +98,10 @@ private struct StartRecordingView: View {
     @State var systemAudio: Bool
     @State var microphone: Bool
     @State var selectedMicrophoneID: String
+    let availableMicrophones: [MicrophoneDeviceOption]
     @State var mouseClicksEnabled: Bool
     @State var selectedVideoTimeLimitMinutes: Int
     let allowsMouseClickToggle: Bool
-    private let microphones = MicrophoneDeviceCatalog.availableOptions()
     let onStart: (Bool, MicrophoneState, Bool, Int) -> Void
     let onCancel: () -> Void
 
@@ -157,7 +169,7 @@ private struct StartRecordingView: View {
             if microphone && captureType != .gif {
                 Picker("Mic", selection: $selectedMicrophoneID) {
                     Text("System Default").tag("")
-                    ForEach(microphones) { device in
+                    ForEach(availableMicrophones) { device in
                         Text(device.name).tag(device.id)
                     }
                 }
