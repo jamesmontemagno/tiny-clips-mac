@@ -278,13 +278,4 @@ enum BrandingOverlayProcessor {
         let margin = fontSize
         return (textSize.width + paddingH * 2, textSize.height + paddingV * 2, paddingH, margin)
     }
-
-    private static func badgeGeometry(for imageHeight: CGFloat) -> (bgRect: CGRect, paddingH: CGFloat, bgHeight: CGFloat) {
-        let fontSize = badgeFontSize(for: imageHeight)
-        let ctFont = makeBadgeFont(size: fontSize)
-        let textSize = measureBadgeText(font: ctFont)
-        let (bgWidth, bgHeight, paddingH, margin) = badgePillSize(textSize: textSize, fontSize: fontSize)
-        let bgRect = CGRect(x: margin, y: margin, width: bgWidth, height: bgHeight)
-        return (bgRect, paddingH, bgHeight)
-    }
 }
