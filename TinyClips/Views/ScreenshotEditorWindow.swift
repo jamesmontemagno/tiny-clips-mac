@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+private let textSystemFontFamily = "System"
+
 // MARK: - Window
 
 class ScreenshotEditorWindow: NSWindow, NSWindowDelegate {
@@ -85,6 +87,10 @@ private struct Annotation: Identifiable {
     var text: String
     var points: [CGPoint] // for pencil
     var fontSize: CGFloat = 16 // for text annotations
+    var fontFamily: String = textSystemFontFamily
+    var isBold: Bool = false
+    var isItalic: Bool = false
+    var isUnderlined: Bool = false
     var redactionBlurPreset: RedactionBlurPreset = .medium
     var arrowStyle: ArrowStyle = .straight
 }
@@ -175,6 +181,7 @@ private enum ExportBackgroundStyle: String, CaseIterable, Identifiable {
     case transparent
     case solid
     case gradient
+    case wallpaper
 
     var id: Self { self }
 
@@ -183,8 +190,45 @@ private enum ExportBackgroundStyle: String, CaseIterable, Identifiable {
         case .transparent: return "Transparent"
         case .solid: return "Solid"
         case .gradient: return "Gradient"
+        case .wallpaper: return "Wallpaper"
         }
     }
+}
+
+private struct ExportBackgroundPreset: Identifiable {
+    let id: String
+    let label: String
+    let style: ExportBackgroundStyle
+    let primary: Color
+    let secondary: Color?
+}
+
+private let solidBackgroundPresets: [ExportBackgroundPreset] = [
+    ExportBackgroundPreset(id: "transparent", label: "Transparent", style: .transparent, primary: .clear, secondary: nil),
+    ExportBackgroundPreset(id: "white", label: "White", style: .solid, primary: .white, secondary: nil),
+    ExportBackgroundPreset(id: "ink", label: "Ink", style: .solid, primary: Color(red: 0.08, green: 0.09, blue: 0.10), secondary: nil),
+    ExportBackgroundPreset(id: "coral", label: "Coral", style: .solid, primary: Color(red: 1.00, green: 0.48, blue: 0.42), secondary: nil),
+    ExportBackgroundPreset(id: "lemon", label: "Lemon", style: .solid, primary: Color(red: 1.00, green: 0.88, blue: 0.25), secondary: nil),
+    ExportBackgroundPreset(id: "mint", label: "Mint", style: .solid, primary: Color(red: 0.41, green: 0.86, blue: 0.62), secondary: nil),
+    ExportBackgroundPreset(id: "sky", label: "Sky", style: .solid, primary: Color(red: 0.34, green: 0.67, blue: 0.96), secondary: nil),
+    ExportBackgroundPreset(id: "lilac", label: "Lilac", style: .solid, primary: Color(red: 0.70, green: 0.58, blue: 0.94), secondary: nil),
+]
+
+private let gradientBackgroundPresets: [ExportBackgroundPreset] = [
+    ExportBackgroundPreset(id: "sunset", label: "Sunset", style: .gradient, primary: Color(red: 1.00, green: 0.48, blue: 0.37), secondary: Color(red: 1.00, green: 0.86, blue: 0.31)),
+    ExportBackgroundPreset(id: "ocean", label: "Ocean", style: .gradient, primary: Color(red: 0.15, green: 0.53, blue: 0.91), secondary: Color(red: 0.18, green: 0.88, blue: 0.75)),
+    ExportBackgroundPreset(id: "candy", label: "Candy", style: .gradient, primary: Color(red: 1.00, green: 0.42, blue: 0.68), secondary: Color(red: 0.55, green: 0.78, blue: 1.00)),
+    ExportBackgroundPreset(id: "forest", label: "Forest", style: .gradient, primary: Color(red: 0.16, green: 0.56, blue: 0.35), secondary: Color(red: 0.72, green: 0.88, blue: 0.42)),
+    ExportBackgroundPreset(id: "ember", label: "Ember", style: .gradient, primary: Color(red: 0.22, green: 0.08, blue: 0.05), secondary: Color(red: 1.00, green: 0.45, blue: 0.16)),
+    ExportBackgroundPreset(id: "aurora", label: "Aurora", style: .gradient, primary: Color(red: 0.28, green: 0.94, blue: 0.72), secondary: Color(red: 0.52, green: 0.42, blue: 1.00)),
+    ExportBackgroundPreset(id: "peach", label: "Peach", style: .gradient, primary: Color(red: 1.00, green: 0.72, blue: 0.52), secondary: Color(red: 0.98, green: 0.42, blue: 0.54)),
+    ExportBackgroundPreset(id: "glacier", label: "Glacier", style: .gradient, primary: Color(red: 0.73, green: 0.94, blue: 1.00), secondary: Color(red: 0.42, green: 0.58, blue: 0.96)),
+]
+
+private enum EditorPopover: String, Identifiable {
+    case saveOptions
+
+    var id: Self { self }
 }
 
 private func redactionBrightness(for row: Int, column: Int, preset: RedactionBlurPreset) -> Double {
@@ -253,6 +297,8 @@ private struct ScreenshotEditorView: View {
     @StateObject private var viewModel: EditorViewModel
     @State private var isSaving = false
     @State private var splitVisibility: NavigationSplitViewVisibility = .all
+    @State private var activePopover: EditorPopover?
+    @State private var isBackgroundSectionExpanded = false
 
     init(imageURL: URL, onDone: @escaping (URL?) -> Void) {
         self.imageURL = imageURL
@@ -350,10 +396,62 @@ private struct ScreenshotEditorView: View {
         )
     }
 
+    private var textFontFamilyBinding: Binding<String> {
+        Binding(
+            get: {
+                viewModel.selectedTextFontFamily() ?? viewModel.textFontFamily
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedTextFontFamily(newValue) {
+                    viewModel.textFontFamily = newValue
+                }
+            }
+        )
+    }
+
+    private var textBoldBinding: Binding<Bool> {
+        Binding(
+            get: {
+                viewModel.selectedTextBold() ?? viewModel.textIsBold
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedTextBold(newValue) {
+                    viewModel.textIsBold = newValue
+                }
+            }
+        )
+    }
+
+    private var textItalicBinding: Binding<Bool> {
+        Binding(
+            get: {
+                viewModel.selectedTextItalic() ?? viewModel.textIsItalic
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedTextItalic(newValue) {
+                    viewModel.textIsItalic = newValue
+                }
+            }
+        )
+    }
+
+    private var textUnderlineBinding: Binding<Bool> {
+        Binding(
+            get: {
+                viewModel.selectedTextUnderline() ?? viewModel.textIsUnderlined
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedTextUnderline(newValue) {
+                    viewModel.textIsUnderlined = newValue
+                }
+            }
+        )
+    }
+
     var body: some View {
         NavigationSplitView(columnVisibility: $splitVisibility) {
             sidebar
-                .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 360)
+                .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 240)
         } detail: {
             VStack(spacing: 0) {
                 GeometryReader { geo in
@@ -371,11 +469,36 @@ private struct ScreenshotEditorView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button(action: toggleSidebar) {
-                    Image(systemName: "sidebar.leading")
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    viewModel.undo()
+                } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
                 }
-                .help("Toggle the inspector sidebar.")
+                .disabled(!viewModel.canUndo)
+                .keyboardShortcut("z", modifiers: .command)
+                .help("Undo the last edit.")
+
+                Button {
+                    viewModel.copyToClipboard()
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+                .help("Copy the edited image to the clipboard.")
+
+                Button {
+                    activePopover = .saveOptions
+                } label: {
+                    Label("Save", systemImage: "square.and.arrow.down")
+                }
+                .keyboardShortcut(.defaultAction)
+                .help("Choose export options and save.")
+                .popover(item: $activePopover) { item in
+                    switch item {
+                    case .saveOptions:
+                        saveOptionsPopover
+                    }
+                }
             }
         }
         .disabled(isSaving)
@@ -387,54 +510,53 @@ private struct ScreenshotEditorView: View {
     }
 
     private var sidebar: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Tools")
-                    .font(.headline)
-
+        List {
+            Section("Tools") {
                 toolGrid
-
-                Button {
-                    viewModel.undo()
-                } label: {
-                    Label("Undo", systemImage: "arrow.uturn.backward")
-                }
-                .disabled(viewModel.annotations.isEmpty)
-                .keyboardShortcut("z", modifiers: .command)
-
-                Divider()
-
-                Text("Style")
-                    .font(.headline)
-                styleControls
-
-                Divider()
-
-                Text("Background")
-                    .font(.headline)
-                backgroundControls
+                    .listRowInsets(EdgeInsets(top: 6, leading: 10, bottom: 8, trailing: 10))
             }
-            .padding(14)
+
+            if viewModel.showsAnyStyleControls {
+                Section("Style") {
+                    styleControls
+                        .listRowInsets(EdgeInsets(top: 6, leading: 10, bottom: 8, trailing: 10))
+                }
+            }
+
+            Section {
+                DisclosureGroup(isExpanded: $isBackgroundSectionExpanded) {
+                    backgroundControls
+                        .padding(.top, 8)
+                } label: {
+                    Label("Background", systemImage: "photo.on.rectangle")
+                }
+                .listRowInsets(EdgeInsets(top: 6, leading: 10, bottom: 8, trailing: 10))
+            }
         }
+        .listStyle(.sidebar)
     }
 
     private var toolGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 80), spacing: 8)], spacing: 8) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 50), spacing: 6)], spacing: 6) {
             ForEach(EditTool.allCases, id: \.self) { tool in
                 Button {
                     viewModel.selectedTool = tool
                 } label: {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 2) {
                         Image(systemName: tool.rawValue)
-                            .font(.system(size: 14))
+                            .font(.system(size: 13))
                         Text(tool.label)
-                            .font(.system(size: 11))
+                            .font(.system(size: 9))
+                            .lineLimit(1)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .frame(maxWidth: .infinity, minHeight: 42)
                     .background(viewModel.selectedTool == tool ? Color.accentColor.opacity(0.2) : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                    .contentShape(RoundedRectangle(cornerRadius: 7))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("\(tool.label) tool")
+                .accessibilityValue(viewModel.selectedTool == tool ? "Selected" : "Not selected")
             }
         }
     }
@@ -453,6 +575,20 @@ private struct ScreenshotEditorView: View {
                 ColorPicker("Text", selection: numberTextColorBinding, supportsOpacity: true)
             }
 
+            if viewModel.showsTextStyleControls {
+                Picker("Font", selection: textFontFamilyBinding) {
+                    ForEach(viewModel.availableTextFontFamilies, id: \.self) { family in
+                        Text(family).tag(family)
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    TextStyleToggleButton(title: "Bold", systemImage: "bold", isOn: textBoldBinding)
+                    TextStyleToggleButton(title: "Italic", systemImage: "italic", isOn: textItalicBinding)
+                    TextStyleToggleButton(title: "Underline", systemImage: "underline", isOn: textUnderlineBinding)
+                }
+            }
+
             if viewModel.showsLineWidthControl {
                 Picker("Stroke", selection: $viewModel.lineWidth) {
                     Text("1 px").tag(CGFloat(1))
@@ -465,9 +601,11 @@ private struct ScreenshotEditorView: View {
             }
 
             if viewModel.showsArrowStyleControl {
-                Picker("Arrow", selection: arrowStyleBinding) {
+                HStack(spacing: 8) {
                     ForEach(ArrowStyle.allCases) { style in
-                        Text(style.label).tag(style)
+                        ArrowStyleButton(style: style, isSelected: arrowStyleBinding.wrappedValue == style) {
+                            arrowStyleBinding.wrappedValue = style
+                        }
                     }
                 }
             }
@@ -500,21 +638,55 @@ private struct ScreenshotEditorView: View {
             }
         }
     }
-
     private var backgroundControls: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Picker("Type", selection: $viewModel.backgroundStyle) {
-                ForEach(ExportBackgroundStyle.allCases) { style in
-                    Text(style.label).tag(style)
+            backgroundPresetSection("Solid", presets: solidBackgroundPresets)
+            backgroundPresetSection("Gradient", presets: gradientBackgroundPresets)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Custom")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ColorPicker("Color", selection: $viewModel.backgroundColor, supportsOpacity: true)
+
+                if viewModel.backgroundStyle == .gradient {
+                    ColorPicker("Color 2", selection: $viewModel.backgroundSecondaryColor, supportsOpacity: true)
+                }
+
+                HStack(spacing: 8) {
+                    Button("Solid") {
+                        viewModel.applyCustomSolidBackground()
+                    }
+                    Button("Gradient") {
+                        viewModel.applyCustomGradientBackground()
+                    }
                 }
             }
 
-            if viewModel.backgroundStyle != .transparent {
-                ColorPicker("Color", selection: $viewModel.backgroundColor, supportsOpacity: true)
-            }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Wallpaper")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
-            if viewModel.backgroundStyle == .gradient {
-                ColorPicker("Color 2", selection: $viewModel.backgroundSecondaryColor, supportsOpacity: true)
+                HStack(spacing: 8) {
+                    Button {
+                        viewModel.chooseWallpaperBackground()
+                    } label: {
+                        WallpaperPresetSwatch(image: viewModel.wallpaperImage, isSelected: viewModel.backgroundStyle == .wallpaper)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Choose wallpaper")
+                    .accessibilityLabel("Wallpaper background")
+                    .accessibilityValue(viewModel.backgroundStyle == .wallpaper ? "Selected" : "Not selected")
+
+                    if viewModel.backgroundStyle == .wallpaper {
+                        Button("Remove") {
+                            viewModel.clearWallpaperBackground()
+                        }
+                        .buttonStyle(.link)
+                    }
+                }
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -540,14 +712,48 @@ private struct ScreenshotEditorView: View {
         }
     }
 
+    private func backgroundPresetSection(_ title: String, presets: [ExportBackgroundPreset]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 7), count: 4), spacing: 7) {
+                ForEach(presets) { preset in
+                    Button {
+                        viewModel.applyBackgroundPreset(preset)
+                    } label: {
+                        BackgroundPresetSwatch(preset: preset, isSelected: viewModel.selectedBackgroundPresetID == preset.id)
+                    }
+                    .buttonStyle(.plain)
+                    .help(preset.label)
+                    .accessibilityLabel("\(preset.label) background")
+                    .accessibilityValue(viewModel.selectedBackgroundPresetID == preset.id ? "Selected" : "Not selected")
+                }
+            }
+        }
+    }
+
     private var exportControls: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        HStack(spacing: 12) {
             if let img = viewModel.originalImage {
                 let rep = img.representations.first
                 Text("\(Int(rep?.pixelsWide ?? 0)) × \(Int(rep?.pixelsHigh ?? 0))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Spacer()
+
+            Button("Discard") { onDone(nil) }
+                .keyboardShortcut(.cancelAction)
+        }
+    }
+
+    private var saveOptionsPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Export")
+                .font(.headline)
 
             Picker("Format", selection: $viewModel.saveFormat) {
                 ForEach(ImageFormat.allCases, id: \.self) { format in
@@ -567,9 +773,16 @@ private struct ScreenshotEditorView: View {
                 Text("25%").tag(25)
             }
 
+            if let outputResolution = viewModel.outputResolutionText {
+                Text("Output: \(outputResolution)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
             if viewModel.saveFormat == .jpeg {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("JPEG: \(Int(viewModel.saveJpegQuality * 100))%")
+                    Text("JPEG quality: \(Int(viewModel.saveJpegQuality * 100))%")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Slider(value: $viewModel.saveJpegQuality, in: 0.1...1.0, step: 0.05)
@@ -577,21 +790,14 @@ private struct ScreenshotEditorView: View {
             }
 
             HStack {
-                Button("Discard") { onDone(nil) }
-                    .keyboardShortcut(.cancelAction)
-
-                Button {
-                    viewModel.copyToClipboard()
-                } label: {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
-
                 Spacer()
-
+                Button("Cancel") { activePopover = nil }
                 Button("Save") { saveImage() }
                     .keyboardShortcut(.defaultAction)
             }
         }
+        .frame(width: 260)
+        .padding(14)
     }
 
     private func saveImage() {
@@ -606,9 +812,136 @@ private struct ScreenshotEditorView: View {
             }
         }
     }
+}
+private struct TextStyleToggleButton: View {
+    let title: String
+    let systemImage: String
+    @Binding var isOn: Bool
 
-    private func toggleSidebar() {
-        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
+    var body: some View {
+        Button {
+            isOn.toggle()
+        } label: {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 30, height: 28)
+                .background(isOn ? Color.accentColor.opacity(0.2) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityValue(isOn ? "On" : "Off")
+        .help(title)
+    }
+}
+
+private struct ArrowStyleButton: View {
+    let style: ArrowStyle
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: iconName)
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 34, height: 30)
+                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(style.label)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .help(style.label)
+    }
+
+    private var iconName: String {
+        switch style {
+        case .straight: return "arrow.up.right"
+        case .curvedLeft: return "arrow.triangle.turn.up.right.diamond"
+        case .curvedRight: return "arrow.turn.up.right"
+        }
+    }
+}
+
+private struct BackgroundPresetSwatch: View {
+    let preset: ExportBackgroundPreset
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(fillStyle)
+                .overlay {
+                    if preset.style == .transparent {
+                        Image(systemName: "slash")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .overlay(Circle().stroke(.separator, lineWidth: 1))
+                .frame(width: 18, height: 18)
+
+            if isSelected {
+                Circle()
+                    .stroke(Color.accentColor, lineWidth: 3)
+                    .frame(width: 24, height: 24)
+            }
+        }
+        .frame(width: 24, height: 24)
+    }
+
+    private var fillStyle: AnyShapeStyle {
+        switch preset.style {
+        case .transparent:
+            return AnyShapeStyle(.regularMaterial)
+        case .solid:
+            return AnyShapeStyle(preset.primary)
+        case .gradient:
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [preset.primary, preset.secondary ?? preset.primary],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        case .wallpaper:
+            return AnyShapeStyle(.regularMaterial)
+        }
+    }
+}
+
+private struct WallpaperPresetSwatch: View {
+    let image: NSImage?
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(.regularMaterial)
+                .overlay {
+                    if let image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: "photo")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .clipShape(Circle())
+                .overlay(Circle().stroke(.separator, lineWidth: 1))
+                .frame(width: 20, height: 20)
+
+            if isSelected {
+                Circle()
+                    .stroke(Color.accentColor, lineWidth: 3)
+                    .frame(width: 26, height: 26)
+            }
+        }
+        .frame(width: 28, height: 28)
     }
 }
 
@@ -674,6 +1007,14 @@ private struct CanvasView: View {
                         .frame(width: backgroundWidth, height: backgroundHeight)
                         .shadow(color: .black.opacity(0.25), radius: viewModel.canvasShadowRadius)
                         .position(x: containerSize.width / 2, y: containerSize.height / 2)
+                } else if viewModel.backgroundStyle == .wallpaper, let wallpaperImage = viewModel.wallpaperImage {
+                    Image(nsImage: wallpaperImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: backgroundWidth, height: backgroundHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: viewModel.canvasCornerRadius))
+                        .shadow(color: .black.opacity(0.25), radius: viewModel.canvasShadowRadius)
+                        .position(x: containerSize.width / 2, y: containerSize.height / 2)
                 }
 
                 // Image
@@ -719,7 +1060,9 @@ private struct CanvasView: View {
                 ForEach(viewModel.annotations.filter { $0.tool == .text }) { annotation in
                     let scaledRect = viewModel.scaledRect(annotation.rect, imageSize: imageSize, origin: origin)
                     Text(annotation.text)
-                        .font(.system(size: annotation.fontSize))
+                        .font(textPreviewFont(family: annotation.fontFamily, size: annotation.fontSize, isBold: annotation.isBold))
+                        .italic(annotation.isItalic)
+                        .underline(annotation.isUnderlined)
                         .foregroundColor(annotation.color)
                         .position(x: scaledRect.midX, y: scaledRect.midY)
                         .allowsHitTesting(false)
@@ -734,6 +1077,10 @@ private struct CanvasView: View {
                     InlineTextEditor(
                         text: $viewModel.textEditValue,
                         fontSize: $viewModel.textFontSize,
+                        fontFamily: viewModel.textFontFamily,
+                        isBold: viewModel.textIsBold,
+                        isItalic: viewModel.textIsItalic,
+                        isUnderlined: viewModel.textIsUnderlined,
                         color: viewModel.selectedColor,
                         onCommit: {
                             viewModel.commitTextAnnotation()
@@ -935,6 +1282,12 @@ private struct CanvasView: View {
         }
     }
 }
+private func textPreviewFont(family: String, size: CGFloat, isBold: Bool) -> Font {
+    if family == textSystemFontFamily {
+        return .system(size: size, weight: isBold ? .bold : .regular)
+    }
+    return .custom(family, size: size).weight(isBold ? .bold : .regular)
+}
 
 // MARK: - ViewModel
 
@@ -960,6 +1313,10 @@ private class EditorViewModel: ObservableObject {
     @Published var textEditPosition: CGPoint? // normalized click position
     @Published var textEditValue: String = ""
     @Published var textFontSize: CGFloat = 16
+    @Published var textFontFamily: String = textSystemFontFamily
+    @Published var textIsBold = false
+    @Published var textIsItalic = false
+    @Published var textIsUnderlined = false
     @Published var selectedAnnotationIndex: Int?
     @Published var saveFormat: ImageFormat
     @Published var saveScale: Int
@@ -973,6 +1330,8 @@ private class EditorViewModel: ObservableObject {
     @Published var backgroundStyle: ExportBackgroundStyle = .transparent
     @Published var backgroundColor: Color = Color(red: 0.96, green: 0.96, blue: 0.98)
     @Published var backgroundSecondaryColor: Color = Color(red: 0.84, green: 0.90, blue: 0.99)
+    @Published var selectedBackgroundPresetID: String = "transparent"
+    @Published var wallpaperImage: NSImage?
     @Published var canvasPadding: CGFloat = 0
     @Published var canvasCornerRadius: CGFloat = 0
     @Published var canvasShadowRadius: CGFloat = 0
@@ -1158,6 +1517,120 @@ private class EditorViewModel: ObservableObject {
             return annotations[index].tool
         }
         return selectedTool
+    }
+
+    func applyBackgroundPreset(_ preset: ExportBackgroundPreset) {
+        selectedBackgroundPresetID = preset.id
+        backgroundStyle = preset.style
+        backgroundColor = preset.primary
+        if let secondary = preset.secondary {
+            backgroundSecondaryColor = secondary
+        }
+    }
+
+    func applyCustomSolidBackground() {
+        selectedBackgroundPresetID = "custom-solid"
+        backgroundStyle = .solid
+    }
+
+    func applyCustomGradientBackground() {
+        selectedBackgroundPresetID = "custom-gradient"
+        backgroundStyle = .gradient
+    }
+
+    func chooseWallpaperBackground() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+
+        if panel.runModal() == .OK,
+           let url = panel.url,
+           let image = NSImage(contentsOf: url) {
+            wallpaperImage = image
+            selectedBackgroundPresetID = "wallpaper"
+            backgroundStyle = .wallpaper
+        }
+    }
+
+    func clearWallpaperBackground() {
+        wallpaperImage = nil
+        selectedBackgroundPresetID = "transparent"
+        backgroundStyle = .transparent
+    }
+
+    var canUndo: Bool {
+        !annotations.isEmpty || cropRect != nil
+    }
+
+    var showsAnyStyleControls: Bool {
+        primaryStyleControlsVisible || showsLineWidthControl || showsArrowStyleControl || showsNumberSizeControl || showsRedactionPresetControl || showsTextStyleControls
+    }
+
+    var showsTextStyleControls: Bool {
+        inspectorTool == .text
+    }
+
+    private var primaryStyleControlsVisible: Bool {
+        switch inspectorTool {
+        case .rectangle, .circle, .arrow, .line, .pencil, .text, .number:
+            return true
+        case .move, .crop, .blur:
+            return false
+        }
+    }
+
+    var availableTextFontFamilies: [String] {
+        [textSystemFontFamily] + NSFontManager.shared.availableFontFamilies.sorted()
+    }
+
+    func selectedTextFontFamily() -> String? {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return nil }
+        return annotations[index].fontFamily
+    }
+
+    func selectedTextBold() -> Bool? {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return nil }
+        return annotations[index].isBold
+    }
+
+    func selectedTextItalic() -> Bool? {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return nil }
+        return annotations[index].isItalic
+    }
+
+    func selectedTextUnderline() -> Bool? {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return nil }
+        return annotations[index].isUnderlined
+    }
+
+    @discardableResult
+    func updateSelectedTextFontFamily(_ family: String) -> Bool {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return false }
+        annotations[index].fontFamily = family
+        return true
+    }
+
+    @discardableResult
+    func updateSelectedTextBold(_ isBold: Bool) -> Bool {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return false }
+        annotations[index].isBold = isBold
+        return true
+    }
+
+    @discardableResult
+    func updateSelectedTextItalic(_ isItalic: Bool) -> Bool {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return false }
+        annotations[index].isItalic = isItalic
+        return true
+    }
+
+    @discardableResult
+    func updateSelectedTextUnderline(_ isUnderlined: Bool) -> Bool {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return false }
+        annotations[index].isUnderlined = isUnderlined
+        return true
     }
 
     func selectedArrowStyle() -> ArrowStyle? {
@@ -1385,6 +1858,16 @@ private class EditorViewModel: ObservableObject {
         }
     }
 
+    var outputResolutionText: String? {
+        let size = exportBasePixelSize()
+        guard size.width > 0, size.height > 0 else { return nil }
+
+        let scale = CGFloat(saveScale) / 100.0
+        let outputWidth = max(1, Int((size.width * scale).rounded()))
+        let outputHeight = max(1, Int((size.height * scale).rounded()))
+        return "\(outputWidth) × \(outputHeight) px"
+    }
+
     private func buildOutputImage() -> (image: NSImage, data: Data)? {
         guard let renderedBitmap = renderFinalImage() else { return nil }
 
@@ -1436,6 +1919,28 @@ private class EditorViewModel: ObservableObject {
     }
 
     // MARK: - Private
+
+    private func exportBasePixelSize() -> CGSize {
+        guard imagePixelSize.width > 0, imagePixelSize.height > 0 else { return .zero }
+
+        let cropPixelRect: CGRect
+        if let crop = cropRect {
+            cropPixelRect = CGRect(
+                x: crop.origin.x * imagePixelSize.width,
+                y: crop.origin.y * imagePixelSize.height,
+                width: crop.width * imagePixelSize.width,
+                height: crop.height * imagePixelSize.height
+            )
+        } else {
+            cropPixelRect = CGRect(origin: .zero, size: imagePixelSize)
+        }
+
+        let exportPadding = max(0, Int(canvasPadding))
+        return CGSize(
+            width: Int(cropPixelRect.width) + (exportPadding * 2),
+            height: Int(cropPixelRect.height) + (exportPadding * 2)
+        )
+    }
 
     private func originalLinePoints() -> LinePoints {
         if dragOriginalPoints.count >= 2 {
@@ -1491,6 +1996,10 @@ private class EditorViewModel: ObservableObject {
             text: textEditValue,
             points: [],
             fontSize: textFontSize,
+            fontFamily: textFontFamily,
+            isBold: textIsBold,
+            isItalic: textIsItalic,
+            isUnderlined: textIsUnderlined,
             redactionBlurPreset: redactionBlurPreset,
             arrowStyle: selectedArrowStylePreset
         ))
@@ -1665,7 +2174,7 @@ private class EditorViewModel: ObservableObject {
                 } else {
                     context.fill(fullRect)
                 }
-            } else {
+            } else if backgroundStyle == .gradient {
                 let colors = [NSColor(backgroundColor).cgColor, NSColor(backgroundSecondaryColor).cgColor] as CFArray
                 let colorSpace = CGColorSpaceCreateDeviceRGB()
                 if let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0, 1]) {
@@ -1680,6 +2189,10 @@ private class EditorViewModel: ObservableObject {
                         context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: outputH), end: CGPoint(x: outputW, y: 0), options: [])
                     }
                 }
+            } else if backgroundStyle == .wallpaper,
+                      let wallpaperImage,
+                      let wallpaperCGImage = wallpaperImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                drawWallpaper(wallpaperCGImage, in: fullRect, context: context)
             }
         }
 
@@ -1866,9 +2379,16 @@ private class EditorViewModel: ObservableObject {
         case .text:
             let str = annotation.text as NSString
             let fontSize = annotation.fontSize * (fullSize.width / 800.0) // scale to pixel density
+            let font = exportTextFont(
+                family: annotation.fontFamily,
+                size: fontSize,
+                isBold: annotation.isBold,
+                isItalic: annotation.isItalic
+            )
             let attrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: fontSize),
+                .font: font,
                 .foregroundColor: nsColor,
+                .underlineStyle: annotation.isUnderlined ? NSUnderlineStyle.single.rawValue : 0,
             ]
             // NSGraphicsContext.current is set to the unflipped bitmap context,
             // so NSString.draw uses CG (bottom-left) coordinates directly.
@@ -1888,6 +2408,53 @@ private class EditorViewModel: ObservableObject {
     private func exportStrokeWidth(baseWidth: CGFloat, outputWidth: CGFloat) -> CGFloat {
         let widthScale = max(1.0, outputWidth / 900.0)
         return baseWidth * widthScale
+    }
+
+    private func exportTextFont(family: String, size: CGFloat, isBold: Bool, isItalic: Bool) -> NSFont {
+        if family == textSystemFontFamily {
+            let weight: NSFont.Weight = isBold ? .bold : .regular
+            let baseFont = NSFont.systemFont(ofSize: size, weight: weight)
+            guard isItalic else { return baseFont }
+            return NSFontManager.shared.convert(baseFont, toHaveTrait: .italicFontMask)
+        }
+
+        let traits: NSFontTraitMask = isItalic ? .italicFontMask : []
+        let weight = isBold ? 9 : 5
+        return NSFontManager.shared.font(withFamily: family, traits: traits, weight: weight, size: size)
+            ?? NSFont(name: family, size: size)
+            ?? NSFont.systemFont(ofSize: size, weight: isBold ? .bold : .regular)
+    }
+
+    private func drawWallpaper(_ image: CGImage, in rect: CGRect, context: CGContext) {
+        let imageSize = CGSize(width: image.width, height: image.height)
+        guard imageSize.width > 0, imageSize.height > 0, rect.width > 0, rect.height > 0 else { return }
+
+        let scale = max(rect.width / imageSize.width, rect.height / imageSize.height)
+        let drawSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+        let drawRect = CGRect(
+            x: rect.midX - drawSize.width / 2,
+            y: rect.midY - drawSize.height / 2,
+            width: drawSize.width,
+            height: drawSize.height
+        )
+
+        context.saveGState()
+        if canvasCornerRadius > 0 {
+            let path = CGPath(roundedRect: rect, cornerWidth: canvasCornerRadius, cornerHeight: canvasCornerRadius, transform: nil)
+            context.addPath(path)
+            context.clip()
+        } else {
+            context.clip(to: rect)
+        }
+        context.draw(image, in: drawRect)
+        context.restoreGState()
+    }
+
+    private var selectedAnnotationIsText: Bool {
+        guard let index = selectedAnnotationIndex, annotations.indices.contains(index) else {
+            return false
+        }
+        return annotations[index].tool == .text
     }
 
     private var selectedAnnotationIsNumber: Bool {
@@ -1918,6 +2485,10 @@ private class EditorViewModel: ObservableObject {
 private struct InlineTextEditor: View {
     @Binding var text: String
     @Binding var fontSize: CGFloat
+    let fontFamily: String
+    let isBold: Bool
+    let isItalic: Bool
+    let isUnderlined: Bool
     let color: Color
     let onCommit: () -> Void
     let onCancel: () -> Void
@@ -1928,7 +2499,9 @@ private struct InlineTextEditor: View {
         VStack(spacing: 4) {
             TextField("Type text…", text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: fontSize, weight: .medium))
+                .font(textPreviewFont(family: fontFamily, size: fontSize, isBold: isBold))
+                .italic(isItalic)
+                .underline(isUnderlined)
                 .foregroundColor(color)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)

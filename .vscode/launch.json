@@ -5,7 +5,7 @@
             "name": "Run TinyClips",
             "type": "node-terminal",
             "request": "launch",
-            "command": "open -n \"${workspaceFolder}/build/Debug/TinyClips.app\"",
+            "command": "killall TinyClips 2>/dev/null || true; open \"${workspaceFolder}/build/Debug/TinyClips.app\"",
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "Build TinyClips"
         },
@@ -13,7 +13,7 @@
             "name": "Run TinyClipsMAS",
             "type": "node-terminal",
             "request": "launch",
-            "command": "open -n \"${workspaceFolder}/build/Debug/Tiny Clips.app\"",
+            "command": "killall \"Tiny Clips\" 2>/dev/null || true; open \"${workspaceFolder}/build/Debug/Tiny Clips.app\"",
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "Build TinyClipsMAS"
         }

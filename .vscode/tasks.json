@@ -48,10 +48,10 @@
         {
             "label": "Run TinyClips",
             "type": "shell",
-            "command": "open",
+            "command": "zsh",
             "args": [
-                "-n",
-                "${workspaceFolder}/build/Debug/TinyClips.app"
+                "-c",
+                "killall TinyClips 2>/dev/null || true; open \"${workspaceFolder}/build/Debug/TinyClips.app\""
             ],
             "dependsOn": "Build TinyClips",
             "problemMatcher": []
@@ -59,10 +59,10 @@
         {
             "label": "Run TinyClipsMAS",
             "type": "shell",
-            "command": "open",
+            "command": "zsh",
             "args": [
-                "-n",
-                "${workspaceFolder}/build/Debug/Tiny Clips.app"
+                "-c",
+                "killall \"Tiny Clips\" 2>/dev/null || true; open \"${workspaceFolder}/build/Debug/Tiny Clips.app\""
             ],
             "dependsOn": "Build TinyClipsMAS",
             "problemMatcher": []
