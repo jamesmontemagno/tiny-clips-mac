@@ -281,6 +281,7 @@ class CaptureSettings: ObservableObject {
     @AppStorage("alwaysCaptureMainDisplay") var alwaysCaptureMainDisplay: Bool = false
     @AppStorage("showRegionIndicator") var showRegionIndicator: Bool = true
     @AppStorage("includeTinyClipsInCapture") var includeTinyClipsInCapture: Bool = false
+    @AppStorage("showBrandingOverlay") var showBrandingOverlay: Bool = false
     // Custom global hotkeys (stored as Carbon keyCode + modifiers bitmask).
     // Defaults: ⌃⌥⌘5 / ⌃⌥⌘6 / ⌃⌥⌘7
     // 6400 = controlKey (4096) | optionKey (2048) | cmdKey (256)
@@ -425,7 +426,7 @@ class CaptureSettings: ObservableObject {
             "gifCountdownEnabled", "gifCountdownDuration",
             "screenshotCountdownEnabled", "screenshotCountdownDuration",
             "hasCompletedOnboarding", "alwaysCaptureMainDisplay", "showRegionIndicator",
-            "includeTinyClipsInCapture",
+            "includeTinyClipsInCapture", "showBrandingOverlay",
             "screenshotHotKeyCode", "screenshotHotKeyModifiers",
             "videoHotKeyCode", "videoHotKeyModifiers",
             "gifHotKeyCode", "gifHotKeyModifiers",
