@@ -252,6 +252,7 @@ private struct ScreenshotEditorView: View {
 
     @StateObject private var viewModel: EditorViewModel
     @State private var isSaving = false
+    @State private var splitVisibility: NavigationSplitViewVisibility = .all
 
     init(imageURL: URL, onDone: @escaping (URL?) -> Void) {
         self.imageURL = imageURL
@@ -350,18 +351,32 @@ private struct ScreenshotEditorView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        NavigationSplitView(columnVisibility: $splitVisibility) {
             sidebar
-                .frame(width: 300)
-                .background(.thinMaterial)
+                .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 360)
+        } detail: {
+            VStack(spacing: 0) {
+                GeometryReader { geo in
+                    CanvasView(viewModel: viewModel, containerSize: geo.size)
+                }
+                .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
+                .clipped()
 
-            Divider()
+                Divider()
 
-            GeometryReader { geo in
-                CanvasView(viewModel: viewModel, containerSize: geo.size)
+                exportControls
+                    .padding(14)
+                    .background(.regularMaterial)
             }
-            .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
-            .clipped()
+        }
+        .navigationSplitViewStyle(.balanced)
+        .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button(action: toggleSidebar) {
+                    Image(systemName: "sidebar.leading")
+                }
+                .help("Toggle the inspector sidebar.")
+            }
         }
         .disabled(isSaving)
         .overlay {
@@ -398,12 +413,6 @@ private struct ScreenshotEditorView: View {
                 Text("Background")
                     .font(.headline)
                 backgroundControls
-
-                Divider()
-
-                Text("Export")
-                    .font(.headline)
-                exportControls
             }
             .padding(14)
         }
@@ -596,6 +605,10 @@ private struct ScreenshotEditorView: View {
                 isSaving = false
             }
         }
+    }
+
+    private func toggleSidebar() {
+        NSApp.keyWindow?.firstResponder?.tryToPerform(#selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
     }
 }
 
