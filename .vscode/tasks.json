@@ -1,0 +1,67 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build TinyClips",
+            "type": "shell",
+            "command": "xcodebuild",
+            "args": [
+                "build",
+                "-project",
+                "TinyClips.xcodeproj",
+                "-scheme",
+                "TinyClips",
+                "-configuration",
+                "Debug",
+                "SYMROOT=${workspaceFolder}/build",
+                "CODE_SIGN_IDENTITY=",
+                "CODE_SIGNING_REQUIRED=NO",
+                "CODE_SIGNING_ALLOWED=NO"
+            ],
+            "group": "build",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Build TinyClipsMAS",
+            "type": "shell",
+            "command": "xcodebuild",
+            "args": [
+                "build",
+                "-project",
+                "TinyClips.xcodeproj",
+                "-scheme",
+                "TinyClipsMAS",
+                "-configuration",
+                "Debug",
+                "SYMROOT=${workspaceFolder}/build",
+                "CODE_SIGN_IDENTITY=",
+                "CODE_SIGNING_REQUIRED=NO",
+                "CODE_SIGNING_ALLOWED=NO"
+            ],
+            "group": "build",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Run TinyClips",
+            "type": "shell",
+            "command": "open",
+            "args": [
+                "-n",
+                "${workspaceFolder}/build/Debug/TinyClips.app"
+            ],
+            "dependsOn": "Build TinyClips",
+            "problemMatcher": []
+        },
+        {
+            "label": "Run TinyClipsMAS",
+            "type": "shell",
+            "command": "open",
+            "args": [
+                "-n",
+                "${workspaceFolder}/build/Debug/Tiny Clips.app"
+            ],
+            "dependsOn": "Build TinyClipsMAS",
+            "problemMatcher": []
+        }
+    ]
+}
