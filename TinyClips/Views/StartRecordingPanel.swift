@@ -88,7 +88,6 @@ class StartRecordingPanel: NSPanel {
 
 private struct StartRecordingView: View {
     @Environment(\.colorScheme) private var colorScheme
-    private let clickLightURL = URL(string: "https://github.com/aurorascharff/ClickLight")!
 
     struct MicrophoneState {
         let enabled: Bool
@@ -165,10 +164,6 @@ private struct StartRecordingView: View {
                 .accessibilityLabel("Mouse click visuals")
                 .accessibilityValue(mouseClicksEnabled ? "On" : "Off")
                 .accessibilityHint("Toggles mouse click visuals for this recording.")
-
-                Link("ClickLight", destination: clickLightURL)
-                    .font(.system(size: 12, weight: .medium))
-                    .help("For the best click event animations, install ClickLight.")
             }
 
             if microphone && captureType != .gif {
