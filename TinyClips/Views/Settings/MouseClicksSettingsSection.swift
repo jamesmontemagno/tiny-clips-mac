@@ -3,6 +3,7 @@ import SwiftUI
 struct MouseClicksSettingsSection: View {
     @ObservedObject var settings: CaptureSettings
     let isPro: Bool
+    private let clickLightURL = URL(string: "https://github.com/aurorascharff/ClickLight")!
 
     var body: some View {
 #if APPSTORE
@@ -22,6 +23,8 @@ struct MouseClicksSettingsSection: View {
             Text("Tune the saved click pulse for recordings. Adding click effects will add more processing time at the end of recording.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            Link("For the best live click animations, install ClickLight.", destination: clickLightURL)
+                .help("Opens ClickLight on GitHub.")
         }
 
         Section("Video") {
