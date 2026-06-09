@@ -23,6 +23,17 @@ class StartRecordingPanel: NSPanel {
         self.isMovableByWindowBackground = true
 
         let settings = CaptureSettings.shared
+        let availableMicrophones = MicrophoneDeviceCatalog.availableOptions()
+        let resolvedMicrophoneID: String = {
+            let saved = settings.selectedMicrophoneID
+            guard !saved.isEmpty, availableMicrophones.contains(where: { $0.id == saved }) else {
+                if !saved.isEmpty {
+                    settings.selectedMicrophoneID = ""
+                }
+                return ""
+            }
+            return saved
+        }()
         let allowsMouseClickToggle: Bool
     #if APPSTORE
         allowsMouseClickToggle = StoreService.shared.isPro
@@ -37,7 +48,8 @@ class StartRecordingPanel: NSPanel {
             captureType: captureType,
             systemAudio: settings.recordAudio,
             microphone: settings.recordMicrophone,
-            selectedMicrophoneID: settings.selectedMicrophoneID,
+            selectedMicrophoneID: resolvedMicrophoneID,
+            availableMicrophones: availableMicrophones,
             mouseClicksEnabled: defaultMouseClicksEnabled,
             selectedVideoTimeLimitMinutes: settings.videoRecordingTimeLimitMinutes,
             allowsMouseClickToggle: allowsMouseClickToggle,
@@ -86,10 +98,10 @@ private struct StartRecordingView: View {
     @State var systemAudio: Bool
     @State var microphone: Bool
     @State var selectedMicrophoneID: String
+    let availableMicrophones: [MicrophoneDeviceOption]
     @State var mouseClicksEnabled: Bool
     @State var selectedVideoTimeLimitMinutes: Int
     let allowsMouseClickToggle: Bool
-    private let microphones = MicrophoneDeviceCatalog.availableOptions()
     let onStart: (Bool, MicrophoneState, Bool, Int) -> Void
     let onCancel: () -> Void
 
@@ -99,39 +111,41 @@ private struct StartRecordingView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // System audio toggle
-            Button {
-                systemAudio.toggle()
-            } label: {
-                Image(systemName: systemAudio ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(systemAudio ? .white : .primary.opacity(0.5))
-                    .frame(width: 28, height: 28)
-                    .background(systemAudio ? .blue : .primary.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-            }
-            .buttonStyle(.plain)
-            .help(systemAudio ? "Output audio: ON" : "Output audio: OFF")
-            .accessibilityLabel("Output audio")
-            .accessibilityValue(systemAudio ? "On" : "Off")
-            .accessibilityHint("Toggles recording output audio.")
+            if captureType != .gif {
+                // System audio toggle
+                Button {
+                    systemAudio.toggle()
+                } label: {
+                    Image(systemName: systemAudio ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(systemAudio ? .white : .primary.opacity(0.5))
+                        .frame(width: 28, height: 28)
+                        .background(systemAudio ? .blue : .primary.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .help(systemAudio ? "Output audio: ON" : "Output audio: OFF")
+                .accessibilityLabel("Output audio")
+                .accessibilityValue(systemAudio ? "On" : "Off")
+                .accessibilityHint("Toggles recording output audio.")
 
-            // Microphone toggle
-            Button {
-                microphone.toggle()
-            } label: {
-                Image(systemName: microphone ? "mic.fill" : "mic.slash.fill")
-                    .font(.system(size: 13))
-                    .foregroundStyle(microphone ? .white : .primary.opacity(0.5))
-                    .frame(width: 28, height: 28)
-                    .background(microphone ? .blue : .primary.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                // Microphone toggle
+                Button {
+                    microphone.toggle()
+                } label: {
+                    Image(systemName: microphone ? "mic.fill" : "mic.slash.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(microphone ? .white : .primary.opacity(0.5))
+                        .frame(width: 28, height: 28)
+                        .background(microphone ? .blue : .primary.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .help(microphone ? "Microphone: ON" : "Microphone: OFF")
+                .accessibilityLabel("Microphone")
+                .accessibilityValue(microphone ? "On" : "Off")
+                .accessibilityHint("Toggles microphone recording.")
             }
-            .buttonStyle(.plain)
-            .help(microphone ? "Microphone: ON" : "Microphone: OFF")
-            .accessibilityLabel("Microphone")
-            .accessibilityValue(microphone ? "On" : "Off")
-            .accessibilityHint("Toggles microphone recording.")
 
             if allowsMouseClickToggle {
                 // Mouse click visuals toggle (Pro only)
@@ -152,10 +166,10 @@ private struct StartRecordingView: View {
                 .accessibilityHint("Toggles mouse click visuals for this recording.")
             }
 
-            if microphone {
+            if microphone && captureType != .gif {
                 Picker("Mic", selection: $selectedMicrophoneID) {
                     Text("System Default").tag("")
-                    ForEach(microphones) { device in
+                    ForEach(availableMicrophones) { device in
                         Text(device.name).tag(device.id)
                     }
                 }
