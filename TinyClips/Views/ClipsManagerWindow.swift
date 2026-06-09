@@ -898,17 +898,11 @@ private class ClipsViewModel: ObservableObject {
     }
 
     private func presentScreenshotEditor(_ item: ClipItem) {
-        var windowRef: ScreenshotEditorWindow?
-        let window = ScreenshotEditorWindow(imageURL: item.url) { [weak self] _ in
+        ScreenshotEditorRegistry.shared.present(imageURL: item.url) { [weak self] _ in
             DispatchQueue.main.async {
-                if let windowRef {
-                    self?.releaseEditorWindow(windowRef)
-                }
                 self?.load()
             }
         }
-        windowRef = window
-        retainEditorWindow(window)
     }
 
     private func presentVideoTrimmer(_ item: ClipItem) {

@@ -189,10 +189,16 @@ struct MenuBarContentView: View {
 
 struct MenuBarLabelView: View {
     @ObservedObject var captureManager: CaptureManager
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Image(systemName: captureManager.isRecording ? "record.circle.fill" : "camera.viewfinder")
             .foregroundStyle(captureManager.isRecording ? .red : .primary)
+            .onAppear {
+                ScreenshotEditorRegistry.shared.installOpener { sessionID in
+                    openWindow(id: ScreenshotEditorRegistry.windowID, value: sessionID)
+                }
+            }
     }
 }
 

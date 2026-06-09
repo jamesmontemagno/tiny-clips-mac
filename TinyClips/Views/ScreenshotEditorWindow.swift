@@ -4,43 +4,87 @@ import UniformTypeIdentifiers
 
 private let textSystemFontFamily = "System"
 
-// MARK: - Window
+// MARK: - Scene
 
-class ScreenshotEditorWindow: NSWindow, NSWindowDelegate {
-    private var onComplete: ((URL?) -> Void)?
-    private var didComplete = false
-
-    convenience init(imageURL: URL, onComplete: @escaping (URL?) -> Void) {
-        self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 840, height: 580),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        self.onComplete = onComplete
-        self.title = "Edit Screenshot"
-        self.isReleasedWhenClosed = false
-        self.delegate = self
-        self.minSize = NSSize(width: 560, height: 460)
-        self.center()
-
-        let editorView = ScreenshotEditorView(imageURL: imageURL) { [weak self] resultURL in
-            self?.completeWith(resultURL)
+struct ScreenshotEditorScene: Scene {
+    var body: some Scene {
+        WindowGroup("Edit Screenshot", id: ScreenshotEditorRegistry.windowID, for: UUID.self) { $sessionID in
+            ScreenshotEditorSceneRoot(sessionID: sessionID)
         }
-        self.contentView = NSHostingView(rootView: editorView)
+        .defaultSize(width: 1040, height: 720)
+    }
+}
+
+private struct ScreenshotEditorSceneRoot: View {
+    let sessionID: UUID?
+    @Environment(\.dismissWindow) private var dismissWindow
+    @State private var resolvedSession: ScreenshotEditorRegistry.Session?
+
+    var body: some View {
+        Group {
+            if let session = resolvedSession, let sessionID {
+                ScreenshotEditorView(imageURL: session.imageURL) { resultURL in
+                    ScreenshotEditorRegistry.shared.finish(sessionID, result: resultURL)
+                    dismissWindow(id: ScreenshotEditorRegistry.windowID, value: sessionID)
+                }
+            } else {
+                Color(NSColor.windowBackgroundColor)
+                    .frame(minWidth: 700, minHeight: 520)
+            }
+        }
+        .onAppear {
+            guard let sessionID else { return }
+            if let session = ScreenshotEditorRegistry.shared.session(for: sessionID) {
+                resolvedSession = session
+            } else {
+                dismissWindow(id: ScreenshotEditorRegistry.windowID, value: sessionID)
+            }
+        }
+    }
+}
+
+// MARK: - Registry
+
+@MainActor
+final class ScreenshotEditorRegistry {
+    static let shared = ScreenshotEditorRegistry()
+    static let windowID = "screenshot-editor"
+
+    struct Session {
+        let imageURL: URL
+        let onComplete: (URL?) -> Void
     }
 
-    private func completeWith(_ url: URL?) {
-        guard !didComplete, let callback = onComplete else { return }
-        didComplete = true
-        onComplete = nil
-        callback(url)
-        orderOut(nil)
+    private var sessions: [UUID: Session] = [:]
+    private var pendingOpens: [UUID] = []
+    private var opener: ((UUID) -> Void)?
+
+    func installOpener(_ opener: @escaping (UUID) -> Void) {
+        self.opener = opener
+        let pending = pendingOpens
+        pendingOpens.removeAll()
+        for id in pending {
+            opener(id)
+        }
     }
 
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        completeWith(nil)
-        return true
+    func present(imageURL: URL, onComplete: @escaping (URL?) -> Void) {
+        let id = UUID()
+        sessions[id] = Session(imageURL: imageURL, onComplete: onComplete)
+        if let opener {
+            opener(id)
+        } else {
+            pendingOpens.append(id)
+        }
+    }
+
+    func session(for id: UUID) -> Session? {
+        sessions[id]
+    }
+
+    func finish(_ id: UUID, result: URL?) {
+        guard let session = sessions.removeValue(forKey: id) else { return }
+        session.onComplete(result)
     }
 }
 
@@ -51,7 +95,7 @@ private enum EditTool: String, CaseIterable {
     case crop = "crop"
     case rectangle = "rectangle"
     case circle = "circle"
-    case arrow = "arrow.up.right"
+    case arrow = "arrowshape.right"
     case line = "line.diagonal"
     case pencil = "pencil.tip"
     case text = "textformat"
@@ -212,6 +256,10 @@ private let solidBackgroundPresets: [ExportBackgroundPreset] = [
     ExportBackgroundPreset(id: "mint", label: "Mint", style: .solid, primary: Color(red: 0.41, green: 0.86, blue: 0.62), secondary: nil),
     ExportBackgroundPreset(id: "sky", label: "Sky", style: .solid, primary: Color(red: 0.34, green: 0.67, blue: 0.96), secondary: nil),
     ExportBackgroundPreset(id: "lilac", label: "Lilac", style: .solid, primary: Color(red: 0.70, green: 0.58, blue: 0.94), secondary: nil),
+    ExportBackgroundPreset(id: "bubblegum", label: "Bubblegum", style: .solid, primary: Color(red: 1.00, green: 0.42, blue: 0.76), secondary: nil),
+    ExportBackgroundPreset(id: "tangerine", label: "Tangerine", style: .solid, primary: Color(red: 1.00, green: 0.56, blue: 0.16), secondary: nil),
+    ExportBackgroundPreset(id: "lagoon", label: "Lagoon", style: .solid, primary: Color(red: 0.00, green: 0.72, blue: 0.78), secondary: nil),
+    ExportBackgroundPreset(id: "plum", label: "Plum", style: .solid, primary: Color(red: 0.39, green: 0.18, blue: 0.58), secondary: nil),
 ]
 
 private let gradientBackgroundPresets: [ExportBackgroundPreset] = [
@@ -223,6 +271,10 @@ private let gradientBackgroundPresets: [ExportBackgroundPreset] = [
     ExportBackgroundPreset(id: "aurora", label: "Aurora", style: .gradient, primary: Color(red: 0.28, green: 0.94, blue: 0.72), secondary: Color(red: 0.52, green: 0.42, blue: 1.00)),
     ExportBackgroundPreset(id: "peach", label: "Peach", style: .gradient, primary: Color(red: 1.00, green: 0.72, blue: 0.52), secondary: Color(red: 0.98, green: 0.42, blue: 0.54)),
     ExportBackgroundPreset(id: "glacier", label: "Glacier", style: .gradient, primary: Color(red: 0.73, green: 0.94, blue: 1.00), secondary: Color(red: 0.42, green: 0.58, blue: 0.96)),
+    ExportBackgroundPreset(id: "neon", label: "Neon", style: .gradient, primary: Color(red: 0.05, green: 1.00, blue: 0.54), secondary: Color(red: 1.00, green: 0.08, blue: 0.70)),
+    ExportBackgroundPreset(id: "mango", label: "Mango", style: .gradient, primary: Color(red: 1.00, green: 0.78, blue: 0.20), secondary: Color(red: 1.00, green: 0.26, blue: 0.18)),
+    ExportBackgroundPreset(id: "midnight", label: "Midnight", style: .gradient, primary: Color(red: 0.05, green: 0.07, blue: 0.18), secondary: Color(red: 0.00, green: 0.58, blue: 0.82)),
+    ExportBackgroundPreset(id: "prism", label: "Prism", style: .gradient, primary: Color(red: 0.98, green: 0.16, blue: 0.38), secondary: Color(red: 0.18, green: 0.86, blue: 0.93)),
 ]
 
 private enum EditorPopover: String, Identifiable {
@@ -296,9 +348,10 @@ private struct ScreenshotEditorView: View {
 
     @StateObject private var viewModel: EditorViewModel
     @State private var isSaving = false
-    @State private var splitVisibility: NavigationSplitViewVisibility = .all
+    @State private var splitVisibility: NavigationSplitViewVisibility = .automatic
     @State private var activePopover: EditorPopover?
     @State private var isBackgroundSectionExpanded = false
+    @State private var showExitConfirmation = false
 
     init(imageURL: URL, onDone: @escaping (URL?) -> Void) {
         self.imageURL = imageURL
@@ -451,7 +504,7 @@ private struct ScreenshotEditorView: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $splitVisibility) {
             sidebar
-                .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 240)
+                .navigationSplitViewColumnWidth(min: 160, ideal: 220, max: 320)
         } detail: {
             VStack(spacing: 0) {
                 GeometryReader { geo in
@@ -468,6 +521,17 @@ private struct ScreenshotEditorView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .onExitCommand {
+            handleEscape()
+        }
+        .confirmationDialog("Discard changes?", isPresented: $showExitConfirmation, titleVisibility: .visible) {
+            Button("Discard Changes", role: .destructive) {
+                onDone(nil)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You have unsaved changes. Are you sure you want to exit?")
+        }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
@@ -513,13 +577,13 @@ private struct ScreenshotEditorView: View {
         List {
             Section("Tools") {
                 toolGrid
-                    .listRowInsets(EdgeInsets(top: 6, leading: 10, bottom: 8, trailing: 10))
+                    .listRowInsets(EdgeInsets(top: 2, leading: 2, bottom: 4, trailing: 2))
             }
 
             if viewModel.showsAnyStyleControls {
                 Section("Style") {
                     styleControls
-                        .listRowInsets(EdgeInsets(top: 6, leading: 10, bottom: 8, trailing: 10))
+                        .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 4, trailing: 4))
                 }
             }
 
@@ -530,29 +594,30 @@ private struct ScreenshotEditorView: View {
                 } label: {
                     Label("Background", systemImage: "photo.on.rectangle")
                 }
-                .listRowInsets(EdgeInsets(top: 6, leading: 10, bottom: 8, trailing: 10))
+                .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 4, trailing: 4))
             }
         }
         .listStyle(.sidebar)
     }
 
     private var toolGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 50), spacing: 6)], spacing: 6) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 3), spacing: 4) {
             ForEach(EditTool.allCases, id: \.self) { tool in
                 Button {
                     viewModel.selectedTool = tool
                 } label: {
-                    VStack(spacing: 2) {
+                    VStack(spacing: 1) {
                         Image(systemName: tool.rawValue)
-                            .font(.system(size: 13))
+                            .font(.system(size: 12))
                         Text(tool.label)
-                            .font(.system(size: 9))
+                            .font(.system(size: 8))
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 42)
+                    .frame(maxWidth: .infinity, minHeight: 34)
                     .background(viewModel.selectedTool == tool ? Color.accentColor.opacity(0.2) : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
-                    .contentShape(RoundedRectangle(cornerRadius: 7))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .contentShape(RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(tool.label) tool")
@@ -718,7 +783,7 @@ private struct ScreenshotEditorView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 7), count: 4), spacing: 7) {
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(19), spacing: 5), count: 6), spacing: 5) {
                 ForEach(presets) { preset in
                     Button {
                         viewModel.applyBackgroundPreset(preset)
@@ -812,6 +877,19 @@ private struct ScreenshotEditorView: View {
             }
         }
     }
+
+    private func handleEscape() {
+        if viewModel.textEditPosition != nil {
+            viewModel.cancelTextAnnotation()
+            return
+        }
+
+        if viewModel.hasUnsavedChanges {
+            showExitConfirmation = true
+        } else {
+            onDone(nil)
+        }
+    }
 }
 private struct TextStyleToggleButton: View {
     let title: String
@@ -858,9 +936,9 @@ private struct ArrowStyleButton: View {
 
     private var iconName: String {
         switch style {
-        case .straight: return "arrow.up.right"
-        case .curvedLeft: return "arrow.triangle.turn.up.right.diamond"
-        case .curvedRight: return "arrow.turn.up.right"
+        case .straight: return "arrowshape.right"
+        case .curvedLeft: return "arrowshape.turn.up.right"
+        case .curvedRight: return "arrowshape.turn.up.left"
         }
     }
 }
@@ -881,15 +959,15 @@ private struct BackgroundPresetSwatch: View {
                     }
                 }
                 .overlay(Circle().stroke(.separator, lineWidth: 1))
-                .frame(width: 18, height: 18)
+                .frame(width: 15, height: 15)
 
             if isSelected {
                 Circle()
-                    .stroke(Color.accentColor, lineWidth: 3)
-                    .frame(width: 24, height: 24)
+                    .stroke(Color.accentColor, lineWidth: 2)
+                    .frame(width: 19, height: 19)
             }
         }
-        .frame(width: 24, height: 24)
+        .frame(width: 19, height: 19)
     }
 
     private var fillStyle: AnyShapeStyle {
@@ -1131,17 +1209,20 @@ private struct CanvasView: View {
                 Color.clear
                     .contentShape(Rectangle())
                     .frame(width: imageSize.width, height: imageSize.height)
+                    .allowsHitTesting(viewModel.textEditPosition == nil)
                     .gesture(
                         DragGesture(minimumDistance: 1)
                             .onChanged { value in
                                 let normalizedStart = viewModel.normalizePoint(value.startLocation, imageSize: imageSize)
                                 let normalizedCurrent = viewModel.normalizePoint(value.location, imageSize: imageSize)
-                                viewModel.handleDrag(start: normalizedStart, current: normalizedCurrent)
+                                let isShiftPressed = NSEvent.modifierFlags.contains(.shift)
+                                viewModel.handleDrag(start: normalizedStart, current: normalizedCurrent, isAspectLocked: isShiftPressed)
                             }
                             .onEnded { value in
                                 let normalizedStart = viewModel.normalizePoint(value.startLocation, imageSize: imageSize)
                                 let normalizedEnd = viewModel.normalizePoint(value.location, imageSize: imageSize)
-                                viewModel.handleDragEnd(start: normalizedStart, end: normalizedEnd)
+                                let isShiftPressed = NSEvent.modifierFlags.contains(.shift)
+                                viewModel.handleDragEnd(start: normalizedStart, end: normalizedEnd, isAspectLocked: isShiftPressed)
                             }
                     )
                     .simultaneousGesture(
@@ -1345,6 +1426,15 @@ private class EditorViewModel: ObservableObject {
     private var isDraggingEndpoint = false // true = dragging arrowhead/line end
     private var isDraggingStartpoint = false // true = dragging arrow tail/line start
 
+    private let initialBackgroundStyle: ExportBackgroundStyle
+    private let initialBackgroundColor: Color
+    private let initialBackgroundSecondaryColor: Color
+    private let initialSelectedBackgroundPresetID: String
+    private let initialWallpaperPresent: Bool
+    private let initialCanvasPadding: CGFloat
+    private let initialCanvasCornerRadius: CGFloat
+    private let initialCanvasShadowRadius: CGFloat
+
     init(url: URL) {
         self.sourceURL = url
         let settings = CaptureSettings.shared
@@ -1357,6 +1447,15 @@ private class EditorViewModel: ObservableObject {
                 self.imagePixelSize = CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)
             }
         }
+
+        self.initialBackgroundStyle = .transparent
+        self.initialBackgroundColor = Color(red: 0.96, green: 0.96, blue: 0.98)
+        self.initialBackgroundSecondaryColor = Color(red: 0.84, green: 0.90, blue: 0.99)
+        self.initialSelectedBackgroundPresetID = "transparent"
+        self.initialWallpaperPresent = false
+        self.initialCanvasPadding = 0
+        self.initialCanvasCornerRadius = 0
+        self.initialCanvasShadowRadius = 0
     }
 
     // Convert point in overlay-local space to 0..1 normalized coordinate
@@ -1564,6 +1663,36 @@ private class EditorViewModel: ObservableObject {
         !annotations.isEmpty || cropRect != nil
     }
 
+    var hasUnsavedChanges: Bool {
+        if canUndo {
+            return true
+        }
+
+        if backgroundStyle != initialBackgroundStyle {
+            return true
+        }
+
+        if selectedBackgroundPresetID != initialSelectedBackgroundPresetID {
+            return true
+        }
+
+        if (wallpaperImage != nil) != initialWallpaperPresent {
+            return true
+        }
+
+        if !colorsEqual(backgroundColor, initialBackgroundColor) || !colorsEqual(backgroundSecondaryColor, initialBackgroundSecondaryColor) {
+            return true
+        }
+
+        if abs(canvasPadding - initialCanvasPadding) > 0.0001 ||
+            abs(canvasCornerRadius - initialCanvasCornerRadius) > 0.0001 ||
+            abs(canvasShadowRadius - initialCanvasShadowRadius) > 0.0001 {
+            return true
+        }
+
+        return false
+    }
+
     var showsAnyStyleControls: Bool {
         primaryStyleControlsVisible || showsLineWidthControl || showsArrowStyleControl || showsNumberSizeControl || showsRedactionPresetControl || showsTextStyleControls
     }
@@ -1649,7 +1778,7 @@ private class EditorViewModel: ObservableObject {
         return true
     }
 
-    func handleDrag(start: CGPoint, current: CGPoint) {
+    func handleDrag(start: CGPoint, current: CGPoint, isAspectLocked: Bool = false) {
         switch selectedTool {
         case .move:
             if !isDraggingAnnotation && !isDraggingEndpoint && !isDraggingStartpoint {
@@ -1736,7 +1865,7 @@ private class EditorViewModel: ObservableObject {
             break // text/number use click, not drag
 
         default:
-            let rect = makeRect(from: start, to: current)
+            let rect = makeRect(from: start, to: current, isAspectLocked: isAspectLocked)
             currentAnnotation = Annotation(
                 tool: selectedTool,
                 rect: rect,
@@ -1752,7 +1881,7 @@ private class EditorViewModel: ObservableObject {
         }
     }
 
-    func handleDragEnd(start: CGPoint, end: CGPoint) {
+    func handleDragEnd(start: CGPoint, end: CGPoint, isAspectLocked: Bool = false) {
         switch selectedTool {
         case .move:
             isDraggingAnnotation = false
@@ -1780,7 +1909,7 @@ private class EditorViewModel: ObservableObject {
             break // handled by SpatialTapGesture
 
         default:
-            let rect = makeRect(from: start, to: end)
+            let rect = makeRect(from: start, to: end, isAspectLocked: isAspectLocked)
             let w = abs(rect.width)
             let h = abs(rect.height)
             if w > 0.005 || h > 0.005 {
@@ -1965,11 +2094,30 @@ private class EditorViewModel: ObservableObject {
         return hypot(point.x - proj.x, point.y - proj.y)
     }
 
-    private func makeRect(from start: CGPoint, to end: CGPoint) -> CGRect {
+    private func makeRect(from start: CGPoint, to end: CGPoint, isAspectLocked: Bool = false) -> CGRect {
         // Arrow/line store start in origin and end in maxX/maxY (can be negative width/height)
         if selectedTool == .arrow || selectedTool == .line {
             return CGRect(x: start.x, y: start.y, width: end.x - start.x, height: end.y - start.y)
         }
+
+        if isAspectLocked && (selectedTool == .rectangle || selectedTool == .circle) {
+            let dx = end.x - start.x
+            let dy = end.y - start.y
+            let pixelWidth = max(1.0, imagePixelSize.width)
+            let pixelHeight = max(1.0, imagePixelSize.height)
+            let side = max(abs(dx * pixelWidth), abs(dy * pixelHeight))
+            let constrainedEnd = CGPoint(
+                x: start.x + ((dx >= 0 ? side : -side) / pixelWidth),
+                y: start.y + ((dy >= 0 ? side : -side) / pixelHeight)
+            )
+            return CGRect(
+                x: min(start.x, constrainedEnd.x),
+                y: min(start.y, constrainedEnd.y),
+                width: abs(constrainedEnd.x - start.x),
+                height: abs(constrainedEnd.y - start.y)
+            )
+        }
+
         return CGRect(
             x: min(start.x, end.x),
             y: min(start.y, end.y),
@@ -2477,6 +2625,29 @@ private class EditorViewModel: ObservableObject {
 
     private func currentNumberSidePixels() -> CGFloat {
         max(numberCircleMinimumDisplayPixels, baseNumberSidePixels() * numberSizeMultiplier)
+    }
+
+    private func colorsEqual(_ lhs: Color, _ rhs: Color) -> Bool {
+        guard let left = NSColor(lhs).usingColorSpace(.deviceRGB),
+              let right = NSColor(rhs).usingColorSpace(.deviceRGB) else {
+            return false
+        }
+
+        var lr: CGFloat = 0
+        var lg: CGFloat = 0
+        var lb: CGFloat = 0
+        var la: CGFloat = 0
+        var rr: CGFloat = 0
+        var rg: CGFloat = 0
+        var rb: CGFloat = 0
+        var ra: CGFloat = 0
+        left.getRed(&lr, green: &lg, blue: &lb, alpha: &la)
+        right.getRed(&rr, green: &rg, blue: &rb, alpha: &ra)
+
+        return abs(lr - rr) < 0.0001 &&
+            abs(lg - rg) < 0.0001 &&
+            abs(lb - rb) < 0.0001 &&
+            abs(la - ra) < 0.0001
     }
 }
 

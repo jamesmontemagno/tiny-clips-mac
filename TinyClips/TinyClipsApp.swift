@@ -26,5 +26,7 @@ struct TinyClipsApp: App {
             SettingsView()
         }
         .defaultSize(width: 720, height: 460)
+
+        ScreenshotEditorScene()
     }
 }
