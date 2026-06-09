@@ -31,7 +31,6 @@ class CaptureManager: ObservableObject {
     private var recordPanelPosition: NSPoint?
     private var trimmerWindow: VideoTrimmerWindow?
     private var gifTrimmerWindow: GifTrimmerWindow?
-    private var screenshotEditorWindow: ScreenshotEditorWindow?
     private var countdownWindow: CountdownWindow?
     private var processingIndicatorWindow: ProcessingIndicatorWindow?
     private var processingIndicatorShownAt: Date?
@@ -824,22 +823,12 @@ class CaptureManager: ObservableObject {
     }
 
     private func showScreenshotEditor(for url: URL, deleteSourceOnCancel: Bool) {
-        let window = ScreenshotEditorWindow(imageURL: url) { [weak self] resultURL in
-            guard let self else { return }
+        ScreenshotEditorRegistry.shared.present(imageURL: url) { resultURL in
             if let resultURL {
                 SaveService.shared.handleSavedFile(url: resultURL, type: .screenshot)
-            } else {
-                if deleteSourceOnCancel {
-                    try? FileManager.default.removeItem(at: url)
-                }
+            } else if deleteSourceOnCancel {
+                try? FileManager.default.removeItem(at: url)
             }
-            DispatchQueue.main.async {
-                self.screenshotEditorWindow = nil
-            }
-        }
-        self.screenshotEditorWindow = window
-        DispatchQueue.main.async {
-            self.bringWindowToFront(window)
         }
     }
 

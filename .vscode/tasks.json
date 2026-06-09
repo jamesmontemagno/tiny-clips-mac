@@ -1,0 +1,71 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build TinyClips",
+            "type": "shell",
+            "command": "xcodebuild",
+            "args": [
+                "build",
+                "-project",
+                "TinyClips.xcodeproj",
+                "-scheme",
+                "TinyClips",
+                "-destination",
+                "generic/platform=macOS",
+                "-configuration",
+                "Debug",
+                "SYMROOT=${workspaceFolder}/build",
+                "CODE_SIGN_IDENTITY=",
+                "CODE_SIGNING_REQUIRED=NO",
+                "CODE_SIGNING_ALLOWED=NO"
+            ],
+            "group": "build",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Build TinyClipsMAS",
+            "type": "shell",
+            "command": "xcodebuild",
+            "args": [
+                "build",
+                "-project",
+                "TinyClips.xcodeproj",
+                "-scheme",
+                "TinyClipsMAS",
+                "-destination",
+                "generic/platform=macOS",
+                "-configuration",
+                "Debug",
+                "SYMROOT=${workspaceFolder}/build",
+                "CODE_SIGN_IDENTITY=",
+                "CODE_SIGNING_REQUIRED=NO",
+                "CODE_SIGNING_ALLOWED=NO"
+            ],
+            "group": "build",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "Run TinyClips",
+            "type": "shell",
+            "command": "zsh",
+            "args": [
+                "-c",
+                "killall TinyClips 2>/dev/null || true; open \"${workspaceFolder}/build/Debug/TinyClips.app\""
+            ],
+            "dependsOn": "Build TinyClips",
+            "problemMatcher": []
+        },
+        {
+            "label": "Run TinyClipsMAS",
+            "type": "shell",
+            "command": "zsh",
+            "args": [
+                "-c",
+                "killall \"Tiny Clips\" 2>/dev/null || true; open \"${workspaceFolder}/build/Debug/Tiny Clips.app\""
+            ],
+            "dependsOn": "Build TinyClipsMAS",
+            "problemMatcher": []
+        }
+    ]
+}

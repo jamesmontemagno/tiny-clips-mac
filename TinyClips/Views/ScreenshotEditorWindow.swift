@@ -2,43 +2,89 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-// MARK: - Window
+private let textSystemFontFamily = "System"
 
-class ScreenshotEditorWindow: NSWindow, NSWindowDelegate {
-    private var onComplete: ((URL?) -> Void)?
-    private var didComplete = false
+// MARK: - Scene
 
-    convenience init(imageURL: URL, onComplete: @escaping (URL?) -> Void) {
-        self.init(
-            contentRect: NSRect(x: 0, y: 0, width: 840, height: 580),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        self.onComplete = onComplete
-        self.title = "Edit Screenshot"
-        self.isReleasedWhenClosed = false
-        self.delegate = self
-        self.minSize = NSSize(width: 560, height: 460)
-        self.center()
-
-        let editorView = ScreenshotEditorView(imageURL: imageURL) { [weak self] resultURL in
-            self?.completeWith(resultURL)
+struct ScreenshotEditorScene: Scene {
+    var body: some Scene {
+        WindowGroup("Edit Screenshot", id: ScreenshotEditorRegistry.windowID, for: UUID.self) { $sessionID in
+            ScreenshotEditorSceneRoot(sessionID: sessionID)
         }
-        self.contentView = NSHostingView(rootView: editorView)
+        .defaultSize(width: 1040, height: 720)
+    }
+}
+
+private struct ScreenshotEditorSceneRoot: View {
+    let sessionID: UUID?
+    @Environment(\.dismissWindow) private var dismissWindow
+    @State private var resolvedSession: ScreenshotEditorRegistry.Session?
+
+    var body: some View {
+        Group {
+            if let session = resolvedSession, let sessionID {
+                ScreenshotEditorView(imageURL: session.imageURL) { resultURL in
+                    ScreenshotEditorRegistry.shared.finish(sessionID, result: resultURL)
+                    dismissWindow(id: ScreenshotEditorRegistry.windowID, value: sessionID)
+                }
+            } else {
+                Color(NSColor.windowBackgroundColor)
+                    .frame(minWidth: 700, minHeight: 520)
+            }
+        }
+        .onAppear {
+            guard let sessionID else { return }
+            if let session = ScreenshotEditorRegistry.shared.session(for: sessionID) {
+                resolvedSession = session
+            } else {
+                dismissWindow(id: ScreenshotEditorRegistry.windowID, value: sessionID)
+            }
+        }
+    }
+}
+
+// MARK: - Registry
+
+@MainActor
+final class ScreenshotEditorRegistry {
+    static let shared = ScreenshotEditorRegistry()
+    static let windowID = "screenshot-editor"
+
+    struct Session {
+        let imageURL: URL
+        let onComplete: (URL?) -> Void
     }
 
-    private func completeWith(_ url: URL?) {
-        guard !didComplete, let callback = onComplete else { return }
-        didComplete = true
-        onComplete = nil
-        callback(url)
-        orderOut(nil)
+    private var sessions: [UUID: Session] = [:]
+    private var pendingOpens: [UUID] = []
+    private var opener: ((UUID) -> Void)?
+
+    func installOpener(_ opener: @escaping (UUID) -> Void) {
+        self.opener = opener
+        let pending = pendingOpens
+        pendingOpens.removeAll()
+        for id in pending {
+            opener(id)
+        }
     }
 
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        completeWith(nil)
-        return true
+    func present(imageURL: URL, onComplete: @escaping (URL?) -> Void) {
+        let id = UUID()
+        sessions[id] = Session(imageURL: imageURL, onComplete: onComplete)
+        if let opener {
+            opener(id)
+        } else {
+            pendingOpens.append(id)
+        }
+    }
+
+    func session(for id: UUID) -> Session? {
+        sessions[id]
+    }
+
+    func finish(_ id: UUID, result: URL?) {
+        guard let session = sessions.removeValue(forKey: id) else { return }
+        session.onComplete(result)
     }
 }
 
@@ -49,7 +95,7 @@ private enum EditTool: String, CaseIterable {
     case crop = "crop"
     case rectangle = "rectangle"
     case circle = "circle"
-    case arrow = "arrow.up.right"
+    case arrow = "arrowshape.right"
     case line = "line.diagonal"
     case pencil = "pencil.tip"
     case text = "textformat"
@@ -85,7 +131,12 @@ private struct Annotation: Identifiable {
     var text: String
     var points: [CGPoint] // for pencil
     var fontSize: CGFloat = 16 // for text annotations
+    var fontFamily: String = textSystemFontFamily
+    var isBold: Bool = false
+    var isItalic: Bool = false
+    var isUnderlined: Bool = false
     var redactionBlurPreset: RedactionBlurPreset = .medium
+    var arrowStyle: ArrowStyle = .straight
 }
 
 private typealias LinePoints = (start: CGPoint, end: CGPoint)
@@ -146,6 +197,92 @@ private enum RedactionBlurPreset: String, CaseIterable, Identifiable {
     }
 }
 
+private enum ArrowStyle: String, CaseIterable, Identifiable {
+    case straight
+    case curvedLeft
+    case curvedRight
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .straight: return "Straight"
+        case .curvedLeft: return "Curved Left"
+        case .curvedRight: return "Curved Right"
+        }
+    }
+
+    var curvatureSign: CGFloat {
+        switch self {
+        case .straight: return 0
+        case .curvedLeft: return -1
+        case .curvedRight: return 1
+        }
+    }
+}
+
+private enum ExportBackgroundStyle: String, CaseIterable, Identifiable {
+    case transparent
+    case solid
+    case gradient
+    case wallpaper
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .transparent: return "Transparent"
+        case .solid: return "Solid"
+        case .gradient: return "Gradient"
+        case .wallpaper: return "Wallpaper"
+        }
+    }
+}
+
+private struct ExportBackgroundPreset: Identifiable {
+    let id: String
+    let label: String
+    let style: ExportBackgroundStyle
+    let primary: Color
+    let secondary: Color?
+}
+
+private let solidBackgroundPresets: [ExportBackgroundPreset] = [
+    ExportBackgroundPreset(id: "transparent", label: "Transparent", style: .transparent, primary: .clear, secondary: nil),
+    ExportBackgroundPreset(id: "white", label: "White", style: .solid, primary: .white, secondary: nil),
+    ExportBackgroundPreset(id: "ink", label: "Ink", style: .solid, primary: Color(red: 0.08, green: 0.09, blue: 0.10), secondary: nil),
+    ExportBackgroundPreset(id: "coral", label: "Coral", style: .solid, primary: Color(red: 1.00, green: 0.48, blue: 0.42), secondary: nil),
+    ExportBackgroundPreset(id: "lemon", label: "Lemon", style: .solid, primary: Color(red: 1.00, green: 0.88, blue: 0.25), secondary: nil),
+    ExportBackgroundPreset(id: "mint", label: "Mint", style: .solid, primary: Color(red: 0.41, green: 0.86, blue: 0.62), secondary: nil),
+    ExportBackgroundPreset(id: "sky", label: "Sky", style: .solid, primary: Color(red: 0.34, green: 0.67, blue: 0.96), secondary: nil),
+    ExportBackgroundPreset(id: "lilac", label: "Lilac", style: .solid, primary: Color(red: 0.70, green: 0.58, blue: 0.94), secondary: nil),
+    ExportBackgroundPreset(id: "bubblegum", label: "Bubblegum", style: .solid, primary: Color(red: 1.00, green: 0.42, blue: 0.76), secondary: nil),
+    ExportBackgroundPreset(id: "tangerine", label: "Tangerine", style: .solid, primary: Color(red: 1.00, green: 0.56, blue: 0.16), secondary: nil),
+    ExportBackgroundPreset(id: "lagoon", label: "Lagoon", style: .solid, primary: Color(red: 0.00, green: 0.72, blue: 0.78), secondary: nil),
+    ExportBackgroundPreset(id: "plum", label: "Plum", style: .solid, primary: Color(red: 0.39, green: 0.18, blue: 0.58), secondary: nil),
+]
+
+private let gradientBackgroundPresets: [ExportBackgroundPreset] = [
+    ExportBackgroundPreset(id: "sunset", label: "Sunset", style: .gradient, primary: Color(red: 1.00, green: 0.48, blue: 0.37), secondary: Color(red: 1.00, green: 0.86, blue: 0.31)),
+    ExportBackgroundPreset(id: "ocean", label: "Ocean", style: .gradient, primary: Color(red: 0.15, green: 0.53, blue: 0.91), secondary: Color(red: 0.18, green: 0.88, blue: 0.75)),
+    ExportBackgroundPreset(id: "candy", label: "Candy", style: .gradient, primary: Color(red: 1.00, green: 0.42, blue: 0.68), secondary: Color(red: 0.55, green: 0.78, blue: 1.00)),
+    ExportBackgroundPreset(id: "forest", label: "Forest", style: .gradient, primary: Color(red: 0.16, green: 0.56, blue: 0.35), secondary: Color(red: 0.72, green: 0.88, blue: 0.42)),
+    ExportBackgroundPreset(id: "ember", label: "Ember", style: .gradient, primary: Color(red: 0.22, green: 0.08, blue: 0.05), secondary: Color(red: 1.00, green: 0.45, blue: 0.16)),
+    ExportBackgroundPreset(id: "aurora", label: "Aurora", style: .gradient, primary: Color(red: 0.28, green: 0.94, blue: 0.72), secondary: Color(red: 0.52, green: 0.42, blue: 1.00)),
+    ExportBackgroundPreset(id: "peach", label: "Peach", style: .gradient, primary: Color(red: 1.00, green: 0.72, blue: 0.52), secondary: Color(red: 0.98, green: 0.42, blue: 0.54)),
+    ExportBackgroundPreset(id: "glacier", label: "Glacier", style: .gradient, primary: Color(red: 0.73, green: 0.94, blue: 1.00), secondary: Color(red: 0.42, green: 0.58, blue: 0.96)),
+    ExportBackgroundPreset(id: "neon", label: "Neon", style: .gradient, primary: Color(red: 0.05, green: 1.00, blue: 0.54), secondary: Color(red: 1.00, green: 0.08, blue: 0.70)),
+    ExportBackgroundPreset(id: "mango", label: "Mango", style: .gradient, primary: Color(red: 1.00, green: 0.78, blue: 0.20), secondary: Color(red: 1.00, green: 0.26, blue: 0.18)),
+    ExportBackgroundPreset(id: "midnight", label: "Midnight", style: .gradient, primary: Color(red: 0.05, green: 0.07, blue: 0.18), secondary: Color(red: 0.00, green: 0.58, blue: 0.82)),
+    ExportBackgroundPreset(id: "prism", label: "Prism", style: .gradient, primary: Color(red: 0.98, green: 0.16, blue: 0.38), secondary: Color(red: 0.18, green: 0.86, blue: 0.93)),
+]
+
+private enum EditorPopover: String, Identifiable {
+    case saveOptions
+
+    var id: Self { self }
+}
+
 private func redactionBrightness(for row: Int, column: Int, preset: RedactionBlurPreset) -> Double {
     let phase = Double((row + column) % preset.cycleLength)
     return min(0.82, preset.baseBrightness + phase * preset.contrastStep)
@@ -192,6 +329,17 @@ private func drawCheckerboardRedaction(in context: CGContext, rect: CGRect, pres
     }
 }
 
+private func arrowControlPoint(start: CGPoint, end: CGPoint, style: ArrowStyle) -> CGPoint {
+    let mid = CGPoint(x: (start.x + end.x) * 0.5, y: (start.y + end.y) * 0.5)
+    guard style != .straight else { return mid }
+    let dx = end.x - start.x
+    let dy = end.y - start.y
+    let length = max(1, hypot(dx, dy))
+    let normal = CGPoint(x: -dy / length, y: dx / length)
+    let magnitude = max(20, length * 0.25) * style.curvatureSign
+    return CGPoint(x: mid.x + normal.x * magnitude, y: mid.y + normal.y * magnitude)
+}
+
 // MARK: - Editor View
 
 private struct ScreenshotEditorView: View {
@@ -200,6 +348,10 @@ private struct ScreenshotEditorView: View {
 
     @StateObject private var viewModel: EditorViewModel
     @State private var isSaving = false
+    @State private var splitVisibility: NavigationSplitViewVisibility = .automatic
+    @State private var activePopover: EditorPopover?
+    @State private var isBackgroundSectionExpanded = false
+    @State private var showExitConfirmation = false
 
     init(imageURL: URL, onDone: @escaping (URL?) -> Void) {
         self.imageURL = imageURL
@@ -284,27 +436,134 @@ private struct ScreenshotEditorView: View {
         )
     }
 
-    var body: some View {
-        VStack(spacing: 0) {
-            // Toolbar
-            toolbar
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-
-            Divider()
-
-            // Canvas
-            GeometryReader { geo in
-                CanvasView(viewModel: viewModel, containerSize: geo.size)
+    private var arrowStyleBinding: Binding<ArrowStyle> {
+        Binding(
+            get: {
+                viewModel.selectedArrowStyle() ?? viewModel.selectedArrowStylePreset
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedArrowStyle(newValue) {
+                    viewModel.selectedArrowStylePreset = newValue
+                }
             }
-            .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
-            .clipped()
+        )
+    }
 
-            Divider()
+    private var textFontFamilyBinding: Binding<String> {
+        Binding(
+            get: {
+                viewModel.selectedTextFontFamily() ?? viewModel.textFontFamily
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedTextFontFamily(newValue) {
+                    viewModel.textFontFamily = newValue
+                }
+            }
+        )
+    }
 
-            // Bottom bar
-            bottomBar
-                .padding(12)
+    private var textBoldBinding: Binding<Bool> {
+        Binding(
+            get: {
+                viewModel.selectedTextBold() ?? viewModel.textIsBold
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedTextBold(newValue) {
+                    viewModel.textIsBold = newValue
+                }
+            }
+        )
+    }
+
+    private var textItalicBinding: Binding<Bool> {
+        Binding(
+            get: {
+                viewModel.selectedTextItalic() ?? viewModel.textIsItalic
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedTextItalic(newValue) {
+                    viewModel.textIsItalic = newValue
+                }
+            }
+        )
+    }
+
+    private var textUnderlineBinding: Binding<Bool> {
+        Binding(
+            get: {
+                viewModel.selectedTextUnderline() ?? viewModel.textIsUnderlined
+            },
+            set: { newValue in
+                if !viewModel.updateSelectedTextUnderline(newValue) {
+                    viewModel.textIsUnderlined = newValue
+                }
+            }
+        )
+    }
+
+    var body: some View {
+        NavigationSplitView(columnVisibility: $splitVisibility) {
+            sidebar
+                .navigationSplitViewColumnWidth(min: 160, ideal: 220, max: 320)
+        } detail: {
+            VStack(spacing: 0) {
+                GeometryReader { geo in
+                    CanvasView(viewModel: viewModel, containerSize: geo.size)
+                }
+                .background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
+                .clipped()
+
+                Divider()
+
+                exportControls
+                    .padding(14)
+                    .background(.regularMaterial)
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .onExitCommand {
+            handleEscape()
+        }
+        .confirmationDialog("Discard changes?", isPresented: $showExitConfirmation, titleVisibility: .visible) {
+            Button("Discard Changes", role: .destructive) {
+                onDone(nil)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You have unsaved changes. Are you sure you want to exit?")
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    viewModel.undo()
+                } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
+                }
+                .disabled(!viewModel.canUndo)
+                .keyboardShortcut("z", modifiers: .command)
+                .help("Undo the last edit.")
+
+                Button {
+                    viewModel.copyToClipboard()
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+                .help("Copy the edited image to the clipboard.")
+
+                Button {
+                    activePopover = .saveOptions
+                } label: {
+                    Label("Save", systemImage: "square.and.arrow.down")
+                }
+                .keyboardShortcut(.defaultAction)
+                .help("Choose export options and save.")
+                .popover(item: $activePopover) { item in
+                    switch item {
+                    case .saveOptions:
+                        saveOptionsPopover
+                    }
+                }
+            }
         }
         .disabled(isSaving)
         .overlay {
@@ -314,82 +573,89 @@ private struct ScreenshotEditorView: View {
         }
     }
 
-    private var toolbar: some View {
-        HStack(spacing: 2) {
+    private var sidebar: some View {
+        List {
+            Section("Tools") {
+                toolGrid
+                    .listRowInsets(EdgeInsets(top: 2, leading: 2, bottom: 4, trailing: 2))
+            }
+
+            if viewModel.showsAnyStyleControls {
+                Section("Style") {
+                    styleControls
+                        .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 4, trailing: 4))
+                }
+            }
+
+            Section {
+                DisclosureGroup(isExpanded: $isBackgroundSectionExpanded) {
+                    backgroundControls
+                        .padding(.top, 8)
+                } label: {
+                    Label("Background", systemImage: "photo.on.rectangle")
+                }
+                .listRowInsets(EdgeInsets(top: 2, leading: 4, bottom: 4, trailing: 4))
+            }
+        }
+        .listStyle(.sidebar)
+    }
+
+    private var toolGrid: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 3), spacing: 4) {
             ForEach(EditTool.allCases, id: \.self) { tool in
                 Button {
                     viewModel.selectedTool = tool
                 } label: {
-                    VStack(spacing: 2) {
+                    VStack(spacing: 1) {
                         Image(systemName: tool.rawValue)
-                            .font(.system(size: 14))
-                            .frame(width: 28, height: 22)
+                            .font(.system(size: 12))
                         Text(tool.label)
-                            .font(.system(size: 9))
+                            .font(.system(size: 8))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
-                    .frame(width: 52, height: 42)
-                    .contentShape(Rectangle())
+                    .frame(maxWidth: .infinity, minHeight: 34)
                     .background(viewModel.selectedTool == tool ? Color.accentColor.opacity(0.2) : Color.clear)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .contentShape(RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("\(tool.label) tool")
                 .accessibilityValue(viewModel.selectedTool == tool ? "Selected" : "Not selected")
-                .help("Use the \(tool.label.lowercased()) tool.")
+            }
+        }
+    }
+
+    private var styleControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let primaryColorLabel {
+                ColorPicker(primaryColorLabel, selection: primaryColorBinding, supportsOpacity: true)
             }
 
-            Spacer()
+            if showsFillColorPicker {
+                ColorPicker("Fill", selection: $viewModel.selectedFillColor, supportsOpacity: true)
+            }
 
-            if let primaryColorLabel {
-                HStack(spacing: 16) {
-                    VStack(spacing: 1) {
-                        ColorPicker("", selection: primaryColorBinding, supportsOpacity: true)
-                            .labelsHidden()
-                            .frame(width: 28)
-                            .accessibilityLabel("\(primaryColorLabel) color")
-                            .accessibilityHint("Adjusts the color used by the selected annotation tool.")
-                            .help("Choose the \(primaryColorLabel.lowercased()) color.")
-                        Text(primaryColorLabel)
-                            .font(.system(size: 8))
-                            .foregroundStyle(.secondary)
-                            .accessibilityHidden(true)
-                    }
+            if showsNumberTextColorPicker {
+                ColorPicker("Text", selection: numberTextColorBinding, supportsOpacity: true)
+            }
 
-                    if showsFillColorPicker {
-                        VStack(spacing: 1) {
-                            ColorPicker("", selection: $viewModel.selectedFillColor, supportsOpacity: true)
-                                .labelsHidden()
-                                .frame(width: 28)
-                                .accessibilityLabel("Fill color")
-                                .accessibilityHint("Selects the fill color for rectangle and circle shapes. Use transparent for no fill.")
-                                .help("Choose the fill color.")
-                            Text("Fill")
-                                .font(.system(size: 8))
-                                .foregroundStyle(.secondary)
-                                .accessibilityHidden(true)
-                        }
-                    }
-
-                    if showsNumberTextColorPicker {
-                        VStack(spacing: 1) {
-                            ColorPicker("", selection: numberTextColorBinding, supportsOpacity: true)
-                                .labelsHidden()
-                                .frame(width: 28)
-                                .accessibilityLabel("Text color")
-                                .accessibilityHint("Sets the numeral color inside the number badge.")
-                                .help("Choose the number text color.")
-                            Text("Text")
-                                .font(.system(size: 8))
-                                .foregroundStyle(.secondary)
-                                .accessibilityHidden(true)
-                        }
+            if viewModel.showsTextStyleControls {
+                Picker("Font", selection: textFontFamilyBinding) {
+                    ForEach(viewModel.availableTextFontFamilies, id: \.self) { family in
+                        Text(family).tag(family)
                     }
                 }
-                .padding(.trailing, 8)
+
+                HStack(spacing: 8) {
+                    TextStyleToggleButton(title: "Bold", systemImage: "bold", isOn: textBoldBinding)
+                    TextStyleToggleButton(title: "Italic", systemImage: "italic", isOn: textItalicBinding)
+                    TextStyleToggleButton(title: "Underline", systemImage: "underline", isOn: textUnderlineBinding)
+                }
             }
 
             if viewModel.showsLineWidthControl {
-                Picker("", selection: $viewModel.lineWidth) {
+                Picker("Stroke", selection: $viewModel.lineWidth) {
                     Text("1 px").tag(CGFloat(1))
                     Text("2 px").tag(CGFloat(2))
                     Text("4 px").tag(CGFloat(4))
@@ -397,15 +663,20 @@ private struct ScreenshotEditorView: View {
                     Text("8 px").tag(CGFloat(8))
                     Text("10 px").tag(CGFloat(10))
                 }
-                .labelsHidden()
-                .frame(width: 96)
-                .accessibilityLabel("Line width")
-                .accessibilityValue("\(Int(viewModel.lineWidth)) pixels")
-                .help("Choose the line width.")
+            }
+
+            if viewModel.showsArrowStyleControl {
+                HStack(spacing: 8) {
+                    ForEach(ArrowStyle.allCases) { style in
+                        ArrowStyleButton(style: style, isSelected: arrowStyleBinding.wrappedValue == style) {
+                            arrowStyleBinding.wrappedValue = style
+                        }
+                    }
+                }
             }
 
             if viewModel.showsNumberSizeControl {
-                Picker("", selection: numberSizeBinding) {
+                Picker("Number size", selection: numberSizeBinding) {
                     Text("20%").tag(CGFloat(0.2))
                     Text("30%").tag(CGFloat(0.3))
                     Text("40%").tag(CGFloat(0.4))
@@ -421,43 +692,115 @@ private struct ScreenshotEditorView: View {
                     Text("175%").tag(CGFloat(1.75))
                     Text("200%").tag(CGFloat(2.0))
                 }
-                .labelsHidden()
-                .frame(width: 96)
-                .accessibilityLabel("Number size")
-                .accessibilityValue("\(Int(numberSizeBinding.wrappedValue * 100)) percent")
-                .help("Choose the number badge size.")
             }
 
             if viewModel.showsRedactionPresetControl {
-                Picker("", selection: blurPresetBinding) {
+                Picker("Redaction", selection: blurPresetBinding) {
                     ForEach(RedactionBlurPreset.allCases) { preset in
                         Text(preset.label).tag(preset)
                     }
                 }
-                .labelsHidden()
-                .frame(width: 110)
-                .accessibilityLabel("Redaction pixelation strength")
-                .accessibilityValue(blurPresetBinding.wrappedValue.label)
-                .help("Choose the redaction pixelation strength.")
+            }
+        }
+    }
+    private var backgroundControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            backgroundPresetSection("Solid", presets: solidBackgroundPresets)
+            backgroundPresetSection("Gradient", presets: gradientBackgroundPresets)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Custom")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ColorPicker("Color", selection: $viewModel.backgroundColor, supportsOpacity: true)
+
+                if viewModel.backgroundStyle == .gradient {
+                    ColorPicker("Color 2", selection: $viewModel.backgroundSecondaryColor, supportsOpacity: true)
+                }
+
+                HStack(spacing: 8) {
+                    Button("Solid") {
+                        viewModel.applyCustomSolidBackground()
+                    }
+                    Button("Gradient") {
+                        viewModel.applyCustomGradientBackground()
+                    }
+                }
             }
 
-            // Undo
-            Button {
-                viewModel.undo()
-            } label: {
-                Image(systemName: "arrow.uturn.backward")
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Wallpaper")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    Button {
+                        viewModel.chooseWallpaperBackground()
+                    } label: {
+                        WallpaperPresetSwatch(image: viewModel.wallpaperImage, isSelected: viewModel.backgroundStyle == .wallpaper)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Choose wallpaper")
+                    .accessibilityLabel("Wallpaper background")
+                    .accessibilityValue(viewModel.backgroundStyle == .wallpaper ? "Selected" : "Not selected")
+
+                    if viewModel.backgroundStyle == .wallpaper {
+                        Button("Remove") {
+                            viewModel.clearWallpaperBackground()
+                        }
+                        .buttonStyle(.link)
+                    }
+                }
             }
-            .disabled(viewModel.annotations.isEmpty)
-            .keyboardShortcut("z", modifiers: .command)
-            .accessibilityLabel("Undo")
-            .accessibilityHint("Removes the last annotation.")
-            .help("Undo the last annotation.")
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Padding: \(Int(viewModel.canvasPadding)) px")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Slider(value: $viewModel.canvasPadding, in: 0...160, step: 2)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Corners: \(Int(viewModel.canvasCornerRadius)) px")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Slider(value: $viewModel.canvasCornerRadius, in: 0...60, step: 1)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Shadow: \(Int(viewModel.canvasShadowRadius))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Slider(value: $viewModel.canvasShadowRadius, in: 0...40, step: 1)
+            }
         }
     }
 
-    private var bottomBar: some View {
-        HStack {
-            // Image info & save options
+    private func backgroundPresetSection(_ title: String, presets: [ExportBackgroundPreset]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(19), spacing: 5), count: 6), spacing: 5) {
+                ForEach(presets) { preset in
+                    Button {
+                        viewModel.applyBackgroundPreset(preset)
+                    } label: {
+                        BackgroundPresetSwatch(preset: preset, isSelected: viewModel.selectedBackgroundPresetID == preset.id)
+                    }
+                    .buttonStyle(.plain)
+                    .help(preset.label)
+                    .accessibilityLabel("\(preset.label) background")
+                    .accessibilityValue(viewModel.selectedBackgroundPresetID == preset.id ? "Selected" : "Not selected")
+                }
+            }
+        }
+    }
+
+    private var exportControls: some View {
+        HStack(spacing: 12) {
             if let img = viewModel.originalImage {
                 let rep = img.representations.first
                 Text("\(Int(rep?.pixelsWide ?? 0)) × \(Int(rep?.pixelsHigh ?? 0))")
@@ -465,15 +808,24 @@ private struct ScreenshotEditorView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Picker("Format:", selection: $viewModel.saveFormat) {
+            Spacer()
+
+            Button("Discard") { onDone(nil) }
+        }
+    }
+
+    private var saveOptionsPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Export")
+                .font(.headline)
+
+            Picker("Format", selection: $viewModel.saveFormat) {
                 ForEach(ImageFormat.allCases, id: \.self) { format in
                     Text(format.label).tag(format)
                 }
             }
-            .frame(width: 140)
-            .help("Choose the file format for saving.")
 
-            Picker("Scale:", selection: $viewModel.saveScale) {
+            Picker("Scale", selection: $viewModel.saveScale) {
                 Text("100%").tag(100)
                 Text("90%").tag(90)
                 Text("80%").tag(80)
@@ -484,41 +836,32 @@ private struct ScreenshotEditorView: View {
                 Text("30%").tag(30)
                 Text("25%").tag(25)
             }
-            .frame(width: 120)
-            .help("Choose the export scale.")
+
+            if let outputResolution = viewModel.outputResolutionText {
+                Text("Output: \(outputResolution)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
 
             if viewModel.saveFormat == .jpeg {
-                Slider(value: $viewModel.saveJpegQuality, in: 0.1...1.0, step: 0.05)
-                    .frame(width: 80)
-                    .accessibilityLabel("JPEG quality")
-                    .help("Adjust JPEG quality.")
-                Text("\(Int(viewModel.saveJpegQuality * 100))%")
-                    .font(.caption)
-                    .monospacedDigit()
-                    .frame(width: 32, alignment: .trailing)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("JPEG quality: \(Int(viewModel.saveJpegQuality * 100))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Slider(value: $viewModel.saveJpegQuality, in: 0.1...1.0, step: 0.05)
+                }
             }
 
-            Spacer()
-
-            Button("Discard") {
-                onDone(nil)
+            HStack {
+                Spacer()
+                Button("Cancel") { activePopover = nil }
+                Button("Save") { saveImage() }
+                    .keyboardShortcut(.defaultAction)
             }
-            .keyboardShortcut(.cancelAction)
-            .help("Close without saving changes.")
-
-            Button {
-                viewModel.copyToClipboard()
-            } label: {
-                Label("Copy", systemImage: "doc.on.doc")
-            }
-            .help("Copy the edited image to the clipboard.")
-
-            Button("Save") {
-                saveImage()
-            }
-            .keyboardShortcut(.defaultAction)
-            .help("Save the edited image.")
         }
+        .frame(width: 260)
+        .padding(14)
     }
 
     private func saveImage() {
@@ -532,6 +875,150 @@ private struct ScreenshotEditorView: View {
                 isSaving = false
             }
         }
+    }
+
+    private func handleEscape() {
+        if viewModel.textEditPosition != nil {
+            viewModel.cancelTextAnnotation()
+            return
+        }
+
+        if viewModel.hasUnsavedChanges {
+            showExitConfirmation = true
+        } else {
+            onDone(nil)
+        }
+    }
+}
+private struct TextStyleToggleButton: View {
+    let title: String
+    let systemImage: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Button {
+            isOn.toggle()
+        } label: {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 30, height: 28)
+                .background(isOn ? Color.accentColor.opacity(0.2) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityValue(isOn ? "On" : "Off")
+        .help(title)
+    }
+}
+
+private struct ArrowStyleButton: View {
+    let style: ArrowStyle
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: iconName)
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 34, height: 30)
+                .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .contentShape(RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(style.label)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .help(style.label)
+    }
+
+    private var iconName: String {
+        switch style {
+        case .straight: return "arrowshape.right"
+        case .curvedLeft: return "arrowshape.turn.up.right"
+        case .curvedRight: return "arrowshape.turn.up.left"
+        }
+    }
+}
+
+private struct BackgroundPresetSwatch: View {
+    let preset: ExportBackgroundPreset
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(fillStyle)
+                .overlay {
+                    if preset.style == .transparent {
+                        Image(systemName: "slash")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .overlay(Circle().stroke(.separator, lineWidth: 1))
+                .frame(width: 15, height: 15)
+
+            if isSelected {
+                Circle()
+                    .stroke(Color.accentColor, lineWidth: 2)
+                    .frame(width: 19, height: 19)
+            }
+        }
+        .frame(width: 19, height: 19)
+    }
+
+    private var fillStyle: AnyShapeStyle {
+        switch preset.style {
+        case .transparent:
+            return AnyShapeStyle(.regularMaterial)
+        case .solid:
+            return AnyShapeStyle(preset.primary)
+        case .gradient:
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [preset.primary, preset.secondary ?? preset.primary],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        case .wallpaper:
+            return AnyShapeStyle(.regularMaterial)
+        }
+    }
+}
+
+private struct WallpaperPresetSwatch: View {
+    let image: NSImage?
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(.regularMaterial)
+                .overlay {
+                    if let image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: "photo")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .clipShape(Circle())
+                .overlay(Circle().stroke(.separator, lineWidth: 1))
+                .frame(width: 20, height: 20)
+
+            if isSelected {
+                Circle()
+                    .stroke(Color.accentColor, lineWidth: 3)
+                    .frame(width: 26, height: 26)
+            }
+        }
+        .frame(width: 28, height: 28)
     }
 }
 
@@ -576,6 +1063,37 @@ private struct CanvasView: View {
             Color(nsColor: .controlBackgroundColor)
 
             if let image = viewModel.originalImage {
+                let backgroundWidth = imageSize.width + (viewModel.canvasPadding * 2)
+                let backgroundHeight = imageSize.height + (viewModel.canvasPadding * 2)
+
+                if viewModel.backgroundStyle == .solid {
+                    RoundedRectangle(cornerRadius: viewModel.canvasCornerRadius)
+                        .fill(viewModel.backgroundColor)
+                        .frame(width: backgroundWidth, height: backgroundHeight)
+                        .shadow(color: .black.opacity(0.25), radius: viewModel.canvasShadowRadius)
+                        .position(x: containerSize.width / 2, y: containerSize.height / 2)
+                } else if viewModel.backgroundStyle == .gradient {
+                    RoundedRectangle(cornerRadius: viewModel.canvasCornerRadius)
+                        .fill(
+                            LinearGradient(
+                                colors: [viewModel.backgroundColor, viewModel.backgroundSecondaryColor],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: backgroundWidth, height: backgroundHeight)
+                        .shadow(color: .black.opacity(0.25), radius: viewModel.canvasShadowRadius)
+                        .position(x: containerSize.width / 2, y: containerSize.height / 2)
+                } else if viewModel.backgroundStyle == .wallpaper, let wallpaperImage = viewModel.wallpaperImage {
+                    Image(nsImage: wallpaperImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: backgroundWidth, height: backgroundHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: viewModel.canvasCornerRadius))
+                        .shadow(color: .black.opacity(0.25), radius: viewModel.canvasShadowRadius)
+                        .position(x: containerSize.width / 2, y: containerSize.height / 2)
+                }
+
                 // Image
                 Image(nsImage: image)
                     .resizable()
@@ -619,7 +1137,9 @@ private struct CanvasView: View {
                 ForEach(viewModel.annotations.filter { $0.tool == .text }) { annotation in
                     let scaledRect = viewModel.scaledRect(annotation.rect, imageSize: imageSize, origin: origin)
                     Text(annotation.text)
-                        .font(.system(size: annotation.fontSize))
+                        .font(textPreviewFont(family: annotation.fontFamily, size: annotation.fontSize, isBold: annotation.isBold))
+                        .italic(annotation.isItalic)
+                        .underline(annotation.isUnderlined)
                         .foregroundColor(annotation.color)
                         .position(x: scaledRect.midX, y: scaledRect.midY)
                         .allowsHitTesting(false)
@@ -634,6 +1154,10 @@ private struct CanvasView: View {
                     InlineTextEditor(
                         text: $viewModel.textEditValue,
                         fontSize: $viewModel.textFontSize,
+                        fontFamily: viewModel.textFontFamily,
+                        isBold: viewModel.textIsBold,
+                        isItalic: viewModel.textIsItalic,
+                        isUnderlined: viewModel.textIsUnderlined,
                         color: viewModel.selectedColor,
                         onCommit: {
                             viewModel.commitTextAnnotation()
@@ -684,17 +1208,20 @@ private struct CanvasView: View {
                 Color.clear
                     .contentShape(Rectangle())
                     .frame(width: imageSize.width, height: imageSize.height)
+                    .allowsHitTesting(viewModel.textEditPosition == nil)
                     .gesture(
                         DragGesture(minimumDistance: 1)
                             .onChanged { value in
                                 let normalizedStart = viewModel.normalizePoint(value.startLocation, imageSize: imageSize)
                                 let normalizedCurrent = viewModel.normalizePoint(value.location, imageSize: imageSize)
-                                viewModel.handleDrag(start: normalizedStart, current: normalizedCurrent)
+                                let isShiftPressed = NSEvent.modifierFlags.contains(.shift)
+                                viewModel.handleDrag(start: normalizedStart, current: normalizedCurrent, isAspectLocked: isShiftPressed)
                             }
                             .onEnded { value in
                                 let normalizedStart = viewModel.normalizePoint(value.startLocation, imageSize: imageSize)
                                 let normalizedEnd = viewModel.normalizePoint(value.location, imageSize: imageSize)
-                                viewModel.handleDragEnd(start: normalizedStart, end: normalizedEnd)
+                                let isShiftPressed = NSEvent.modifierFlags.contains(.shift)
+                                viewModel.handleDragEnd(start: normalizedStart, end: normalizedEnd, isAspectLocked: isShiftPressed)
                             }
                     )
                     .simultaneousGesture(
@@ -752,26 +1279,38 @@ private struct CanvasView: View {
             let linePoints = viewModel.scaledLinePoints(for: annotation, imageSize: imageSize, origin: origin)
             let start = linePoints.start
             let end = linePoints.end
-            let angle = atan2(end.y - start.y, end.x - start.x)
             let headLength = max(18, lineWidth * 4.0)
             let headAngle: CGFloat = .pi / 6
+            let control = arrowControlPoint(start: start, end: end, style: annotation.arrowStyle)
+            let tipAngle: CGFloat
+            switch annotation.arrowStyle {
+            case .straight:
+                tipAngle = atan2(end.y - start.y, end.x - start.x)
+            case .curvedLeft, .curvedRight:
+                tipAngle = atan2(end.y - control.y, end.x - control.x)
+            }
 
             let wing1 = CGPoint(
-                x: end.x - headLength * cos(angle - headAngle),
-                y: end.y - headLength * sin(angle - headAngle)
+                x: end.x - headLength * cos(tipAngle - headAngle),
+                y: end.y - headLength * sin(tipAngle - headAngle)
             )
             let wing2 = CGPoint(
-                x: end.x - headLength * cos(angle + headAngle),
-                y: end.y - headLength * sin(angle + headAngle)
+                x: end.x - headLength * cos(tipAngle + headAngle),
+                y: end.y - headLength * sin(tipAngle + headAngle)
             )
             // Shaft ends at the base of the filled arrowhead
             let shaftEnd = CGPoint(
-                x: end.x - headLength * cos(headAngle) * cos(angle),
-                y: end.y - headLength * cos(headAngle) * sin(angle)
+                x: end.x - headLength * cos(headAngle) * cos(tipAngle),
+                y: end.y - headLength * cos(headAngle) * sin(tipAngle)
             )
             var linePath = Path()
             linePath.move(to: start)
-            linePath.addLine(to: shaftEnd)
+            switch annotation.arrowStyle {
+            case .straight:
+                linePath.addLine(to: shaftEnd)
+            case .curvedLeft, .curvedRight:
+                linePath.addQuadCurve(to: shaftEnd, control: control)
+            }
             context.stroke(linePath, with: .color(color), lineWidth: lineWidth)
 
             // Filled triangular arrowhead
@@ -823,6 +1362,12 @@ private struct CanvasView: View {
         }
     }
 }
+private func textPreviewFont(family: String, size: CGFloat, isBold: Bool) -> Font {
+    if family == textSystemFontFamily {
+        return .system(size: size, weight: isBold ? .bold : .regular)
+    }
+    return .custom(family, size: size).weight(isBold ? .bold : .regular)
+}
 
 // MARK: - ViewModel
 
@@ -848,6 +1393,10 @@ private class EditorViewModel: ObservableObject {
     @Published var textEditPosition: CGPoint? // normalized click position
     @Published var textEditValue: String = ""
     @Published var textFontSize: CGFloat = 16
+    @Published var textFontFamily: String = textSystemFontFamily
+    @Published var textIsBold = false
+    @Published var textIsItalic = false
+    @Published var textIsUnderlined = false
     @Published var selectedAnnotationIndex: Int?
     @Published var saveFormat: ImageFormat
     @Published var saveScale: Int
@@ -857,6 +1406,15 @@ private class EditorViewModel: ObservableObject {
     @Published var numberSizeMultiplier: CGFloat = 1.0
     @Published var numberTextColor: Color = .white
     @Published var redactionBlurPreset: RedactionBlurPreset = .medium
+    @Published var selectedArrowStylePreset: ArrowStyle = .straight
+    @Published var backgroundStyle: ExportBackgroundStyle = .transparent
+    @Published var backgroundColor: Color = Color(red: 0.96, green: 0.96, blue: 0.98)
+    @Published var backgroundSecondaryColor: Color = Color(red: 0.84, green: 0.90, blue: 0.99)
+    @Published var selectedBackgroundPresetID: String = "transparent"
+    @Published var wallpaperImage: NSImage?
+    @Published var canvasPadding: CGFloat = 0
+    @Published var canvasCornerRadius: CGFloat = 0
+    @Published var canvasShadowRadius: CGFloat = 0
 
     private var pencilPoints: [CGPoint] = []
     private var imagePixelSize: CGSize = .zero
@@ -866,6 +1424,15 @@ private class EditorViewModel: ObservableObject {
     private var isDraggingAnnotation = false
     private var isDraggingEndpoint = false // true = dragging arrowhead/line end
     private var isDraggingStartpoint = false // true = dragging arrow tail/line start
+
+    private let initialBackgroundStyle: ExportBackgroundStyle
+    private let initialBackgroundColor: Color
+    private let initialBackgroundSecondaryColor: Color
+    private let initialSelectedBackgroundPresetID: String
+    private let initialWallpaperPresent: Bool
+    private let initialCanvasPadding: CGFloat
+    private let initialCanvasCornerRadius: CGFloat
+    private let initialCanvasShadowRadius: CGFloat
 
     init(url: URL) {
         self.sourceURL = url
@@ -879,6 +1446,15 @@ private class EditorViewModel: ObservableObject {
                 self.imagePixelSize = CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)
             }
         }
+
+        self.initialBackgroundStyle = .transparent
+        self.initialBackgroundColor = Color(red: 0.96, green: 0.96, blue: 0.98)
+        self.initialBackgroundSecondaryColor = Color(red: 0.84, green: 0.90, blue: 0.99)
+        self.initialSelectedBackgroundPresetID = "transparent"
+        self.initialWallpaperPresent = false
+        self.initialCanvasPadding = 0
+        self.initialCanvasCornerRadius = 0
+        self.initialCanvasShadowRadius = 0
     }
 
     // Convert point in overlay-local space to 0..1 normalized coordinate
@@ -940,12 +1516,14 @@ private class EditorViewModel: ObservableObject {
             return .zero
         }
         let imageAspect = image.size.width / image.size.height
-        _ = containerSize.width / containerSize.height
+        let effectivePadding = max(0, canvasPadding)
+        let availableWidth = max(1, containerSize.width - (effectivePadding * 2))
+        let availableHeight = max(1, containerSize.height - (effectivePadding * 2))
 
         // Cap at native pixel dimensions to prevent upscaling blur on Retina
         let screenScale = NSScreen.main?.backingScaleFactor ?? 2.0
-        let maxWidth = min(containerSize.width * 0.95, imagePixelSize.width / screenScale)
-        let maxHeight = min(containerSize.height * 0.95, imagePixelSize.height / screenScale)
+        let maxWidth = min(availableWidth * 0.95, imagePixelSize.width / screenScale)
+        let maxHeight = min(availableHeight * 0.95, imagePixelSize.height / screenScale)
 
         if maxWidth / maxHeight < imageAspect {
             return CGSize(width: maxWidth, height: maxWidth / imageAspect)
@@ -1026,6 +1604,10 @@ private class EditorViewModel: ObservableObject {
         inspectorTool == .blur
     }
 
+    var showsArrowStyleControl: Bool {
+        inspectorTool == .arrow
+    }
+
     var inspectorTool: EditTool {
         if selectedTool == .move,
            let index = selectedAnnotationIndex,
@@ -1035,7 +1617,167 @@ private class EditorViewModel: ObservableObject {
         return selectedTool
     }
 
-    func handleDrag(start: CGPoint, current: CGPoint) {
+    func applyBackgroundPreset(_ preset: ExportBackgroundPreset) {
+        selectedBackgroundPresetID = preset.id
+        backgroundStyle = preset.style
+        backgroundColor = preset.primary
+        if let secondary = preset.secondary {
+            backgroundSecondaryColor = secondary
+        }
+    }
+
+    func applyCustomSolidBackground() {
+        selectedBackgroundPresetID = "custom-solid"
+        backgroundStyle = .solid
+    }
+
+    func applyCustomGradientBackground() {
+        selectedBackgroundPresetID = "custom-gradient"
+        backgroundStyle = .gradient
+    }
+
+    func chooseWallpaperBackground() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+
+        if panel.runModal() == .OK,
+           let url = panel.url,
+           let image = NSImage(contentsOf: url) {
+            wallpaperImage = image
+            selectedBackgroundPresetID = "wallpaper"
+            backgroundStyle = .wallpaper
+        }
+    }
+
+    func clearWallpaperBackground() {
+        wallpaperImage = nil
+        selectedBackgroundPresetID = "transparent"
+        backgroundStyle = .transparent
+    }
+
+    var canUndo: Bool {
+        !annotations.isEmpty || cropRect != nil
+    }
+
+    var hasUnsavedChanges: Bool {
+        if canUndo {
+            return true
+        }
+
+        if backgroundStyle != initialBackgroundStyle {
+            return true
+        }
+
+        if selectedBackgroundPresetID != initialSelectedBackgroundPresetID {
+            return true
+        }
+
+        if (wallpaperImage != nil) != initialWallpaperPresent {
+            return true
+        }
+
+        if !colorsEqual(backgroundColor, initialBackgroundColor) || !colorsEqual(backgroundSecondaryColor, initialBackgroundSecondaryColor) {
+            return true
+        }
+
+        if abs(canvasPadding - initialCanvasPadding) > 0.0001 ||
+            abs(canvasCornerRadius - initialCanvasCornerRadius) > 0.0001 ||
+            abs(canvasShadowRadius - initialCanvasShadowRadius) > 0.0001 {
+            return true
+        }
+
+        return false
+    }
+
+    var showsAnyStyleControls: Bool {
+        primaryStyleControlsVisible || showsLineWidthControl || showsArrowStyleControl || showsNumberSizeControl || showsRedactionPresetControl || showsTextStyleControls
+    }
+
+    var showsTextStyleControls: Bool {
+        inspectorTool == .text
+    }
+
+    private var primaryStyleControlsVisible: Bool {
+        switch inspectorTool {
+        case .rectangle, .circle, .arrow, .line, .pencil, .text, .number:
+            return true
+        case .move, .crop, .blur:
+            return false
+        }
+    }
+
+    var availableTextFontFamilies: [String] {
+        [textSystemFontFamily] + NSFontManager.shared.availableFontFamilies.sorted()
+    }
+
+    func selectedTextFontFamily() -> String? {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return nil }
+        return annotations[index].fontFamily
+    }
+
+    func selectedTextBold() -> Bool? {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return nil }
+        return annotations[index].isBold
+    }
+
+    func selectedTextItalic() -> Bool? {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return nil }
+        return annotations[index].isItalic
+    }
+
+    func selectedTextUnderline() -> Bool? {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return nil }
+        return annotations[index].isUnderlined
+    }
+
+    @discardableResult
+    func updateSelectedTextFontFamily(_ family: String) -> Bool {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return false }
+        annotations[index].fontFamily = family
+        return true
+    }
+
+    @discardableResult
+    func updateSelectedTextBold(_ isBold: Bool) -> Bool {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return false }
+        annotations[index].isBold = isBold
+        return true
+    }
+
+    @discardableResult
+    func updateSelectedTextItalic(_ isItalic: Bool) -> Bool {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return false }
+        annotations[index].isItalic = isItalic
+        return true
+    }
+
+    @discardableResult
+    func updateSelectedTextUnderline(_ isUnderlined: Bool) -> Bool {
+        guard selectedAnnotationIsText, let index = selectedAnnotationIndex else { return false }
+        annotations[index].isUnderlined = isUnderlined
+        return true
+    }
+
+    func selectedArrowStyle() -> ArrowStyle? {
+        guard let index = selectedAnnotationIndex, annotations.indices.contains(index), annotations[index].tool == .arrow else {
+            return nil
+        }
+        return annotations[index].arrowStyle
+    }
+
+    @discardableResult
+    func updateSelectedArrowStyle(_ style: ArrowStyle) -> Bool {
+        guard let index = selectedAnnotationIndex, annotations.indices.contains(index), annotations[index].tool == .arrow else {
+            return false
+        }
+        annotations[index].arrowStyle = style
+        return true
+    }
+
+    func handleDrag(start: CGPoint, current: CGPoint, isAspectLocked: Bool = false) {
         switch selectedTool {
         case .move:
             if !isDraggingAnnotation && !isDraggingEndpoint && !isDraggingStartpoint {
@@ -1122,7 +1864,7 @@ private class EditorViewModel: ObservableObject {
             break // text/number use click, not drag
 
         default:
-            let rect = makeRect(from: start, to: current)
+            let rect = makeRect(from: start, to: current, isAspectLocked: isAspectLocked)
             currentAnnotation = Annotation(
                 tool: selectedTool,
                 rect: rect,
@@ -1132,12 +1874,13 @@ private class EditorViewModel: ObservableObject {
                 lineWidth: lineWidth,
                 text: "",
                 points: (selectedTool == .arrow || selectedTool == .line) ? [start, current] : [],
-                redactionBlurPreset: redactionBlurPreset
+                redactionBlurPreset: redactionBlurPreset,
+                arrowStyle: selectedArrowStylePreset
             )
         }
     }
 
-    func handleDragEnd(start: CGPoint, end: CGPoint) {
+    func handleDragEnd(start: CGPoint, end: CGPoint, isAspectLocked: Bool = false) {
         switch selectedTool {
         case .move:
             isDraggingAnnotation = false
@@ -1165,7 +1908,7 @@ private class EditorViewModel: ObservableObject {
             break // handled by SpatialTapGesture
 
         default:
-            let rect = makeRect(from: start, to: end)
+            let rect = makeRect(from: start, to: end, isAspectLocked: isAspectLocked)
             let w = abs(rect.width)
             let h = abs(rect.height)
             if w > 0.005 || h > 0.005 {
@@ -1178,7 +1921,8 @@ private class EditorViewModel: ObservableObject {
                     lineWidth: lineWidth,
                     text: "",
                     points: (selectedTool == .arrow || selectedTool == .line) ? [start, end] : [],
-                    redactionBlurPreset: redactionBlurPreset
+                    redactionBlurPreset: redactionBlurPreset,
+                    arrowStyle: selectedArrowStylePreset
                 ))
             }
             currentAnnotation = nil
@@ -1242,6 +1986,16 @@ private class EditorViewModel: ObservableObject {
         }
     }
 
+    var outputResolutionText: String? {
+        let size = exportBasePixelSize()
+        guard size.width > 0, size.height > 0 else { return nil }
+
+        let scale = CGFloat(saveScale) / 100.0
+        let outputWidth = max(1, Int((size.width * scale).rounded()))
+        let outputHeight = max(1, Int((size.height * scale).rounded()))
+        return "\(outputWidth) × \(outputHeight) px"
+    }
+
     private func buildOutputImage() -> (image: NSImage, data: Data)? {
         guard let renderedBitmap = renderFinalImage() else { return nil }
 
@@ -1294,6 +2048,28 @@ private class EditorViewModel: ObservableObject {
 
     // MARK: - Private
 
+    private func exportBasePixelSize() -> CGSize {
+        guard imagePixelSize.width > 0, imagePixelSize.height > 0 else { return .zero }
+
+        let cropPixelRect: CGRect
+        if let crop = cropRect {
+            cropPixelRect = CGRect(
+                x: crop.origin.x * imagePixelSize.width,
+                y: crop.origin.y * imagePixelSize.height,
+                width: crop.width * imagePixelSize.width,
+                height: crop.height * imagePixelSize.height
+            )
+        } else {
+            cropPixelRect = CGRect(origin: .zero, size: imagePixelSize)
+        }
+
+        let exportPadding = max(0, Int(canvasPadding))
+        return CGSize(
+            width: Int(cropPixelRect.width) + (exportPadding * 2),
+            height: Int(cropPixelRect.height) + (exportPadding * 2)
+        )
+    }
+
     private func originalLinePoints() -> LinePoints {
         if dragOriginalPoints.count >= 2 {
             return (dragOriginalPoints[0], dragOriginalPoints[1])
@@ -1317,11 +2093,30 @@ private class EditorViewModel: ObservableObject {
         return hypot(point.x - proj.x, point.y - proj.y)
     }
 
-    private func makeRect(from start: CGPoint, to end: CGPoint) -> CGRect {
+    private func makeRect(from start: CGPoint, to end: CGPoint, isAspectLocked: Bool = false) -> CGRect {
         // Arrow/line store start in origin and end in maxX/maxY (can be negative width/height)
         if selectedTool == .arrow || selectedTool == .line {
             return CGRect(x: start.x, y: start.y, width: end.x - start.x, height: end.y - start.y)
         }
+
+        if isAspectLocked && (selectedTool == .rectangle || selectedTool == .circle) {
+            let dx = end.x - start.x
+            let dy = end.y - start.y
+            let pixelWidth = max(1.0, imagePixelSize.width)
+            let pixelHeight = max(1.0, imagePixelSize.height)
+            let side = max(abs(dx * pixelWidth), abs(dy * pixelHeight))
+            let constrainedEnd = CGPoint(
+                x: start.x + ((dx >= 0 ? side : -side) / pixelWidth),
+                y: start.y + ((dy >= 0 ? side : -side) / pixelHeight)
+            )
+            return CGRect(
+                x: min(start.x, constrainedEnd.x),
+                y: min(start.y, constrainedEnd.y),
+                width: abs(constrainedEnd.x - start.x),
+                height: abs(constrainedEnd.y - start.y)
+            )
+        }
+
         return CGRect(
             x: min(start.x, end.x),
             y: min(start.y, end.y),
@@ -1348,7 +2143,12 @@ private class EditorViewModel: ObservableObject {
             text: textEditValue,
             points: [],
             fontSize: textFontSize,
-            redactionBlurPreset: redactionBlurPreset
+            fontFamily: textFontFamily,
+            isBold: textIsBold,
+            isItalic: textIsItalic,
+            isUnderlined: textIsUnderlined,
+            redactionBlurPreset: redactionBlurPreset,
+            arrowStyle: selectedArrowStylePreset
         ))
         textEditPosition = nil
         textEditValue = ""
@@ -1380,7 +2180,8 @@ private class EditorViewModel: ObservableObject {
             lineWidth: lineWidth,
             text: "\(nextNumberLabel)",
             points: [],
-            redactionBlurPreset: redactionBlurPreset
+            redactionBlurPreset: redactionBlurPreset,
+            arrowStyle: selectedArrowStylePreset
         ))
         nextNumberLabel += 1
     }
@@ -1483,8 +2284,9 @@ private class EditorViewModel: ObservableObject {
             cropPixelRect = CGRect(origin: .zero, size: imagePixelSize)
         }
 
-        let outputW = Int(cropPixelRect.width)
-        let outputH = Int(cropPixelRect.height)
+        let exportPadding = max(0, Int(canvasPadding))
+        let outputW = Int(cropPixelRect.width) + (exportPadding * 2)
+        let outputH = Int(cropPixelRect.height) + (exportPadding * 2)
         guard outputW > 0 && outputH > 0 else { return nil }
 
         guard let result = NSBitmapImageRep(
@@ -1508,8 +2310,40 @@ private class EditorViewModel: ObservableObject {
         NSGraphicsContext.current = nsContext
         defer { NSGraphicsContext.restoreGraphicsState() }
 
+        if backgroundStyle != .transparent {
+            let fullRect = CGRect(x: 0, y: 0, width: outputW, height: outputH)
+            if backgroundStyle == .solid {
+                context.setFillColor(NSColor(backgroundColor).cgColor)
+                if canvasCornerRadius > 0 {
+                    let bgPath = CGPath(roundedRect: fullRect, cornerWidth: canvasCornerRadius, cornerHeight: canvasCornerRadius, transform: nil)
+                    context.addPath(bgPath)
+                    context.fillPath()
+                } else {
+                    context.fill(fullRect)
+                }
+            } else if backgroundStyle == .gradient {
+                let colors = [NSColor(backgroundColor).cgColor, NSColor(backgroundSecondaryColor).cgColor] as CFArray
+                let colorSpace = CGColorSpaceCreateDeviceRGB()
+                if let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: [0, 1]) {
+                    if canvasCornerRadius > 0 {
+                        let bgPath = CGPath(roundedRect: fullRect, cornerWidth: canvasCornerRadius, cornerHeight: canvasCornerRadius, transform: nil)
+                        context.saveGState()
+                        context.addPath(bgPath)
+                        context.clip()
+                        context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: outputH), end: CGPoint(x: outputW, y: 0), options: [])
+                        context.restoreGState()
+                    } else {
+                        context.drawLinearGradient(gradient, start: CGPoint(x: 0, y: outputH), end: CGPoint(x: outputW, y: 0), options: [])
+                    }
+                }
+            } else if backgroundStyle == .wallpaper,
+                      let wallpaperImage,
+                      let wallpaperCGImage = wallpaperImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                drawWallpaper(wallpaperCGImage, in: fullRect, context: context)
+            }
+        }
+
         // Draw the original image (cropped)
-        let drawRect = CGRect(x: 0, y: 0, width: outputW, height: outputH)
         let sourceCGImage = original.cgImage(forProposedRect: nil, context: nil, hints: nil)
         if let cgImage = sourceCGImage {
             let cropCGRect = CGRect(
@@ -1519,23 +2353,38 @@ private class EditorViewModel: ObservableObject {
                 height: cropPixelRect.height
             )
             if let croppedCG = cgImage.cropping(to: cropCGRect) {
-                context.draw(croppedCG, in: drawRect)
+                let imageRect = CGRect(
+                    x: exportPadding,
+                    y: exportPadding,
+                    width: Int(cropPixelRect.width),
+                    height: Int(cropPixelRect.height)
+                )
+                context.draw(croppedCG, in: imageRect)
             }
         }
 
         // Draw annotations
         for annotation in annotations {
-            drawAnnotationCG(annotation, in: context, cropOrigin: cropPixelRect.origin, outputSize: CGSize(width: outputW, height: outputH), fullSize: imagePixelSize, sourceCGImage: sourceCGImage)
+            drawAnnotationCG(
+                annotation,
+                in: context,
+                cropOrigin: cropPixelRect.origin,
+                outputSize: CGSize(width: outputW, height: outputH),
+                fullSize: imagePixelSize,
+                contentOffset: CGPoint(x: exportPadding, y: exportPadding),
+                sourceCGImage: sourceCGImage
+            )
         }
 
         return result
     }
 
-    private func drawAnnotationCG(_ annotation: Annotation, in ctx: CGContext, cropOrigin: CGPoint, outputSize: CGSize, fullSize: CGSize, sourceCGImage: CGImage? = nil) {
+    private func drawAnnotationCG(_ annotation: Annotation, in ctx: CGContext, cropOrigin: CGPoint, outputSize: CGSize, fullSize: CGSize, contentOffset: CGPoint, sourceCGImage: CGImage? = nil) {
+        let imageOutputHeight = outputSize.height - (contentOffset.y * 2)
         // Convert normalized rect to pixel coords relative to crop
         let pixelRect = CGRect(
-            x: (annotation.rect.origin.x * fullSize.width) - cropOrigin.x,
-            y: outputSize.height - ((annotation.rect.origin.y * fullSize.height) - cropOrigin.y + annotation.rect.height * fullSize.height), // flip Y
+            x: (annotation.rect.origin.x * fullSize.width) - cropOrigin.x + contentOffset.x,
+            y: imageOutputHeight - ((annotation.rect.origin.y * fullSize.height) - cropOrigin.y + annotation.rect.height * fullSize.height) + contentOffset.y, // flip Y
             width: annotation.rect.width * fullSize.width,
             height: annotation.rect.height * fullSize.height
         )
@@ -1566,32 +2415,44 @@ private class EditorViewModel: ObservableObject {
         case .arrow:
             let line = linePoints(for: annotation)
             let start = CGPoint(
-                x: (line.start.x * fullSize.width) - cropOrigin.x,
-                y: outputSize.height - ((line.start.y * fullSize.height) - cropOrigin.y)
+                x: (line.start.x * fullSize.width) - cropOrigin.x + contentOffset.x,
+                y: imageOutputHeight - ((line.start.y * fullSize.height) - cropOrigin.y) + contentOffset.y
             )
             let end = CGPoint(
-                x: (line.end.x * fullSize.width) - cropOrigin.x,
-                y: outputSize.height - ((line.end.y * fullSize.height) - cropOrigin.y)
+                x: (line.end.x * fullSize.width) - cropOrigin.x + contentOffset.x,
+                y: imageOutputHeight - ((line.end.y * fullSize.height) - cropOrigin.y) + contentOffset.y
             )
-            let angle = atan2(end.y - start.y, end.x - start.x)
             let headLength = max(26, strokeWidth * 5.0)
             let headAngle: CGFloat = .pi / 6
+            let control = arrowControlPoint(start: start, end: end, style: annotation.arrowStyle)
+            let tipAngle: CGFloat
+            switch annotation.arrowStyle {
+            case .straight:
+                tipAngle = atan2(end.y - start.y, end.x - start.x)
+            case .curvedLeft, .curvedRight:
+                tipAngle = atan2(end.y - control.y, end.x - control.x)
+            }
 
             let wing1 = CGPoint(
-                x: end.x - headLength * cos(angle - headAngle),
-                y: end.y - headLength * sin(angle - headAngle)
+                x: end.x - headLength * cos(tipAngle - headAngle),
+                y: end.y - headLength * sin(tipAngle - headAngle)
             )
             let wing2 = CGPoint(
-                x: end.x - headLength * cos(angle + headAngle),
-                y: end.y - headLength * sin(angle + headAngle)
+                x: end.x - headLength * cos(tipAngle + headAngle),
+                y: end.y - headLength * sin(tipAngle + headAngle)
             )
             // Shaft ends at the base of the filled arrowhead
             let shaftEnd = CGPoint(
-                x: end.x - headLength * cos(headAngle) * cos(angle),
-                y: end.y - headLength * cos(headAngle) * sin(angle)
+                x: end.x - headLength * cos(headAngle) * cos(tipAngle),
+                y: end.y - headLength * cos(headAngle) * sin(tipAngle)
             )
             ctx.move(to: start)
-            ctx.addLine(to: shaftEnd)
+            switch annotation.arrowStyle {
+            case .straight:
+                ctx.addLine(to: shaftEnd)
+            case .curvedLeft, .curvedRight:
+                ctx.addQuadCurve(to: shaftEnd, control: control)
+            }
             ctx.strokePath()
 
             // Filled triangular arrowhead
@@ -1605,12 +2466,12 @@ private class EditorViewModel: ObservableObject {
         case .line:
             let line = linePoints(for: annotation)
             let start = CGPoint(
-                x: (line.start.x * fullSize.width) - cropOrigin.x,
-                y: outputSize.height - ((line.start.y * fullSize.height) - cropOrigin.y)
+                x: (line.start.x * fullSize.width) - cropOrigin.x + contentOffset.x,
+                y: imageOutputHeight - ((line.start.y * fullSize.height) - cropOrigin.y) + contentOffset.y
             )
             let end = CGPoint(
-                x: (line.end.x * fullSize.width) - cropOrigin.x,
-                y: outputSize.height - ((line.end.y * fullSize.height) - cropOrigin.y)
+                x: (line.end.x * fullSize.width) - cropOrigin.x + contentOffset.x,
+                y: imageOutputHeight - ((line.end.y * fullSize.height) - cropOrigin.y) + contentOffset.y
             )
             ctx.move(to: start)
             ctx.addLine(to: end)
@@ -1620,8 +2481,8 @@ private class EditorViewModel: ObservableObject {
             if annotation.points.count > 1 {
                 let scaledPoints = annotation.points.map { pt in
                     CGPoint(
-                        x: (pt.x * fullSize.width) - cropOrigin.x,
-                        y: outputSize.height - ((pt.y * fullSize.height) - cropOrigin.y)
+                        x: (pt.x * fullSize.width) - cropOrigin.x + contentOffset.x,
+                        y: imageOutputHeight - ((pt.y * fullSize.height) - cropOrigin.y) + contentOffset.y
                     )
                 }
                 ctx.move(to: scaledPoints[0])
@@ -1665,9 +2526,16 @@ private class EditorViewModel: ObservableObject {
         case .text:
             let str = annotation.text as NSString
             let fontSize = annotation.fontSize * (fullSize.width / 800.0) // scale to pixel density
+            let font = exportTextFont(
+                family: annotation.fontFamily,
+                size: fontSize,
+                isBold: annotation.isBold,
+                isItalic: annotation.isItalic
+            )
             let attrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: fontSize),
+                .font: font,
                 .foregroundColor: nsColor,
+                .underlineStyle: annotation.isUnderlined ? NSUnderlineStyle.single.rawValue : 0,
             ]
             // NSGraphicsContext.current is set to the unflipped bitmap context,
             // so NSString.draw uses CG (bottom-left) coordinates directly.
@@ -1687,6 +2555,53 @@ private class EditorViewModel: ObservableObject {
     private func exportStrokeWidth(baseWidth: CGFloat, outputWidth: CGFloat) -> CGFloat {
         let widthScale = max(1.0, outputWidth / 900.0)
         return baseWidth * widthScale
+    }
+
+    private func exportTextFont(family: String, size: CGFloat, isBold: Bool, isItalic: Bool) -> NSFont {
+        if family == textSystemFontFamily {
+            let weight: NSFont.Weight = isBold ? .bold : .regular
+            let baseFont = NSFont.systemFont(ofSize: size, weight: weight)
+            guard isItalic else { return baseFont }
+            return NSFontManager.shared.convert(baseFont, toHaveTrait: .italicFontMask)
+        }
+
+        let traits: NSFontTraitMask = isItalic ? .italicFontMask : []
+        let weight = isBold ? 9 : 5
+        return NSFontManager.shared.font(withFamily: family, traits: traits, weight: weight, size: size)
+            ?? NSFont(name: family, size: size)
+            ?? NSFont.systemFont(ofSize: size, weight: isBold ? .bold : .regular)
+    }
+
+    private func drawWallpaper(_ image: CGImage, in rect: CGRect, context: CGContext) {
+        let imageSize = CGSize(width: image.width, height: image.height)
+        guard imageSize.width > 0, imageSize.height > 0, rect.width > 0, rect.height > 0 else { return }
+
+        let scale = max(rect.width / imageSize.width, rect.height / imageSize.height)
+        let drawSize = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+        let drawRect = CGRect(
+            x: rect.midX - drawSize.width / 2,
+            y: rect.midY - drawSize.height / 2,
+            width: drawSize.width,
+            height: drawSize.height
+        )
+
+        context.saveGState()
+        if canvasCornerRadius > 0 {
+            let path = CGPath(roundedRect: rect, cornerWidth: canvasCornerRadius, cornerHeight: canvasCornerRadius, transform: nil)
+            context.addPath(path)
+            context.clip()
+        } else {
+            context.clip(to: rect)
+        }
+        context.draw(image, in: drawRect)
+        context.restoreGState()
+    }
+
+    private var selectedAnnotationIsText: Bool {
+        guard let index = selectedAnnotationIndex, annotations.indices.contains(index) else {
+            return false
+        }
+        return annotations[index].tool == .text
     }
 
     private var selectedAnnotationIsNumber: Bool {
@@ -1710,6 +2625,29 @@ private class EditorViewModel: ObservableObject {
     private func currentNumberSidePixels() -> CGFloat {
         max(numberCircleMinimumDisplayPixels, baseNumberSidePixels() * numberSizeMultiplier)
     }
+
+    private func colorsEqual(_ lhs: Color, _ rhs: Color) -> Bool {
+        guard let left = NSColor(lhs).usingColorSpace(.deviceRGB),
+              let right = NSColor(rhs).usingColorSpace(.deviceRGB) else {
+            return false
+        }
+
+        var lr: CGFloat = 0
+        var lg: CGFloat = 0
+        var lb: CGFloat = 0
+        var la: CGFloat = 0
+        var rr: CGFloat = 0
+        var rg: CGFloat = 0
+        var rb: CGFloat = 0
+        var ra: CGFloat = 0
+        left.getRed(&lr, green: &lg, blue: &lb, alpha: &la)
+        right.getRed(&rr, green: &rg, blue: &rb, alpha: &ra)
+
+        return abs(lr - rr) < 0.0001 &&
+            abs(lg - rg) < 0.0001 &&
+            abs(lb - rb) < 0.0001 &&
+            abs(la - ra) < 0.0001
+    }
 }
 
 // MARK: - Inline Text Editor
@@ -1717,6 +2655,10 @@ private class EditorViewModel: ObservableObject {
 private struct InlineTextEditor: View {
     @Binding var text: String
     @Binding var fontSize: CGFloat
+    let fontFamily: String
+    let isBold: Bool
+    let isItalic: Bool
+    let isUnderlined: Bool
     let color: Color
     let onCommit: () -> Void
     let onCancel: () -> Void
@@ -1727,7 +2669,9 @@ private struct InlineTextEditor: View {
         VStack(spacing: 4) {
             TextField("Type text…", text: $text)
                 .textFieldStyle(.plain)
-                .font(.system(size: fontSize, weight: .medium))
+                .font(textPreviewFont(family: fontFamily, size: fontSize, isBold: isBold))
+                .italic(isItalic)
+                .underline(isUnderlined)
                 .foregroundColor(color)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)

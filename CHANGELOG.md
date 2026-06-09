@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Improved
+- Redesigned the screenshot editor with a left flyout for tools, style/background controls, and export actions; added configurable canvas padding/background options and curved arrow styles.
 ### Added
 - "Captured on Tiny Clips" branding overlay: a global setting (off by default) that burns a semi-transparent watermark into the bottom-right corner of screenshots, video recordings, and GIFs.
 - Recommendation link for installing ClickLight was added to mouse click settings for enhanced click animation visuals.
