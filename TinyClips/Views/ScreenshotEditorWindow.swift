@@ -811,7 +811,6 @@ private struct ScreenshotEditorView: View {
             Spacer()
 
             Button("Discard") { onDone(nil) }
-                .keyboardShortcut(.cancelAction)
         }
     }
 
