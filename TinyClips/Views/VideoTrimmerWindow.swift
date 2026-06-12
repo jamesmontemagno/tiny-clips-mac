@@ -229,7 +229,7 @@ private struct VideoTrimmerView: View {
                     Button("Save Trimmed", systemImage: "scissors") {
                         viewModel.exportTrimmed { resultURL in
                             guard let resultURL else { return }
-                            onDone(resultURL)
+                            DispatchQueue.main.async { onDone(resultURL) }
                         }
                     }
                     .help("Export only the selected trimmed segment.")

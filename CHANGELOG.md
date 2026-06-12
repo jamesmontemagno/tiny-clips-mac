@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Start recording panel now falls back to the system default microphone when the previously selected device is no longer connected, and clears the stale saved selection.
+- Video trimmer "Save Without Trimming" and "Save Trimmed" actions now route through `CaptureManager`'s completion callback, ensuring consistent post-save handling (notifications, Finder reveal, uploads). The trimmed export callback is dispatched on the main queue for AppKit safety.
+- GIF trimmer "Save Trimmed" now routes through `CaptureManager`'s completion callback instead of calling `SaveService` directly, preventing duplicate save notifications/uploads when the GIF was already saved immediately.
 
 ## v1.4.0.3 - 2026-05-27
 
