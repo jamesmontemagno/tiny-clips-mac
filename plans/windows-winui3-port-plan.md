@@ -144,6 +144,15 @@ conversion (BT.709 matrix, color range, SDR metadata); HW encoder availability +
 synthetic silence; H.264 profile/level/bitrate/GOP; **100 ns timestamp units**; PTS from frame `SystemRelativeTime`
 with explicit pace/drop/duplicate policy for requested fps (never frame-index × interval).
 
+> **Phase-0 spike outcome (`windows/spikes/MediaFoundationEncoderSpike`):** HW-accelerated H.264 + AAC →
+> valid, ffprobe-verified MP4 confirmed end-to-end. The spike proved the **high-level WinRT path**
+> (`MediaTranscoder` + `MediaStreamSource`, BGRA in → internal NV12, `HardwareAccelerationEnabled=true`) is by
+> far the simplest viable encoder and is the recommended **default**. **Caveat / still to validate:**
+> `MediaTranscoder` is a single-shot/finite transcode primitive — for an **unbounded recorder with pause/resume**
+> we must validate a live, open-ended `MediaStreamSource` (signal-stop semantics) and keep **`IMFSinkWriter` +
+> `IMFDXGIDeviceManager` (zero-copy D3D11/NV12) as the fallback** if the live transcoder path stalls or can't
+> pause. Vortice's MediaFoundation surface was too incomplete; use WinRT or raw P/Invoke, not Vortice, for the encoder.
+
 ### 5.2 Coordinate / DPI model
 Canonical space = **capture-frame pixels**. One borderless topmost overlay **per monitor**, sized in physical
 pixels, rendered in DIPs. Conversions via `GetDpiForMonitor` / `MonitorFromPoint` / virtual-screen bounds.
@@ -206,6 +215,16 @@ from toast / startup / protocol; survive Explorer restart (re-add tray icon).
   2. **WGC self-exclusion** + hide-windows fallback (§5.5).
   3. **Region overlay** multi-monitor / DPI / golden-frame crop (§5.2–5.3).
   4. **WGC capability matrix** — compile-time SDK target + runtime `ApiInformation` + per-capability fallback + packaged-vs-unpackaged behavior.
+
+> **Phase-0 spike outcome (`windows/spikes/ScreenCaptureSpike`):** Monitor enumeration (physical-pixel bounds,
+> negative-X secondary, per-monitor `GetDpiForMonitor`), runtime capability probing, and D3D11↔WGC interop
+> (`CreateDirect3D11DeviceFromDXGIDevice` via Vortice.Direct3D11) all validated. Capability probing pattern works
+> and must be **runtime per-capability** (`IsCursorCaptureEnabled`/`IsBorderRequired` present; `DirtyRegionMode`
+> 22H2+, `TryExcludeWindowAsync` 24H2+ → use hide-windows + `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` +
+> drop-pre-roll fallback). Region crop implemented via staging-texture `CopyResource` + `Map`, honoring **`RowPitch`**
+> (not width×4). Frame timing model = monotonic `frame.SystemRelativeTime` as PTS. **Still to validate on an
+> interactive desktop:** live `CreateForMonitor` capture (headless agent could not exercise DWM — `CreateForMonitor`
+> threw "invalid cast", attributed to no compositor; must re-run on a real session before Phase 1 capture work).
 - **Early dummy Store submission rehearsal** (Partner Center validation, restricted-capability review, privacy policy, age rating, **durable add-on product IDs**, sandbox purchase/restore, offline entitlement cache, no-op Pro gates).
 - CI tiers: build/test/package on CI; **WACK in CI early**.
 
