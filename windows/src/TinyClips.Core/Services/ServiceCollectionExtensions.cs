@@ -12,6 +12,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IFileSystem, FileSystem>();
         services.AddSingleton<IFileNameService, FileNameService>();
         services.AddSingleton<IClipStorageService, ClipStorageService>();
+        services.AddSingleton<IHotKeyService, HotKeyService>();
         return services;
     }
 }

@@ -439,37 +439,37 @@ public sealed class CaptureSettings : ICaptureSettings
 
     public int ScreenshotHotKeyCode
     {
-        get => _settings.Get("screenshotHotKeyCode", 0);
+        get => _settings.Get("screenshotHotKeyCode", 53);
         set => _settings.Set("screenshotHotKeyCode", value);
     }
 
     public int ScreenshotHotKeyModifiers
     {
-        get => _settings.Get("screenshotHotKeyModifiers", 0);
+        get => _settings.Get("screenshotHotKeyModifiers", 6);
         set => _settings.Set("screenshotHotKeyModifiers", value);
     }
 
     public int VideoHotKeyCode
     {
-        get => _settings.Get("videoHotKeyCode", 0);
+        get => _settings.Get("videoHotKeyCode", 54);
         set => _settings.Set("videoHotKeyCode", value);
     }
 
     public int VideoHotKeyModifiers
     {
-        get => _settings.Get("videoHotKeyModifiers", 0);
+        get => _settings.Get("videoHotKeyModifiers", 6);
         set => _settings.Set("videoHotKeyModifiers", value);
     }
 
     public int GifHotKeyCode
     {
-        get => _settings.Get("gifHotKeyCode", 0);
+        get => _settings.Get("gifHotKeyCode", 55);
         set => _settings.Set("gifHotKeyCode", value);
     }
 
     public int GifHotKeyModifiers
     {
-        get => _settings.Get("gifHotKeyModifiers", 0);
+        get => _settings.Get("gifHotKeyModifiers", 6);
         set => _settings.Set("gifHotKeyModifiers", value);
     }
 
@@ -610,11 +610,11 @@ public sealed class CaptureSettings : ICaptureSettings
         ShowRegionIndicator = true;
         IncludeTinyClipsInCapture = false;
         ShowBrandingOverlay = false;
-        ScreenshotHotKeyCode = 0;
-        ScreenshotHotKeyModifiers = 0;
-        VideoHotKeyCode = 0;
-        VideoHotKeyModifiers = 0;
-        GifHotKeyCode = 0;
-        GifHotKeyModifiers = 0;
+        ScreenshotHotKeyCode = 53;
+        ScreenshotHotKeyModifiers = 6;
+        VideoHotKeyCode = 54;
+        VideoHotKeyModifiers = 6;
+        GifHotKeyCode = 55;
+        GifHotKeyModifiers = 6;
     }
 }
