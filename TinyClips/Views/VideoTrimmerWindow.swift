@@ -222,14 +222,14 @@ private struct VideoTrimmerView: View {
                     Divider()
 
                     Button("Save Without Trimming", systemImage: "film") {
-                        SaveService.shared.handleSavedFile(url: videoURL, type: .video)
+                        onDone(videoURL)
                     }
                     .help("Save the original video without trimming.")
 
                     Button("Save Trimmed", systemImage: "scissors") {
                         viewModel.exportTrimmed { resultURL in
                             guard let resultURL else { return }
-                            SaveService.shared.handleSavedFile(url: resultURL, type: .video)
+                            DispatchQueue.main.async { onDone(resultURL) }
                         }
                     }
                     .help("Export only the selected trimmed segment.")

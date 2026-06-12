@@ -275,7 +275,7 @@ private struct GifTrimmerView: View {
         DispatchQueue.main.async {
             if let url = viewModel.exportGif(to: destinationURL, trimmed: true) {
                 isSaving = false
-                SaveService.shared.handleSavedFile(url: url, type: .gif)
+                onDone(url)
             } else {
                 isSaving = false
             }
