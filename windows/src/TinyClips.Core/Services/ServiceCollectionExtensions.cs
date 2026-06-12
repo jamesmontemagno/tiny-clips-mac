@@ -9,6 +9,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<ICaptureSettings, CaptureSettings>();
         services.AddSingleton<IEntitlementService, FreeEntitlementService>();
+        services.AddSingleton<IFileSystem, FileSystem>();
+        services.AddSingleton<IFileNameService, FileNameService>();
+        services.AddSingleton<IClipStorageService, ClipStorageService>();
         return services;
     }
 }
