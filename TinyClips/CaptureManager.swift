@@ -683,7 +683,7 @@ class CaptureManager: ObservableObject {
                     }
 
                     updateProcessingProgress(1.0, status: "Done")
-                    showGifTrimmer(gifData: gifData, outputURL: url, saveImmediately: shouldSaveImmediately)
+                    showGifTrimmer(gifData: gifData, outputURL: url)
                 } else {
                     try await writer.stop(outputURL: url)
                     updateProcessingProgress(0.5, status: "Applying overlays…")
@@ -865,13 +865,11 @@ class CaptureManager: ObservableObject {
         }
     }
 
-    private func showGifTrimmer(gifData: GifCaptureData, outputURL: URL, saveImmediately: Bool) {
+    private func showGifTrimmer(gifData: GifCaptureData, outputURL: URL) {
         let window = GifTrimmerWindow(gifData: gifData, outputURL: outputURL) { [weak self] resultURL in
             guard let self else { return }
             if let resultURL {
-                if !saveImmediately {
-                    SaveService.shared.handleSavedFile(url: resultURL, type: .gif)
-                }
+                SaveService.shared.handleSavedFile(url: resultURL, type: .gif)
             }
             DispatchQueue.main.async {
                 self.gifTrimmerWindow = nil
