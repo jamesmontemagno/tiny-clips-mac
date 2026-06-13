@@ -28,6 +28,13 @@
                 VerticalAlignment="Center"
                 Style="{StaticResource CaptionTextBlockStyle}"
                 Text="Edit screenshot" />
+            <TextBlock
+                x:Name="ImageSizeText"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                AutomationProperties.AutomationId="EditorImageSizeText"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}" />
         </Grid>
 
         <!--  Output actions  -->

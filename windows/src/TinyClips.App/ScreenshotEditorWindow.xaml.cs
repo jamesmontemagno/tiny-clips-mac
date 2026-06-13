@@ -332,6 +332,8 @@ public sealed partial class ScreenshotEditorWindow : Window
         await source.SetBitmapAsync(bitmap);
         PreviewImage.Source = source;
 
+        ImageSizeText.Text = $"{bitmap.PixelWidth} × {bitmap.PixelHeight} px";
+
         ClearSelection();
         LayoutCanvas();
     }
