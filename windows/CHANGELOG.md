@@ -6,6 +6,13 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Added
+- **Screenshot editor annotations** — parity with the macOS editor: rectangle, ellipse, arrow,
+  line, freehand draw, text, numbered badges, and pixelated redaction, on top of the existing
+  crop. Each annotation has a color picker and stroke-thickness selector; annotations can be
+  selected, moved, deleted, and undone. Single-key tool shortcuts (V/C/R/O/A/L/D/T/N/B),
+  `Ctrl+Z` undo and `Del` to remove the selection. Annotations preview live as XAML shapes and
+  are baked into the image at full resolution with Win2D so the saved/copied PNG or JPEG matches
+  the preview exactly.
 - **Audio recording for video** — microphone and/or system ("desktop"/loopback) audio is now
   captured via WASAPI (NAudio), mixed and resampled to 48 kHz / 16-bit stereo, and muxed into the
   recorded MP4 as an AAC track. Honors the existing **Record system audio** / **Record microphone**

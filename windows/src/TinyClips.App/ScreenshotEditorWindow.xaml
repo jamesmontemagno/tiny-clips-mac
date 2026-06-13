@@ -16,6 +16,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -30,49 +31,234 @@
                 Text="Edit screenshot" />
         </Grid>
 
-        <!--  Toolbar  -->
-        <CommandBar
+        <!--  Tool strip  -->
+        <Border
             Grid.Row="1"
-            DefaultLabelPosition="Right"
-            IsOpen="False">
-            <AppBarButton
-                x:Name="ApplyCropButton"
-                AutomationProperties.AutomationId="EditorApplyCropButton"
-                Click="OnApplyCrop"
-                Icon="Crop"
-                IsEnabled="False"
-                Label="Apply crop" />
-            <AppBarButton
-                x:Name="ResetButton"
-                AutomationProperties.AutomationId="EditorResetButton"
-                Click="OnReset"
-                Icon="Undo"
-                Label="Reset" />
-            <AppBarSeparator />
-            <AppBarButton
-                AutomationProperties.AutomationId="EditorCopyButton"
-                Click="OnCopy"
-                Icon="Copy"
-                Label="Copy" />
-            <AppBarButton
-                AutomationProperties.AutomationId="EditorSaveButton"
-                Click="OnSave"
-                Icon="Save"
-                Label="Save" />
-            <AppBarButton
-                AutomationProperties.AutomationId="EditorSaveCopyButton"
-                Click="OnSaveCopy"
-                Icon="SaveLocal"
-                Label="Save a copy" />
-        </CommandBar>
+            Margin="16,0,16,0"
+            Padding="6"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="{ThemeResource ControlCornerRadius}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!--  Tools  -->
+                <StackPanel
+                    Grid.Column="0"
+                    Orientation="Horizontal"
+                    Spacing="2">
+                    <ToggleButton
+                        x:Name="ToolSelect"
+                        AutomationProperties.AutomationId="EditorToolSelect"
+                        AutomationProperties.Name="Select and move"
+                        Click="OnToolClick"
+                        Tag="Select"
+                        ToolTipService.ToolTip="Select / Move (V)">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE8B0;" />
+                    </ToggleButton>
+                    <ToggleButton
+                        x:Name="ToolCrop"
+                        AutomationProperties.AutomationId="EditorToolCrop"
+                        AutomationProperties.Name="Crop"
+                        Click="OnToolClick"
+                        Tag="Crop"
+                        ToolTipService.ToolTip="Crop (C)">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE7A8;" />
+                    </ToggleButton>
+                    <AppBarSeparator Width="1" />
+                    <ToggleButton
+                        x:Name="ToolRectangle"
+                        AutomationProperties.AutomationId="EditorToolRectangle"
+                        AutomationProperties.Name="Rectangle"
+                        Click="OnToolClick"
+                        Tag="Rectangle"
+                        ToolTipService.ToolTip="Rectangle (R)">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE71A;" />
+                    </ToggleButton>
+                    <ToggleButton
+                        x:Name="ToolEllipse"
+                        AutomationProperties.AutomationId="EditorToolEllipse"
+                        AutomationProperties.Name="Ellipse"
+                        Click="OnToolClick"
+                        Tag="Ellipse"
+                        ToolTipService.ToolTip="Ellipse (O)">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xEA3A;" />
+                    </ToggleButton>
+                    <ToggleButton
+                        x:Name="ToolArrow"
+                        AutomationProperties.AutomationId="EditorToolArrow"
+                        AutomationProperties.Name="Arrow"
+                        Click="OnToolClick"
+                        Tag="Arrow"
+                        ToolTipService.ToolTip="Arrow (A)">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE72A;" />
+                    </ToggleButton>
+                    <ToggleButton
+                        x:Name="ToolLine"
+                        AutomationProperties.AutomationId="EditorToolLine"
+                        AutomationProperties.Name="Line"
+                        Click="OnToolClick"
+                        Tag="Line"
+                        ToolTipService.ToolTip="Line (L)">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE738;" />
+                    </ToggleButton>
+                    <ToggleButton
+                        x:Name="ToolPen"
+                        AutomationProperties.AutomationId="EditorToolPen"
+                        AutomationProperties.Name="Draw"
+                        Click="OnToolClick"
+                        Tag="Pen"
+                        ToolTipService.ToolTip="Draw (D)">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE70F;" />
+                    </ToggleButton>
+                    <ToggleButton
+                        x:Name="ToolText"
+                        AutomationProperties.AutomationId="EditorToolText"
+                        AutomationProperties.Name="Text"
+                        Click="OnToolClick"
+                        Tag="Text"
+                        ToolTipService.ToolTip="Text (T)">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE8D2;" />
+                    </ToggleButton>
+                    <ToggleButton
+                        x:Name="ToolCounter"
+                        AutomationProperties.AutomationId="EditorToolCounter"
+                        AutomationProperties.Name="Number badge"
+                        Click="OnToolClick"
+                        Tag="Counter"
+                        ToolTipService.ToolTip="Number (N)">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE8EF;" />
+                    </ToggleButton>
+                    <ToggleButton
+                        x:Name="ToolRedact"
+                        AutomationProperties.AutomationId="EditorToolRedact"
+                        AutomationProperties.Name="Redact"
+                        Click="OnToolClick"
+                        Tag="Redact"
+                        ToolTipService.ToolTip="Redact / Blur (B)">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xED1A;" />
+                    </ToggleButton>
+
+                    <AppBarSeparator Width="1" />
+
+                    <!--  Color  -->
+                    <Button
+                        x:Name="ColorButton"
+                        Width="40"
+                        AutomationProperties.AutomationId="EditorColorButton"
+                        AutomationProperties.Name="Color"
+                        ToolTipService.ToolTip="Color">
+                        <Border
+                            x:Name="ColorSwatch"
+                            Width="20"
+                            Height="20"
+                            Background="Red"
+                            CornerRadius="4" />
+                        <Button.Flyout>
+                            <Flyout>
+                                <ColorPicker
+                                    x:Name="AnnotationColorPicker"
+                                    ColorChanged="OnColorChanged"
+                                    ColorSpectrumShape="Ring"
+                                    IsAlphaEnabled="False"
+                                    IsColorChannelTextInputVisible="False"
+                                    IsHexInputVisible="True" />
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+
+                    <!--  Thickness  -->
+                    <ComboBox
+                        x:Name="ThicknessCombo"
+                        Width="92"
+                        Margin="4,0,0,0"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="EditorThicknessCombo"
+                        AutomationProperties.Name="Stroke thickness"
+                        SelectionChanged="OnThicknessChanged"
+                        ToolTipService.ToolTip="Thickness">
+                        <ComboBoxItem Content="Thin" Tag="3" />
+                        <ComboBoxItem Content="Medium" Tag="6" />
+                        <ComboBoxItem Content="Thick" Tag="10" />
+                        <ComboBoxItem Content="X-Thick" Tag="16" />
+                    </ComboBox>
+
+                    <AppBarSeparator Width="1" />
+
+                    <Button
+                        x:Name="UndoButton"
+                        AutomationProperties.AutomationId="EditorUndoButton"
+                        AutomationProperties.Name="Undo"
+                        Click="OnUndo"
+                        ToolTipService.ToolTip="Undo (Ctrl+Z)">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE7A7;" />
+                    </Button>
+                    <Button
+                        x:Name="DeleteButton"
+                        AutomationProperties.AutomationId="EditorDeleteButton"
+                        AutomationProperties.Name="Delete selected"
+                        Click="OnDeleteSelected"
+                        ToolTipService.ToolTip="Delete selected (Del)">
+                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE74D;" />
+                    </Button>
+                </StackPanel>
+
+                <!--  Output actions  -->
+                <CommandBar
+                    Grid.Column="1"
+                    Background="Transparent"
+                    DefaultLabelPosition="Collapsed"
+                    IsOpen="False">
+                    <AppBarButton
+                        x:Name="ApplyCropButton"
+                        AutomationProperties.AutomationId="EditorApplyCropButton"
+                        Click="OnApplyCrop"
+                        Icon="Crop"
+                        IsEnabled="False"
+                        Label="Apply crop"
+                        ToolTipService.ToolTip="Apply crop" />
+                    <AppBarButton
+                        x:Name="ResetButton"
+                        AutomationProperties.AutomationId="EditorResetButton"
+                        Click="OnReset"
+                        Icon="Refresh"
+                        Label="Reset"
+                        ToolTipService.ToolTip="Reset all edits" />
+                    <AppBarSeparator />
+                    <AppBarButton
+                        AutomationProperties.AutomationId="EditorCopyButton"
+                        Click="OnCopy"
+                        Icon="Copy"
+                        Label="Copy"
+                        ToolTipService.ToolTip="Copy to clipboard" />
+                    <AppBarButton
+                        AutomationProperties.AutomationId="EditorSaveButton"
+                        Click="OnSave"
+                        Icon="Save"
+                        Label="Save"
+                        ToolTipService.ToolTip="Save" />
+                    <AppBarButton
+                        AutomationProperties.AutomationId="EditorSaveCopyButton"
+                        Click="OnSaveCopy"
+                        Icon="SaveLocal"
+                        Label="Save a copy"
+                        ToolTipService.ToolTip="Save a copy" />
+                </CommandBar>
+            </Grid>
+        </Border>
 
         <!--  Canvas  -->
         <Grid
             x:Name="ImageHost"
-            Grid.Row="2"
+            Grid.Row="3"
             Margin="16"
             Background="{ThemeResource SubtleFillColorTertiaryBrush}"
-            CornerRadius="{ThemeResource OverlayCornerRadius}">
+            CornerRadius="{ThemeResource OverlayCornerRadius}"
+            SizeChanged="OnImageHostSizeChanged">
             <Image
                 x:Name="PreviewImage"
                 Stretch="Uniform" />
@@ -90,6 +276,14 @@
                     StrokeDashArray="4,2"
                     StrokeThickness="2"
                     Visibility="Collapsed" />
+                <TextBox
+                    x:Name="TextEditBox"
+                    MinWidth="80"
+                    AcceptsReturn="False"
+                    AutomationProperties.AutomationId="EditorTextEntry"
+                    FontSize="16"
+                    LostFocus="OnTextEntryCommitted"
+                    Visibility="Collapsed" />
             </Canvas>
             <TextBlock
                 x:Name="HintText"
@@ -98,7 +292,7 @@
                 VerticalAlignment="Bottom"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                 Style="{StaticResource CaptionTextBlockStyle}"
-                Text="Drag to select an area, then choose Apply crop." />
+                Text="Pick a tool, then draw on the image. Crop, annotate, then save." />
         </Grid>
     </Grid>
 </Window>
