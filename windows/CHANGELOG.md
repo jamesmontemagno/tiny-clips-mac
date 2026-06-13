@@ -6,6 +6,9 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Added
+- **Copy video / GIF to clipboard** settings — recorded MP4s and GIFs can now be copied to the
+  clipboard (as a file) automatically after capture, alongside the existing screenshot copy
+  (which also places the bitmap for direct paste). Toggles added to the Video and GIF sections.
 - **Mouse-click visual overlays** in video and GIF recordings: a global low-level mouse hook
   (`MouseClickMonitor`) records click timing/position, and `MouseClickOverlayCompositor` draws
   expanding, fading pulse rings into each captured frame (parity with the macOS

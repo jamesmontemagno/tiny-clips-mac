@@ -555,6 +555,28 @@
                             IsOn="{x:Bind ViewModel.ShowTrimmer, Mode=TwoWay}" />
                     </Grid>
                 </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Copy video to the clipboard" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Copy the recorded MP4 file so it can be pasted into chats and editors." />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="CopyVideoToggle"
+                            AutomationProperties.Name="Copy video to the clipboard"
+                            IsOn="{x:Bind ViewModel.CopyVideoToClipboard, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
                     </StackPanel>
 
                     <StackPanel
@@ -665,6 +687,28 @@
                             AutomationProperties.AutomationId="ShowGifTrimmerToggle"
                             AutomationProperties.Name="Open GIF trimmer after recording"
                             IsOn="{x:Bind ViewModel.ShowGifTrimmer, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Copy GIF to the clipboard" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Copy the recorded GIF file so it can be pasted into chats and editors." />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="CopyGifToggle"
+                            AutomationProperties.Name="Copy GIF to the clipboard"
+                            IsOn="{x:Bind ViewModel.CopyGifToClipboard, Mode=TwoWay}" />
                     </Grid>
                 </Border>
                     </StackPanel>

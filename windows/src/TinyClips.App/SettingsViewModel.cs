@@ -69,6 +69,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _copyScreenshotToClipboard;
 
     [ObservableProperty]
+    private bool _copyVideoToClipboard;
+
+    [ObservableProperty]
+    private bool _copyGifToClipboard;
+
+    [ObservableProperty]
     private bool _reopenPickerAfterCapture;
 
     // Screenshot
@@ -177,6 +183,8 @@ public sealed partial class SettingsViewModel : ObservableObject
             ShowSaveNotifications = _settings.ShowSaveNotifications;
             LaunchAtLogin = _settings.LaunchAtLogin;
             CopyScreenshotToClipboard = _settings.CopyScreenshotToClipboard;
+            CopyVideoToClipboard = _settings.CopyVideoToClipboard;
+            CopyGifToClipboard = _settings.CopyGifToClipboard;
             ReopenPickerAfterCapture = _settings.ReopenPickerAfterCapture;
 
             ScreenshotFormatIndex = _settings.ImageFormat == ImageFormat.Png ? 0 : 1;
@@ -248,6 +256,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     partial void OnCopyScreenshotToClipboardChanged(bool value) => Persist(() => _settings.CopyScreenshotToClipboard = value);
+
+    partial void OnCopyVideoToClipboardChanged(bool value) => Persist(() => _settings.CopyVideoToClipboard = value);
+
+    partial void OnCopyGifToClipboardChanged(bool value) => Persist(() => _settings.CopyGifToClipboard = value);
 
     partial void OnReopenPickerAfterCaptureChanged(bool value) => Persist(() => _settings.ReopenPickerAfterCapture = value);
 
