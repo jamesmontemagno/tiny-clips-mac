@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using TinyClips.Core.Capture;
 using TinyClips.Core.Models;
@@ -14,6 +16,8 @@ namespace TinyClips.App;
 
 public partial class App : Application
 {
+    private static readonly FontFamily FluentIconFont = new("Segoe Fluent Icons");
+
     private TaskbarIcon? _taskbarIcon;
     private SettingsWindow? _settingsWindow;
 
@@ -41,59 +45,77 @@ public partial class App : Application
             return;
         }
 
+        var hotKeys = Services.GetRequiredService<IHotKeyService>();
+
         var menuFlyout = new MenuFlyout();
 
-        // In H.NotifyIcon's default PopupMenu mode the flyout is rendered as a native
-        // Win32 menu that invokes each item's Command (not the XAML Click event), so
-        // every item must supply an ICommand to be interactive.
-        var screenshotItem = new MenuFlyoutItem
-        {
-            Text = "Screenshot",
-            Command = new AsyncRelayCommand(CaptureScreenshotAsync)
-        };
-        menuFlyout.Items.Add(screenshotItem);
+        menuFlyout.Items.Add(CreateMenuItem(
+            text: "Screenshot",
+            glyph: "\uE722",
+            acceleratorText: hotKeys.GetBinding(CaptureType.Screenshot).DisplayString,
+            command: new AsyncRelayCommand(CaptureScreenshotAsync)));
 
-        var videoItem = new MenuFlyoutItem
-        {
-            Text = "Record Video",
-            Command = new RelayCommand(() => Debug.WriteLine("TODO: Video capture not implemented yet."))
-        };
-        menuFlyout.Items.Add(videoItem);
+        menuFlyout.Items.Add(CreateMenuItem(
+            text: "Record Video",
+            glyph: "\uE714",
+            acceleratorText: hotKeys.GetBinding(CaptureType.Video).DisplayString,
+            command: new RelayCommand(() => Debug.WriteLine("TODO: Video capture not implemented yet."))));
 
-        var gifItem = new MenuFlyoutItem
-        {
-            Text = "Record GIF",
-            Command = new RelayCommand(() => Debug.WriteLine("TODO: GIF capture not implemented yet."))
-        };
-        menuFlyout.Items.Add(gifItem);
+        menuFlyout.Items.Add(CreateMenuItem(
+            text: "Record GIF",
+            glyph: "\uE786",
+            acceleratorText: hotKeys.GetBinding(CaptureType.Gif).DisplayString,
+            command: new RelayCommand(() => Debug.WriteLine("TODO: GIF capture not implemented yet."))));
 
         menuFlyout.Items.Add(new MenuFlyoutSeparator());
 
-        var settingsItem = new MenuFlyoutItem
-        {
-            Text = "Settings",
-            Command = new RelayCommand(OpenSettingsWindow)
-        };
-        menuFlyout.Items.Add(settingsItem);
+        menuFlyout.Items.Add(CreateMenuItem(
+            text: "Settings",
+            glyph: "\uE713",
+            acceleratorText: null,
+            command: new RelayCommand(OpenSettingsWindow)));
 
-        var exitItem = new MenuFlyoutItem
-        {
-            Text = "Exit",
-            Command = new RelayCommand(ExitApplication)
-        };
-        menuFlyout.Items.Add(exitItem);
+        menuFlyout.Items.Add(CreateMenuItem(
+            text: "Exit",
+            glyph: "\uE7E8",
+            acceleratorText: null,
+            command: new RelayCommand(ExitApplication)));
 
         _taskbarIcon = new TaskbarIcon
         {
             ToolTipText = "Tiny Clips",
             IconSource = new BitmapImage(new Uri("ms-appx:///Assets/TrayIcon.ico")),
             ContextFlyout = menuFlyout,
+            // SecondWindow renders the real WinUI MenuFlyout (rounded corners, acrylic,
+            // shadow, Fluent styling) instead of the legacy Win32 popup menu.
+            ContextMenuMode = ContextMenuMode.SecondWindow,
             // Show the menu on either left- or right-click, with no delay on left-click.
             MenuActivation = PopupActivationMode.LeftOrRightClick,
             NoLeftClickDelay = true
         };
 
         _taskbarIcon.ForceCreate();
+    }
+
+    private static MenuFlyoutItem CreateMenuItem(string text, string glyph, string? acceleratorText, ICommand command)
+    {
+        var item = new MenuFlyoutItem
+        {
+            Text = text,
+            Icon = new FontIcon
+            {
+                Glyph = glyph,
+                FontFamily = FluentIconFont
+            },
+            Command = command
+        };
+
+        if (!string.IsNullOrEmpty(acceleratorText))
+        {
+            item.KeyboardAcceleratorTextOverride = acceleratorText;
+        }
+
+        return item;
     }
 
     private async Task CaptureScreenshotAsync()
@@ -154,12 +176,18 @@ public partial class App : Application
     private void ApplyTheme()
     {
         var settings = Services.GetRequiredService<ISettingsService>();
-        RequestedTheme = settings.Theme switch
+
+        // RequestedTheme can only be set once, before any window is created. Leaving it
+        // unset for AppTheme.Default lets the app follow the current system theme.
+        switch (settings.Theme)
         {
-            AppTheme.Light => ApplicationTheme.Light,
-            AppTheme.Dark => ApplicationTheme.Dark,
-            _ => ApplicationTheme.Light
-        };
+            case AppTheme.Light:
+                RequestedTheme = ApplicationTheme.Light;
+                break;
+            case AppTheme.Dark:
+                RequestedTheme = ApplicationTheme.Dark;
+                break;
+        }
     }
 }
 
