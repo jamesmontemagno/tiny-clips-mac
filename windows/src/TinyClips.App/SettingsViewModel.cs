@@ -1,3 +1,4 @@
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using TinyClips.Core.Models;
 using TinyClips.Core.Services;
@@ -22,17 +23,19 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IHotKeyService _hotKeys;
     private readonly ILaunchAtLoginService _launchAtLoginService;
     private readonly IEntitlementService _entitlement;
+    private readonly IAudioDeviceService _audioDevices;
     private bool _loading;
 
     /// <summary>Raised when the selected theme changes so the window can re-apply it live.</summary>
     public event Action? ThemeChanged;
 
-    public SettingsViewModel(ICaptureSettings settings, IHotKeyService hotKeys, ILaunchAtLoginService launchAtLogin, IEntitlementService entitlement)
+    public SettingsViewModel(ICaptureSettings settings, IHotKeyService hotKeys, ILaunchAtLoginService launchAtLogin, IEntitlementService entitlement, IAudioDeviceService audioDevices)
     {
         _settings = settings;
         _hotKeys = hotKeys;
         _launchAtLoginService = launchAtLogin;
         _entitlement = entitlement;
+        _audioDevices = audioDevices;
         Load();
     }
 
@@ -106,6 +109,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _recordMicrophone;
 
+    /// <summary>Microphone devices for the picker (first entry is the system default).</summary>
+    public System.Collections.ObjectModel.ObservableCollection<AudioInputDevice> Microphones { get; } = new();
+
+    [ObservableProperty]
+    private AudioInputDevice _selectedMicrophone;
+
     [ObservableProperty]
     private double _videoRecordingTimeLimitMinutes;
 
@@ -142,6 +151,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private bool _showMouseClicksInGif;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GifClicksEditable))]
     private bool _gifMouseClicksUseVideoSettings;
 
     [ObservableProperty]
@@ -154,8 +164,26 @@ public sealed partial class SettingsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(MouseClickPreviewColorHex))]
     private string _videoMouseClickColorHex = "#FFD60A";
 
+    [ObservableProperty]
+    private double _gifMouseClickSize;
+
+    [ObservableProperty]
+    private double _gifMouseClickOpacity;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GifMouseClickPreviewColorHex))]
+    private string _gifMouseClickColorHex = "#FFD60A";
+
     /// <summary>Hex color surfaced to the settings preview swatch.</summary>
     public string MouseClickPreviewColorHex => VideoMouseClickColorHex;
+
+    /// <summary>Hex color surfaced to the GIF click preview swatch.</summary>
+    public string GifMouseClickPreviewColorHex => GifMouseClicksUseVideoSettings
+        ? VideoMouseClickColorHex
+        : GifMouseClickColorHex;
+
+    /// <summary>True when the GIF click controls should be editable (Pro and not mirroring video).</summary>
+    public bool GifClicksEditable => IsPro && !GifMouseClicksUseVideoSettings;
 
     // Branding (Pro)
     [ObservableProperty]
@@ -197,6 +225,16 @@ public sealed partial class SettingsViewModel : ObservableObject
             VideoFrameRate = _settings.VideoFrameRate;
             RecordAudio = _settings.RecordAudio;
             RecordMicrophone = _settings.RecordMicrophone;
+
+            Microphones.Clear();
+            foreach (var mic in _audioDevices.GetMicrophones())
+            {
+                Microphones.Add(mic);
+            }
+
+            var savedMicId = _settings.SelectedMicrophoneId ?? string.Empty;
+            SelectedMicrophone = Microphones.FirstOrDefault(m => m.Id == savedMicId, Microphones[0]);
+
             VideoRecordingTimeLimitMinutes = _settings.VideoRecordingTimeLimitMinutes;
             VideoCountdownEnabled = _settings.VideoCountdownEnabled;
             VideoCountdownDuration = _settings.VideoCountdownDuration;
@@ -214,6 +252,9 @@ public sealed partial class SettingsViewModel : ObservableObject
             VideoMouseClickSize = _settings.VideoMouseClickSize;
             VideoMouseClickOpacity = _settings.VideoMouseClickOpacity;
             VideoMouseClickColorHex = _settings.VideoMouseClickColorHex;
+            GifMouseClickSize = _settings.GifMouseClickSize;
+            GifMouseClickOpacity = _settings.GifMouseClickOpacity;
+            GifMouseClickColorHex = _settings.GifMouseClickColorHex;
             ShowBrandingOverlay = _settings.ShowBrandingOverlay;
         }
         finally
@@ -283,6 +324,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnRecordMicrophoneChanged(bool value) => Persist(() => _settings.RecordMicrophone = value);
 
+    partial void OnSelectedMicrophoneChanged(AudioInputDevice value) =>
+        Persist(() => _settings.SelectedMicrophoneId = value.Id ?? string.Empty);
+
     partial void OnVideoRecordingTimeLimitMinutesChanged(double value) =>
         Persist(() => _settings.VideoRecordingTimeLimitMinutes = (int)Math.Round(value));
 
@@ -308,7 +352,11 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnShowMouseClicksInGifChanged(bool value) => Persist(() => _settings.ShowMouseClickVisualsInGif = value);
 
-    partial void OnGifMouseClicksUseVideoSettingsChanged(bool value) => Persist(() => _settings.GifMouseClicksUseVideoSettings = value);
+    partial void OnGifMouseClicksUseVideoSettingsChanged(bool value) => Persist(() =>
+    {
+        _settings.GifMouseClicksUseVideoSettings = value;
+        OnPropertyChanged(nameof(GifMouseClickPreviewColorHex));
+    });
 
     partial void OnVideoMouseClickSizeChanged(double value) => Persist(() => _settings.VideoMouseClickSize = value);
 
@@ -320,8 +368,15 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (_settings.GifMouseClicksUseVideoSettings)
         {
             _settings.GifMouseClickColorHex = value;
+            OnPropertyChanged(nameof(GifMouseClickPreviewColorHex));
         }
     });
+
+    partial void OnGifMouseClickSizeChanged(double value) => Persist(() => _settings.GifMouseClickSize = value);
+
+    partial void OnGifMouseClickOpacityChanged(double value) => Persist(() => _settings.GifMouseClickOpacity = value);
+
+    partial void OnGifMouseClickColorHexChanged(string value) => Persist(() => _settings.GifMouseClickColorHex = value);
 
     partial void OnShowBrandingOverlayChanged(bool value) => Persist(() => _settings.ShowBrandingOverlay = value);
 

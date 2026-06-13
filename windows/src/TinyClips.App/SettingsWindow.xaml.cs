@@ -24,7 +24,8 @@ public sealed partial class SettingsWindow : Window
             App.Services.GetRequiredService<ICaptureSettings>(),
             App.Services.GetRequiredService<IHotKeyService>(),
             App.Services.GetRequiredService<ILaunchAtLoginService>(),
-            App.Services.GetRequiredService<IEntitlementService>());
+            App.Services.GetRequiredService<IEntitlementService>(),
+            App.Services.GetRequiredService<IAudioDeviceService>());
 
         InitializeComponent();
 
@@ -38,6 +39,7 @@ public sealed partial class SettingsWindow : Window
 
         ApplyTheme();
         UpdateMouseClickPreview();
+        UpdateGifMouseClickPreview();
         ViewModel.ThemeChanged += ApplyTheme;
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         Closed += OnClosed;
@@ -57,11 +59,46 @@ public sealed partial class SettingsWindow : Window
         {
             UpdateMouseClickPreview();
         }
+
+        if (e.PropertyName == nameof(SettingsViewModel.GifMouseClickPreviewColorHex) ||
+            e.PropertyName == nameof(SettingsViewModel.GifMouseClickColorHex) ||
+            e.PropertyName == nameof(SettingsViewModel.GifMouseClicksUseVideoSettings) ||
+            e.PropertyName == nameof(SettingsViewModel.VideoMouseClickColorHex))
+        {
+            UpdateGifMouseClickPreview();
+        }
     }
 
     private void UpdateMouseClickPreview()
     {
         MouseClickPreviewRing.Stroke = new SolidColorBrush(ParseHexColor(ViewModel.MouseClickPreviewColorHex));
+    }
+
+    private void UpdateGifMouseClickPreview()
+    {
+        GifMouseClickPreviewRing.Stroke = new SolidColorBrush(ParseHexColor(ViewModel.GifMouseClickPreviewColorHex));
+    }
+
+    private static string ToHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+
+    private void OnVideoColorFlyoutOpening(object? sender, object e)
+    {
+        VideoColorPicker.Color = ParseHexColor(ViewModel.VideoMouseClickColorHex);
+    }
+
+    private void OnVideoColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+    {
+        ViewModel.VideoMouseClickColorHex = ToHex(args.NewColor);
+    }
+
+    private void OnGifColorFlyoutOpening(object? sender, object e)
+    {
+        GifColorPicker.Color = ParseHexColor(ViewModel.GifMouseClickColorHex);
+    }
+
+    private void OnGifColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+    {
+        ViewModel.GifMouseClickColorHex = ToHex(args.NewColor);
     }
 
     private static Color ParseHexColor(string? hex)

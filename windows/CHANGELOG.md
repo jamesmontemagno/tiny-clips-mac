@@ -6,6 +6,11 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Added
+- **Microphone device picker** — when "Record microphone" is on you can now choose which input
+  device is recorded (defaults to the system default) in the Video settings.
+- **Separate Video and GIF mouse-click styles** — the Mouse Clicks settings now have independent
+  size, opacity, and color controls for video versus GIF recordings, each with a Fluent
+  **color picker** (the GIF group is disabled while "GIF uses video click settings" is on).
 - **GIF trimmer preview playback** — a play/pause toggle animates the selected frame range in the
   GIF trimmer, honoring per-frame delays and the chosen output speed so you can preview the result
   before saving.

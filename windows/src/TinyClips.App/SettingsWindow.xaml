@@ -484,6 +484,32 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Microphone device" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Choose which input is recorded when &quot;Record microphone&quot; is on." />
+                        </StackPanel>
+                        <ComboBox
+                            Grid.Column="1"
+                            MinWidth="220"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="MicrophoneDeviceCombo"
+                            AutomationProperties.Name="Microphone device"
+                            DisplayMemberPath="Name"
+                            IsEnabled="{x:Bind ViewModel.RecordMicrophone, Mode=OneWay}"
+                            ItemsSource="{x:Bind ViewModel.Microphones, Mode=OneWay}"
+                            SelectedItem="{x:Bind ViewModel.SelectedMicrophone, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
                             <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Recording time limit" />
                             <TextBlock
                                 Style="{StaticResource CaptionTextBlockStyle}"
@@ -795,6 +821,11 @@
                     </Grid>
                 </Border>
 
+                <TextBlock
+                    Margin="4,8,0,0"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="Video click style" />
+
                 <Border Style="{StaticResource SettingCardStyle}">
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
@@ -809,7 +840,7 @@
                             Width="120"
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="VideoMouseClickSizeNumberBox"
-                            AutomationProperties.Name="Mouse click highlight size"
+                            AutomationProperties.Name="Video mouse click highlight size"
                             IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             Maximum="200"
                             Minimum="20"
@@ -832,7 +863,7 @@
                             Width="120"
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="VideoMouseClickOpacityNumberBox"
-                            AutomationProperties.Name="Mouse click highlight opacity"
+                            AutomationProperties.Name="Video mouse click highlight opacity"
                             IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             LargeChange="0.1"
                             Maximum="1.0"
@@ -854,28 +885,152 @@
                             <TextBlock
                                 Style="{StaticResource CaptionTextBlockStyle}"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Text="Hex color (e.g. #FFD60A) used for the click pulse ring." />
+                                Text="Pick a color or type a hex value (e.g. #FFD60A) for the click pulse ring." />
                         </StackPanel>
                         <StackPanel
                             Grid.Column="1"
                             VerticalAlignment="Center"
                             Orientation="Horizontal"
                             Spacing="12">
-                            <Grid Width="40" Height="40">
-                                <Ellipse Fill="{ThemeResource ControlFillColorDefaultBrush}" />
-                                <Ellipse
-                                    x:Name="MouseClickPreviewRing"
-                                    Width="30"
-                                    Height="30"
-                                    StrokeThickness="4" />
-                            </Grid>
+                            <DropDownButton
+                                AutomationProperties.AutomationId="VideoMouseClickColorButton"
+                                AutomationProperties.Name="Pick video mouse click color"
+                                IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}">
+                                <Grid Width="28" Height="28">
+                                    <Ellipse Fill="{ThemeResource ControlFillColorDefaultBrush}" />
+                                    <Ellipse
+                                        x:Name="MouseClickPreviewRing"
+                                        Width="22"
+                                        Height="22"
+                                        StrokeThickness="4" />
+                                </Grid>
+                                <DropDownButton.Flyout>
+                                    <Flyout Opening="OnVideoColorFlyoutOpening">
+                                        <ColorPicker
+                                            x:Name="VideoColorPicker"
+                                            ColorChanged="OnVideoColorChanged"
+                                            IsAlphaEnabled="False"
+                                            IsColorChannelTextInputVisible="True"
+                                            IsHexInputVisible="True" />
+                                    </Flyout>
+                                </DropDownButton.Flyout>
+                            </DropDownButton>
                             <TextBox
                                 Width="120"
                                 VerticalAlignment="Center"
                                 AutomationProperties.AutomationId="VideoMouseClickColorTextBox"
-                                AutomationProperties.Name="Mouse click highlight color hex"
+                                AutomationProperties.Name="Video mouse click highlight color hex"
                                 IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                                 Text="{x:Bind ViewModel.VideoMouseClickColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <TextBlock
+                    Margin="4,16,0,0"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="GIF click style" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Highlight size" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Disabled while &quot;GIF uses video click settings&quot; is on." />
+                        </StackPanel>
+                        <NumberBox
+                            Grid.Column="1"
+                            Width="120"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="GifMouseClickSizeNumberBox"
+                            AutomationProperties.Name="GIF mouse click highlight size"
+                            IsEnabled="{x:Bind ViewModel.GifClicksEditable, Mode=OneWay}"
+                            Maximum="200"
+                            Minimum="20"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind ViewModel.GifMouseClickSize, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Highlight opacity" />
+                        </StackPanel>
+                        <NumberBox
+                            Grid.Column="1"
+                            Width="120"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="GifMouseClickOpacityNumberBox"
+                            AutomationProperties.Name="GIF mouse click highlight opacity"
+                            IsEnabled="{x:Bind ViewModel.GifClicksEditable, Mode=OneWay}"
+                            LargeChange="0.1"
+                            Maximum="1.0"
+                            Minimum="0.1"
+                            SmallChange="0.05"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind ViewModel.GifMouseClickOpacity, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Highlight color" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Pick a color or type a hex value for the GIF click pulse ring." />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="12">
+                            <DropDownButton
+                                AutomationProperties.AutomationId="GifMouseClickColorButton"
+                                AutomationProperties.Name="Pick GIF mouse click color"
+                                IsEnabled="{x:Bind ViewModel.GifClicksEditable, Mode=OneWay}">
+                                <Grid Width="28" Height="28">
+                                    <Ellipse Fill="{ThemeResource ControlFillColorDefaultBrush}" />
+                                    <Ellipse
+                                        x:Name="GifMouseClickPreviewRing"
+                                        Width="22"
+                                        Height="22"
+                                        StrokeThickness="4" />
+                                </Grid>
+                                <DropDownButton.Flyout>
+                                    <Flyout Opening="OnGifColorFlyoutOpening">
+                                        <ColorPicker
+                                            x:Name="GifColorPicker"
+                                            ColorChanged="OnGifColorChanged"
+                                            IsAlphaEnabled="False"
+                                            IsColorChannelTextInputVisible="True"
+                                            IsHexInputVisible="True" />
+                                    </Flyout>
+                                </DropDownButton.Flyout>
+                            </DropDownButton>
+                            <TextBox
+                                Width="120"
+                                VerticalAlignment="Center"
+                                AutomationProperties.AutomationId="GifMouseClickColorTextBox"
+                                AutomationProperties.Name="GIF mouse click highlight color hex"
+                                IsEnabled="{x:Bind ViewModel.GifClicksEditable, Mode=OneWay}"
+                                Text="{x:Bind ViewModel.GifMouseClickColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
                     </Grid>
                 </Border>
