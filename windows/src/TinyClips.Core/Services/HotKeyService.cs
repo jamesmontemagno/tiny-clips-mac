@@ -4,6 +4,9 @@ namespace TinyClips.Core.Services;
 
 public sealed class HotKeyService : IHotKeyService
 {
+    private static readonly HotKeyDefinition StopRecordingBinding =
+        new(HotKeyModifiers.Control | HotKeyModifiers.Shift, 0x53);
+
     private readonly ICaptureSettings _settings;
 
     public HotKeyService(ICaptureSettings settings)
@@ -44,6 +47,10 @@ public sealed class HotKeyService : IHotKeyService
                 throw new ArgumentOutOfRangeException(nameof(type), type, null);
         }
     }
+
+    public HotKeyDefinition GetStopBinding() => StopRecordingBinding;
+
+    public string StopRecordingDisplayString => GetStopBinding().DisplayString;
 
     public HotKeyDefinition DefaultFor(CaptureType type) => type switch
     {

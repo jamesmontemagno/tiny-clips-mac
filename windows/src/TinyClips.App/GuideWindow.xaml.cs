@@ -32,5 +32,6 @@ public sealed partial class GuideWindow : Window
         ScreenshotShortcut.Text = hotKeys.GetBinding(CaptureType.Screenshot).DisplayString;
         VideoShortcut.Text = hotKeys.GetBinding(CaptureType.Video).DisplayString;
         GifShortcut.Text = hotKeys.GetBinding(CaptureType.Gif).DisplayString;
+        StopRecordingShortcut.Text = hotKeys.StopRecordingDisplayString;
     }
 }

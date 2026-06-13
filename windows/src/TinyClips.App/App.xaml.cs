@@ -192,9 +192,23 @@ public partial class App : Application
                 return;
             }
 
+            RegionIndicatorWindow? regionIndicator = null;
             if (pick.CountdownEnabled && pick.CountdownDuration > 0)
             {
-                await CountdownWindow.RunAsync(pick.CountdownDuration);
+                try
+                {
+                    if (selection.Region is { } region)
+                    {
+                        regionIndicator = new RegionIndicatorWindow();
+                        regionIndicator.Show(ToVirtualDesktopRegion(selection.Target, region));
+                    }
+
+                    await CountdownWindow.RunAsync(pick.CountdownDuration);
+                }
+                finally
+                {
+                    regionIndicator?.ClosePanel();
+                }
             }
 
             switch (type)
@@ -285,6 +299,20 @@ public partial class App : Application
         CaptureType.Gif => (settings.GifCountdownEnabled, settings.GifCountdownDuration),
         _ => (settings.ScreenshotCountdownEnabled, settings.ScreenshotCountdownDuration),
     };
+
+    private static PixelRect ToVirtualDesktopRegion(CaptureTarget target, PixelRect region)
+    {
+        if (target.HMonitor == 0)
+        {
+            return region;
+        }
+
+        var monitors = Services.GetRequiredService<IMonitorService>().GetMonitors();
+        var monitor = monitors.FirstOrDefault(m => m.HMonitor == target.HMonitor);
+        return monitor is null
+            ? region
+            : region with { X = monitor.X + region.X, Y = monitor.Y + region.Y };
+    }
 
     private readonly record struct TargetSelection(CaptureTarget Target, PixelRect? Region);
 
@@ -446,7 +474,7 @@ public partial class App : Application
         _recordingStartedUtc = DateTime.UtcNow;
 
         var hotKeys = Services.GetRequiredService<IHotKeyService>();
-        var window = new RecordingIndicatorWindow(hotKeys.GetBinding(type).DisplayString);
+        var window = new RecordingIndicatorWindow(hotKeys.StopRecordingDisplayString);
         window.StopRequested = () => _ = StopActiveRecordingAsync();
         window.Closed += (_, _) =>
         {
@@ -553,11 +581,15 @@ public partial class App : Application
     {
         var video = Services.GetRequiredService<IVideoRecordingService>();
         var gif = Services.GetRequiredService<IGifRecordingService>();
+        var hotKeys = Services.GetRequiredService<IHotKeyService>();
 
         if (_videoItem is not null)
         {
             var recording = video.IsRecording;
             _videoItem.Text = recording ? "Stop Recording" : "Record Video";
+            _videoItem.KeyboardAcceleratorTextOverride = recording
+                ? hotKeys.StopRecordingDisplayString
+                : hotKeys.GetBinding(CaptureType.Video).DisplayString;
             if (_videoItem.Icon is FontIcon icon)
             {
                 icon.Glyph = recording ? GlyphStop : GlyphVideo;
@@ -570,6 +602,9 @@ public partial class App : Application
         {
             var recording = gif.IsRecording;
             _gifItem.Text = recording ? "Stop Recording" : "Record GIF";
+            _gifItem.KeyboardAcceleratorTextOverride = recording
+                ? hotKeys.StopRecordingDisplayString
+                : hotKeys.GetBinding(CaptureType.Gif).DisplayString;
             if (_gifItem.Icon is FontIcon icon)
             {
                 icon.Glyph = recording ? GlyphStop : GlyphGif;
@@ -662,6 +697,9 @@ public partial class App : Application
 
             var gifBinding = hotKeys.GetBinding(CaptureType.Gif);
             _hotKeyManager.Add(gifBinding.ModifiersValue, gifBinding.VirtualKey, () => _ = ToggleGifAsync());
+
+            var stopBinding = hotKeys.GetStopBinding();
+            _hotKeyManager.Add(stopBinding.ModifiersValue, stopBinding.VirtualKey, () => _ = StopActiveRecordingAsync());
 
             _hotKeyManager.Start();
         }

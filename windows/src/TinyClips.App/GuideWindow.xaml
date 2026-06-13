@@ -152,6 +152,25 @@
                                     FontFamily="Consolas" />
                             </Border>
                         </Grid>
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Stop recording" />
+                            <Border
+                                Grid.Column="1"
+                                Padding="10,4"
+                                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                CornerRadius="{ThemeResource ControlCornerRadius}">
+                                <TextBlock
+                                    x:Name="StopRecordingShortcut"
+                                    FontFamily="Consolas" />
+                            </Border>
+                        </Grid>
                     </StackPanel>
                 </Border>
             </StackPanel>

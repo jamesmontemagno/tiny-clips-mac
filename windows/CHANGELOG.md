@@ -23,6 +23,10 @@ own `CHANGELOG.md` at the repository root.
   preserved per-frame delays.
 - Settings toggles to open the editor / trimmers automatically after capture
   (**Screenshot**, **Video**, **GIF** sections).
+- Dedicated stop-recording hotkey (`Ctrl+Shift+S`) shown in the tray menu, recording indicator,
+  and Guide.
+- Region countdown indicator that outlines the selected capture region until recording or
+  screenshot capture begins.
 
 ### Changed
 - **Region selector** now shows a live snapshot of the screen behind a hole-punch dim, so the
