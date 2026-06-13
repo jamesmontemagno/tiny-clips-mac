@@ -29,12 +29,18 @@ public sealed class ScreenshotService : IScreenshotService
     }
 
     public async Task<string> CaptureFullScreenAsync(CancellationToken cancellationToken = default)
+        => await CaptureAndSaveAsync(region: null, cancellationToken).ConfigureAwait(false);
+
+    public async Task<string> CaptureRegionAsync(PixelRect region, CancellationToken cancellationToken = default)
+        => await CaptureAndSaveAsync(region, cancellationToken).ConfigureAwait(false);
+
+    private async Task<string> CaptureAndSaveAsync(PixelRect? region, CancellationToken cancellationToken)
     {
         var monitor = _monitors.GetPrimaryMonitor()
             ?? throw new InvalidOperationException("No monitor was found to capture.");
 
         var frame = await _capture
-            .CaptureMonitorAsync(monitor.HMonitor, region: null, includeCursor: false, cancellationToken)
+            .CaptureMonitorAsync(monitor.HMonitor, region, includeCursor: false, cancellationToken)
             .ConfigureAwait(false);
 
         var path = _storage.GenerateFilePath(CaptureType.Screenshot);

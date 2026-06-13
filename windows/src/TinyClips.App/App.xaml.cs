@@ -27,6 +27,7 @@ public partial class App : Application
     private const string GlyphVideo = "\uE714";
     private const string GlyphGif = "\uE786";
     private const string GlyphStop = "\uE71A";
+    private const string GlyphRegion = "\uE7A8";
 
     private TaskbarIcon? _taskbarIcon;
     private SettingsWindow? _settingsWindow;
@@ -73,6 +74,12 @@ public partial class App : Application
             glyph: GlyphScreenshot,
             acceleratorText: hotKeys.GetBinding(CaptureType.Screenshot).DisplayString,
             command: new AsyncRelayCommand(CaptureScreenshotAsync)));
+
+        menuFlyout.Items.Add(CreateMenuItem(
+            text: "Capture Region",
+            glyph: GlyphRegion,
+            acceleratorText: null,
+            command: new AsyncRelayCommand(CaptureRegionAsync)));
 
         _videoItem = CreateMenuItem(
             text: "Record Video",
@@ -146,6 +153,12 @@ public partial class App : Application
             // Give the tray menu a moment to dismiss so it isn't part of the capture.
             await Task.Delay(150);
 
+            var settings = Services.GetRequiredService<ICaptureSettings>();
+            if (settings.ScreenshotCountdownEnabled && settings.ScreenshotCountdownDuration > 0)
+            {
+                await CountdownWindow.RunAsync(settings.ScreenshotCountdownDuration);
+            }
+
             var screenshots = Services.GetRequiredService<IScreenshotService>();
             var path = await screenshots.CaptureFullScreenAsync();
 
@@ -155,6 +168,38 @@ public partial class App : Application
         catch (Exception ex)
         {
             Debug.WriteLine($"Screenshot capture failed: {ex}");
+        }
+    }
+
+    private async Task CaptureRegionAsync()
+    {
+        try
+        {
+            // Let the tray menu dismiss before the overlay appears.
+            await Task.Delay(150);
+
+            var monitors = Services.GetRequiredService<IMonitorService>();
+            var monitor = monitors.GetPrimaryMonitor();
+            if (monitor is null)
+            {
+                return;
+            }
+
+            var region = await RegionSelectWindow.RunAsync(monitor);
+            if (region is not { } selected)
+            {
+                return;
+            }
+
+            var screenshots = Services.GetRequiredService<IScreenshotService>();
+            var path = await screenshots.CaptureRegionAsync(selected);
+
+            RevealInExplorer(path);
+            ShowSaveToast(path);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Region capture failed: {ex}");
         }
     }
 
@@ -178,6 +223,13 @@ public partial class App : Application
 
             // Let the tray menu dismiss before the recording starts.
             await Task.Delay(150);
+
+            var settings = Services.GetRequiredService<ICaptureSettings>();
+            if (settings.VideoCountdownEnabled && settings.VideoCountdownDuration > 0)
+            {
+                await CountdownWindow.RunAsync(settings.VideoCountdownDuration);
+            }
+
             await video.StartAsync();
             UpdateRecordingState();
         }
@@ -207,6 +259,13 @@ public partial class App : Application
             }
 
             await Task.Delay(150);
+
+            var settings = Services.GetRequiredService<ICaptureSettings>();
+            if (settings.GifCountdownEnabled && settings.GifCountdownDuration > 0)
+            {
+                await CountdownWindow.RunAsync(settings.GifCountdownDuration);
+            }
+
             await gif.StartAsync();
             UpdateRecordingState();
         }
