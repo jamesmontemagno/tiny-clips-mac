@@ -1,8 +1,11 @@
 using System.Diagnostics;
+using CommunityToolkit.Mvvm.Input;
 using H.NotifyIcon;
+using H.NotifyIcon.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 using TinyClips.Core.Models;
 using TinyClips.Core.Services;
 
@@ -39,39 +42,54 @@ public partial class App : Application
 
         var menuFlyout = new MenuFlyout();
 
-        var screenshotItem = new MenuFlyoutItem { Text = "Screenshot" };
-        screenshotItem.Click += (_, _) => Debug.WriteLine("TODO: Screenshot capture not implemented yet.");
+        // In H.NotifyIcon's default PopupMenu mode the flyout is rendered as a native
+        // Win32 menu that invokes each item's Command (not the XAML Click event), so
+        // every item must supply an ICommand to be interactive.
+        var screenshotItem = new MenuFlyoutItem
+        {
+            Text = "Screenshot",
+            Command = new RelayCommand(() => Debug.WriteLine("TODO: Screenshot capture not implemented yet."))
+        };
         menuFlyout.Items.Add(screenshotItem);
 
-        var videoItem = new MenuFlyoutItem { Text = "Record Video" };
-        videoItem.Click += (_, _) => Debug.WriteLine("TODO: Video capture not implemented yet.");
+        var videoItem = new MenuFlyoutItem
+        {
+            Text = "Record Video",
+            Command = new RelayCommand(() => Debug.WriteLine("TODO: Video capture not implemented yet."))
+        };
         menuFlyout.Items.Add(videoItem);
 
-        var gifItem = new MenuFlyoutItem { Text = "Record GIF" };
-        gifItem.Click += (_, _) => Debug.WriteLine("TODO: GIF capture not implemented yet.");
+        var gifItem = new MenuFlyoutItem
+        {
+            Text = "Record GIF",
+            Command = new RelayCommand(() => Debug.WriteLine("TODO: GIF capture not implemented yet."))
+        };
         menuFlyout.Items.Add(gifItem);
 
         menuFlyout.Items.Add(new MenuFlyoutSeparator());
 
-        var settingsItem = new MenuFlyoutItem { Text = "Settings" };
-        settingsItem.Click += (_, _) => OpenSettingsWindow();
+        var settingsItem = new MenuFlyoutItem
+        {
+            Text = "Settings",
+            Command = new RelayCommand(OpenSettingsWindow)
+        };
         menuFlyout.Items.Add(settingsItem);
 
-        var exitItem = new MenuFlyoutItem { Text = "Exit" };
-        exitItem.Click += (_, _) => ExitApplication();
+        var exitItem = new MenuFlyoutItem
+        {
+            Text = "Exit",
+            Command = new RelayCommand(ExitApplication)
+        };
         menuFlyout.Items.Add(exitItem);
 
         _taskbarIcon = new TaskbarIcon
         {
             ToolTipText = "Tiny Clips",
-            IconSource = new GeneratedIconSource
-            {
-                Text = "TC",
-                FontSize = 24,
-                Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.CornflowerBlue),
-                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White)
-            },
-            ContextFlyout = menuFlyout
+            IconSource = new BitmapImage(new Uri("ms-appx:///Assets/TrayIcon.ico")),
+            ContextFlyout = menuFlyout,
+            // Show the menu on either left- or right-click, with no delay on left-click.
+            MenuActivation = PopupActivationMode.LeftOrRightClick,
+            NoLeftClickDelay = true
         };
 
         _taskbarIcon.ForceCreate();
@@ -92,7 +110,11 @@ public partial class App : Application
     {
         _taskbarIcon?.Dispose();
         _taskbarIcon = null;
+        _settingsWindow?.Close();
         Application.Current.Exit();
+        // No persistent host window keeps the process alive, so force termination
+        // to guarantee the user can always quit from the tray menu.
+        Environment.Exit(0);
     }
 
     private void ApplyTheme()
