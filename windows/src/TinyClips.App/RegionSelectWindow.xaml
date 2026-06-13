@@ -6,21 +6,29 @@
 
     <Grid
         x:Name="RootGrid"
-        Background="#59000000"
+        Background="Transparent"
         PointerPressed="OnPointerPressed"
         PointerMoved="OnPointerMoved"
         PointerReleased="OnPointerReleased"
         KeyDown="OnKeyDown">
-        <Canvas x:Name="OverlayCanvas">
+        <Image
+            x:Name="Backdrop"
+            Stretch="Fill" />
+        <Canvas x:Name="OverlayCanvas" SizeChanged="OnOverlaySizeChanged">
+            <!--  Full-screen dim shown until the user starts dragging  -->
+            <Rectangle
+                x:Name="FullDim"
+                Fill="#73000000" />
+            <!--  Four dim panels that surround the selection, leaving it clear  -->
+            <Rectangle x:Name="TopDim" Fill="#73000000" Visibility="Collapsed" />
+            <Rectangle x:Name="BottomDim" Fill="#73000000" Visibility="Collapsed" />
+            <Rectangle x:Name="LeftDim" Fill="#73000000" Visibility="Collapsed" />
+            <Rectangle x:Name="RightDim" Fill="#73000000" Visibility="Collapsed" />
             <Rectangle
                 x:Name="SelectionRect"
                 Stroke="{ThemeResource AccentFillColorDefaultBrush}"
                 StrokeThickness="2"
-                Visibility="Collapsed">
-                <Rectangle.Fill>
-                    <SolidColorBrush Color="White" Opacity="0.2" />
-                </Rectangle.Fill>
-            </Rectangle>
+                Visibility="Collapsed" />
         </Canvas>
         <Border
             Margin="0,48,0,0"

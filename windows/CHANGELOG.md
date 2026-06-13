@@ -10,16 +10,13 @@ own `CHANGELOG.md` at the repository root.
   shortcuts and an inline pre-capture countdown (parity with the macOS picker).
 - Per-window and per-monitor capture targets (`CaptureTarget`) wired through screenshot, video,
   and GIF pipelines.
-- **Clips Manager** library window: Fluent grid of saved captures with image previews, a
-  type/favorites filter, and per-clip open / show-in-Explorer / copy / delete actions.
 - First-run **onboarding** wizard and an in-app **Guide** (help) window.
 - Settings parity sections: **Mouse Clicks**, **Branding**, and a **Pro** status notice.
 - **Pro feature gating** (`IEntitlementService` / `ProFeature`) for the direct build; mouse-click
-  visuals, branding overlay, favorites, and upload are gated and surface an upsell when locked.
+  visuals, branding overlay, and upload are gated and surface an upsell when locked.
 - `windows/docs/dpi-and-coordinates.md` documenting the pixel-vs-DIP capture strategy.
 - **Screenshot editor** that opens after each screenshot (toggleable): drag-to-crop with
-  apply/reset, copy to clipboard, save (overwrite), and save-a-copy. Also reachable from the
-  Clips Manager **Edit** action on image clips.
+  apply/reset, copy to clipboard, save (overwrite), and save-a-copy.
 - **Video trimmer** with a preview player and start/end range sliders that renders a trimmed
   `(trimmed)` MP4 via `MediaComposition`.
 - **GIF trimmer** that drops leading/trailing frames and re-encodes a `(trimmed)` GIF with
@@ -27,9 +24,19 @@ own `CHANGELOG.md` at the repository root.
 - Settings toggles to open the editor / trimmers automatically after capture
   (**Screenshot**, **Video**, **GIF** sections).
 
+### Changed
+- **Region selector** now shows a live snapshot of the screen behind a hole-punch dim, so the
+  area being captured stays clear and fully visible (instead of dimming the whole screen).
+- **Screen** and **Window** pickers are now compact, centered Mica dialogs that leave the rest
+  of the desktop visible rather than graying out the entire display.
+
+### Removed
+- The **Clips Manager** library window (and its `ClipTile` view-model) for now; captures still
+  save to the configured output folders and surface via Explorer + save toasts.
+
 ### Notes
-- Captures are recorded to the configured output folders and surfaced by the Clips Manager by
-  scanning those folders — no separate database to keep in sync.
+- Captures are recorded to the configured output folders and surfaced by save toasts /
+  reveal-in-Explorer — no separate database to keep in sync.
 - Real-time mouse-click & branding compositing, microphone/system-audio muxing, and MSIX/Store
   packaging are **not yet implemented** in this port.
 
