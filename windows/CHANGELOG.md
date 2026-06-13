@@ -32,6 +32,10 @@ own `CHANGELOG.md` at the repository root.
   abstraction were deleted to keep the app simple.
 
 ### Fixed
+- **Screenshot editor: tool rail clipping** — the tool rail icons could be cut off at fractional
+  display scales (e.g. 125%): the buttons kept their default internal padding and the auto
+  scrollbar overlapped the right edge. The rail now uses zero-padding 44×44 buttons with centered
+  glyphs and reserves space for the scrollbar, so every tool icon is fully visible.
 - **Screenshot editor: background panel clipping** — the Background expander's padding/corner/shadow
   sliders and style dropdown were cut off on the right edge of the inspector; the panel now stretches
   to fit and no longer overflows.

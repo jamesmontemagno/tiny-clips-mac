@@ -115,21 +115,33 @@
             <!--  Vertical tool rail  -->
             <Border
                 Grid.Column="0"
-                Padding="6"
+                Padding="8,8,12,8"
                 VerticalAlignment="Stretch"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="{ThemeResource ControlCornerRadius}">
+                <Border.Resources>
+                    <!--  Rail tool buttons: zero padding so the glyph is centered in the full
+                          44x44 hit target and never clipped at fractional scales (e.g. 125%).  -->
+                    <Style TargetType="ToggleButton">
+                        <Setter Property="Width" Value="44" />
+                        <Setter Property="Height" Value="44" />
+                        <Setter Property="MinWidth" Value="0" />
+                        <Setter Property="MinHeight" Value="0" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="HorizontalContentAlignment" Value="Center" />
+                        <Setter Property="VerticalContentAlignment" Value="Center" />
+                        <Setter Property="FontSize" Value="18" />
+                    </Style>
+                </Border.Resources>
                 <ScrollViewer
                     HorizontalScrollMode="Disabled"
                     VerticalScrollBarVisibility="Auto"
                     ZoomMode="Disabled">
-                <StackPanel Spacing="3">
+                <StackPanel HorizontalAlignment="Center" Spacing="4">
                     <ToggleButton
                         x:Name="ToolSelect"
-                        Width="40"
-                        Height="40"
                         AutomationProperties.AutomationId="EditorToolSelect"
                         AutomationProperties.Name="Select and move"
                         Click="OnToolClick"
@@ -139,8 +151,6 @@
                     </ToggleButton>
                     <ToggleButton
                         x:Name="ToolCrop"
-                        Width="40"
-                        Height="40"
                         AutomationProperties.AutomationId="EditorToolCrop"
                         AutomationProperties.Name="Crop"
                         Click="OnToolClick"
@@ -154,8 +164,6 @@
                         Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
                     <ToggleButton
                         x:Name="ToolRectangle"
-                        Width="40"
-                        Height="40"
                         AutomationProperties.AutomationId="EditorToolRectangle"
                         AutomationProperties.Name="Rectangle"
                         Click="OnToolClick"
@@ -165,8 +173,6 @@
                     </ToggleButton>
                     <ToggleButton
                         x:Name="ToolEllipse"
-                        Width="40"
-                        Height="40"
                         AutomationProperties.AutomationId="EditorToolEllipse"
                         AutomationProperties.Name="Ellipse"
                         Click="OnToolClick"
@@ -176,8 +182,6 @@
                     </ToggleButton>
                     <ToggleButton
                         x:Name="ToolArrow"
-                        Width="40"
-                        Height="40"
                         AutomationProperties.AutomationId="EditorToolArrow"
                         AutomationProperties.Name="Arrow"
                         Click="OnToolClick"
@@ -187,8 +191,6 @@
                     </ToggleButton>
                     <ToggleButton
                         x:Name="ToolLine"
-                        Width="40"
-                        Height="40"
                         AutomationProperties.AutomationId="EditorToolLine"
                         AutomationProperties.Name="Line"
                         Click="OnToolClick"
@@ -198,8 +200,6 @@
                     </ToggleButton>
                     <ToggleButton
                         x:Name="ToolPen"
-                        Width="40"
-                        Height="40"
                         AutomationProperties.AutomationId="EditorToolPen"
                         AutomationProperties.Name="Draw"
                         Click="OnToolClick"
@@ -209,8 +209,6 @@
                     </ToggleButton>
                     <ToggleButton
                         x:Name="ToolText"
-                        Width="40"
-                        Height="40"
                         AutomationProperties.AutomationId="EditorToolText"
                         AutomationProperties.Name="Text"
                         Click="OnToolClick"
@@ -220,8 +218,6 @@
                     </ToggleButton>
                     <ToggleButton
                         x:Name="ToolCounter"
-                        Width="40"
-                        Height="40"
                         AutomationProperties.AutomationId="EditorToolCounter"
                         AutomationProperties.Name="Number badge"
                         Click="OnToolClick"
@@ -231,8 +227,6 @@
                     </ToggleButton>
                     <ToggleButton
                         x:Name="ToolRedact"
-                        Width="40"
-                        Height="40"
                         AutomationProperties.AutomationId="EditorToolRedact"
                         AutomationProperties.Name="Redact"
                         Click="OnToolClick"
