@@ -1080,11 +1080,19 @@
                     Style="{StaticResource SubtitleTextBlockStyle}"
                     Text="Keyboard shortcuts" />
 
+                <InfoBar
+                    IsClosable="False"
+                    IsOpen="True"
+                    Message="Click Edit, then press the key combination you want (include Ctrl, Alt, Shift, or Win)."
+                    Severity="Informational" />
+
                 <Border Style="{StaticResource SettingCardStyle}">
-                    <StackPanel Spacing="8">
-                        <Grid ColumnSpacing="16">
+                    <StackPanel Spacing="12">
+                        <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock
@@ -1093,15 +1101,36 @@
                                 Text="Screenshot" />
                             <Border
                                 Grid.Column="1"
+                                MinWidth="120"
                                 Padding="10,4"
+                                VerticalAlignment="Center"
                                 Background="{ThemeResource ControlFillColorDefaultBrush}"
                                 CornerRadius="{ThemeResource ControlCornerRadius}">
-                                <TextBlock FontFamily="Consolas" Text="{x:Bind ViewModel.ScreenshotHotKeyDisplay, Mode=OneWay}" />
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    FontFamily="Consolas"
+                                    Text="{x:Bind ViewModel.ScreenshotHotKeyDisplay, Mode=OneWay}" />
                             </Border>
+                            <Button
+                                Grid.Column="2"
+                                AutomationProperties.AutomationId="EditScreenshotHotKeyButton"
+                                AutomationProperties.Name="Edit screenshot shortcut"
+                                Click="OnEditHotKey"
+                                Content="Edit"
+                                Tag="Screenshot" />
+                            <Button
+                                Grid.Column="3"
+                                AutomationProperties.AutomationId="ResetScreenshotHotKeyButton"
+                                AutomationProperties.Name="Reset screenshot shortcut"
+                                Click="OnResetHotKey"
+                                Content="Reset"
+                                Tag="Screenshot" />
                         </Grid>
-                        <Grid ColumnSpacing="16">
+                        <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock
@@ -1110,15 +1139,36 @@
                                 Text="Record video" />
                             <Border
                                 Grid.Column="1"
+                                MinWidth="120"
                                 Padding="10,4"
+                                VerticalAlignment="Center"
                                 Background="{ThemeResource ControlFillColorDefaultBrush}"
                                 CornerRadius="{ThemeResource ControlCornerRadius}">
-                                <TextBlock FontFamily="Consolas" Text="{x:Bind ViewModel.VideoHotKeyDisplay, Mode=OneWay}" />
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    FontFamily="Consolas"
+                                    Text="{x:Bind ViewModel.VideoHotKeyDisplay, Mode=OneWay}" />
                             </Border>
+                            <Button
+                                Grid.Column="2"
+                                AutomationProperties.AutomationId="EditVideoHotKeyButton"
+                                AutomationProperties.Name="Edit record video shortcut"
+                                Click="OnEditHotKey"
+                                Content="Edit"
+                                Tag="Video" />
+                            <Button
+                                Grid.Column="3"
+                                AutomationProperties.AutomationId="ResetVideoHotKeyButton"
+                                AutomationProperties.Name="Reset record video shortcut"
+                                Click="OnResetHotKey"
+                                Content="Reset"
+                                Tag="Video" />
                         </Grid>
-                        <Grid ColumnSpacing="16">
+                        <Grid ColumnSpacing="12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBlock
@@ -1127,11 +1177,30 @@
                                 Text="Record GIF" />
                             <Border
                                 Grid.Column="1"
+                                MinWidth="120"
                                 Padding="10,4"
+                                VerticalAlignment="Center"
                                 Background="{ThemeResource ControlFillColorDefaultBrush}"
                                 CornerRadius="{ThemeResource ControlCornerRadius}">
-                                <TextBlock FontFamily="Consolas" Text="{x:Bind ViewModel.GifHotKeyDisplay, Mode=OneWay}" />
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    FontFamily="Consolas"
+                                    Text="{x:Bind ViewModel.GifHotKeyDisplay, Mode=OneWay}" />
                             </Border>
+                            <Button
+                                Grid.Column="2"
+                                AutomationProperties.AutomationId="EditGifHotKeyButton"
+                                AutomationProperties.Name="Edit record GIF shortcut"
+                                Click="OnEditHotKey"
+                                Content="Edit"
+                                Tag="Gif" />
+                            <Button
+                                Grid.Column="3"
+                                AutomationProperties.AutomationId="ResetGifHotKeyButton"
+                                AutomationProperties.Name="Reset record GIF shortcut"
+                                Click="OnResetHotKey"
+                                Content="Reset"
+                                Tag="Gif" />
                         </Grid>
                     </StackPanel>
                 </Border>

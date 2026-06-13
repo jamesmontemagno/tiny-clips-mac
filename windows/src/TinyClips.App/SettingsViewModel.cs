@@ -194,6 +194,27 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public string GifHotKeyDisplay => _hotKeys.GetBinding(CaptureType.Gif).DisplayString;
 
+    /// <summary>Persists a new global shortcut for the given capture type and refreshes the display.</summary>
+    public void SetHotKey(CaptureType type, HotKeyModifiers modifiers, uint virtualKey)
+    {
+        _hotKeys.SetBinding(type, new HotKeyDefinition(modifiers, virtualKey));
+        RaiseHotKeyDisplays();
+    }
+
+    /// <summary>Restores the default shortcut for the given capture type.</summary>
+    public void ResetHotKey(CaptureType type)
+    {
+        _hotKeys.SetBinding(type, _hotKeys.DefaultFor(type));
+        RaiseHotKeyDisplays();
+    }
+
+    private void RaiseHotKeyDisplays()
+    {
+        OnPropertyChanged(nameof(ScreenshotHotKeyDisplay));
+        OnPropertyChanged(nameof(VideoHotKeyDisplay));
+        OnPropertyChanged(nameof(GifHotKeyDisplay));
+    }
+
     private void Load()
     {
         _loading = true;

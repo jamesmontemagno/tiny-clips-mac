@@ -71,6 +71,50 @@ public partial class App : Application
         CreateTrayIcon();
         RegisterGlobalHotKeys();
         ShowOnboardingIfNeeded();
+        HandleFileActivation();
+    }
+
+    /// <summary>
+    /// If the app was launched via "Open with → Tiny Clips" on an image file, open that image
+    /// in the screenshot editor. Mirrors the macOS open-in-editor file-activation behaviour.
+    /// </summary>
+    private void HandleFileActivation()
+    {
+        try
+        {
+            var activation = Microsoft.Windows.AppLifecycle.AppInstance.GetCurrent().GetActivatedEventArgs();
+            if (activation?.Kind != Microsoft.Windows.AppLifecycle.ExtendedActivationKind.File)
+            {
+                return;
+            }
+
+            if (activation.Data is not Windows.ApplicationModel.Activation.IFileActivatedEventArgs fileArgs)
+            {
+                return;
+            }
+
+            foreach (var item in fileArgs.Files)
+            {
+                if (item is StorageFile file && IsSupportedImage(file.Path))
+                {
+                    var path = file.Path;
+                    _dispatcher?.TryEnqueue(() => OpenScreenshotEditor(path));
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"File activation handling failed: {ex}");
+        }
+    }
+
+    private static bool IsSupportedImage(string path)
+    {
+        var ext = Path.GetExtension(path);
+        return ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase);
     }
 
     private void CreateTrayIcon()
@@ -261,7 +305,7 @@ public partial class App : Application
             var settings = Services.GetRequiredService<ICaptureSettings>();
             var (cdEnabled, cdDuration) = GetCountdown(settings, type);
 
-            var pick = await CapturePickerWindow.RunAsync(type, cdEnabled, cdDuration);
+            var pick = await CapturePickerWindow.RunAsync(type, cdEnabled, cdDuration, settings.VideoRecordingTimeLimitMinutes);
             if (pick is null)
             {
                 return;
@@ -311,7 +355,7 @@ public partial class App : Application
                     break;
 
                 case CaptureType.Video:
-                    await Services.GetRequiredService<IVideoRecordingService>().StartAsync(selection.Target, selection.Region);
+                    await Services.GetRequiredService<IVideoRecordingService>().StartAsync(selection.Target, selection.Region, pick.VideoTimeLimitMinutes);
                     ShowRecordingRegionIndicator(selection);
                     UpdateRecordingState();
                     ShowRecordingIndicator(CaptureType.Video);
@@ -788,6 +832,9 @@ public partial class App : Application
             return;
         }
 
+        // Allow re-registration after the user edits a shortcut: tear down the old manager first.
+        _hotKeyManager?.Dispose();
+        _hotKeyManager = null;
         try
         {
             var hotKeys = Services.GetRequiredService<IHotKeyService>();
@@ -811,6 +858,17 @@ public partial class App : Application
         {
             Debug.WriteLine($"Global hotkey registration failed: {ex}");
         }
+    }
+
+    /// <summary>Re-registers the global hotkeys after the user edits a shortcut in Settings.</summary>
+    public void ReapplyGlobalHotKeys()
+    {
+        if (_dispatcher is null)
+        {
+            return;
+        }
+
+        _dispatcher.TryEnqueue(RegisterGlobalHotKeys);
     }
 
     private static void RevealInExplorer(string path)

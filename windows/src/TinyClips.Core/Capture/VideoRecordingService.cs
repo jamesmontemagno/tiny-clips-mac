@@ -53,7 +53,7 @@ public sealed class VideoRecordingService : IVideoRecordingService
 
     public event EventHandler<string?>? RecordingCompleted;
 
-    public async Task StartAsync(CaptureTarget? target = null, PixelRect? region = null, CancellationToken cancellationToken = default)
+    public async Task StartAsync(CaptureTarget? target = null, PixelRect? region = null, double? timeLimitMinutesOverride = null, CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -146,7 +146,7 @@ public sealed class VideoRecordingService : IVideoRecordingService
                 _transcodeTask = prepare.TranscodeAsync().AsTask();
                 IsRecording = true;
 
-                var limitMinutes = _settings.VideoRecordingTimeLimitMinutes;
+                var limitMinutes = timeLimitMinutesOverride ?? _settings.VideoRecordingTimeLimitMinutes;
                 if (limitMinutes > 0)
                 {
                     _limitTimer = new Timer(

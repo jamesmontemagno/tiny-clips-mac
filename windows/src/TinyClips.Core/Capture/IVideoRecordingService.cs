@@ -17,7 +17,7 @@ public interface IVideoRecordingService
     /// recorded; pass a monitor or window target (and optional monitor-relative region)
     /// to record a specific screen, window, or region. Throws if already recording.
     /// </summary>
-    Task StartAsync(CaptureTarget? target = null, PixelRect? region = null, CancellationToken cancellationToken = default);
+    Task StartAsync(CaptureTarget? target = null, PixelRect? region = null, double? timeLimitMinutesOverride = null, CancellationToken cancellationToken = default);
 
     /// <summary>Stops recording, finalizes the MP4 and returns the saved path (or null if nothing recorded).</summary>
     Task<string?> StopAsync();

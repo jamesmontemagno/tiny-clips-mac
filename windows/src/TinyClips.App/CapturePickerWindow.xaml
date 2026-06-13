@@ -103,6 +103,21 @@
                     </DropDownButton.Flyout>
                 </DropDownButton>
 
+                <DropDownButton
+                    x:Name="LimitButton"
+                    AutomationProperties.AutomationId="CaptureLimitButton"
+                    AutomationProperties.Name="Recording time limit"
+                    ToolTipService.ToolTip="Stop recording automatically after this long"
+                    Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon FontFamily="Segoe Fluent Icons" FontSize="13" Glyph="&#xE823;" />
+                        <TextBlock x:Name="LimitLabel" Text="No limit" />
+                    </StackPanel>
+                    <DropDownButton.Flyout>
+                        <MenuFlyout x:Name="LimitFlyout" />
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+
                 <Button
                     x:Name="CancelButton"
                     AutomationProperties.AutomationId="CaptureCancelButton"

@@ -6,6 +6,15 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Added
+- **Programmable keyboard shortcuts** — the Screenshot, Record video, and Record GIF global
+  shortcuts can now be reassigned from Settings (click **Edit**, then press a combination that
+  includes Ctrl/Alt/Shift/Win) or **Reset** to the defaults; changes re-register the global
+  hotkeys immediately.
+- **Per-capture video time limit** — the capture picker now has a time-limit dropdown for video
+  (No limit / 1 / 2 / 5 / 10 / 15 / 30 min) that overrides the default from Settings for that
+  recording.
+- **Open with Tiny Clips** — image files (.png/.jpg/.jpeg) can be opened directly in the
+  screenshot editor via the Windows "Open with" menu (file-type association in the package).
 - **Microphone device picker** — when "Record microphone" is on you can now choose which input
   device is recorded (defaults to the system default) in the Video settings.
 - **Separate Video and GIF mouse-click styles** — the Mouse Clicks settings now have independent

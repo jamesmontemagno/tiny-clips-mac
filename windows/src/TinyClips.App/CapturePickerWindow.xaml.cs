@@ -19,7 +19,7 @@ public enum CapturePickerMode
 }
 
 /// <summary>The user's choice from the capture picker bar.</summary>
-public sealed record CapturePickerResult(CapturePickerMode Mode, bool CountdownEnabled, int CountdownDuration);
+public sealed record CapturePickerResult(CapturePickerMode Mode, bool CountdownEnabled, int CountdownDuration, double VideoTimeLimitMinutes);
 
 /// <summary>
 /// A floating, borderless picker bar shown near the top of the primary display when a
@@ -29,22 +29,25 @@ public sealed record CapturePickerResult(CapturePickerMode Mode, bool CountdownE
 public sealed partial class CapturePickerWindow : Window
 {
     private static readonly int[] CountdownOptions = { 1, 2, 3, 5, 10 };
+    private static readonly int[] LimitOptions = { 0, 1, 2, 5, 10, 15, 30 };
 
     private readonly TaskCompletionSource<CapturePickerResult?> _result = new();
     private bool _countdownEnabled;
     private int _countdownDuration;
+    private double _videoTimeLimitMinutes;
     private bool _completed;
 
     private bool _dragging;
     private POINT _dragCursorStart;
     private PointInt32 _dragWindowStart;
 
-    private CapturePickerWindow(CaptureType captureType, bool countdownEnabled, int countdownDuration)
+    private CapturePickerWindow(CaptureType captureType, bool countdownEnabled, int countdownDuration, double videoTimeLimitMinutes)
     {
         InitializeComponent();
 
         _countdownEnabled = countdownEnabled;
         _countdownDuration = countdownDuration <= 0 ? 3 : countdownDuration;
+        _videoTimeLimitMinutes = videoTimeLimitMinutes < 0 ? 0 : videoTimeLimitMinutes;
 
         ModeIcon.Glyph = captureType switch
         {
@@ -61,15 +64,24 @@ public sealed partial class CapturePickerWindow : Window
 
         BuildTimerFlyout();
         UpdateTimerLabel();
+
+        // Only video supports an auto-stop time limit.
+        if (captureType == CaptureType.Video)
+        {
+            LimitButton.Visibility = Visibility.Visible;
+            BuildLimitFlyout();
+            UpdateLimitLabel();
+        }
+
         ConfigurePresenter();
 
         RootGrid.KeyDown += OnKeyDown;
         Activated += OnActivated;
     }
 
-    public static Task<CapturePickerResult?> RunAsync(CaptureType captureType, bool countdownEnabled, int countdownDuration)
+    public static Task<CapturePickerResult?> RunAsync(CaptureType captureType, bool countdownEnabled, int countdownDuration, double videoTimeLimitMinutes = 0)
     {
-        var window = new CapturePickerWindow(captureType, countdownEnabled, countdownDuration);
+        var window = new CapturePickerWindow(captureType, countdownEnabled, countdownDuration, videoTimeLimitMinutes);
         window.Activate();
         return window._result.Task;
     }
@@ -130,6 +142,30 @@ public sealed partial class CapturePickerWindow : Window
     {
         TimerLabel.Text = _countdownEnabled ? $"{_countdownDuration}s" : "Off";
         AutomationProperties.SetName(TimerButton, $"Countdown timer, {(_countdownEnabled ? _countdownDuration + " seconds" : "off")}");
+    }
+
+    private void BuildLimitFlyout()
+    {
+        foreach (var minutes in LimitOptions)
+        {
+            var item = new MenuFlyoutItem { Text = minutes == 0 ? "No limit" : $"{minutes} min" };
+            item.Click += (_, _) =>
+            {
+                _videoTimeLimitMinutes = minutes;
+                UpdateLimitLabel();
+            };
+            LimitFlyout.Items.Add(item);
+        }
+    }
+
+    private void UpdateLimitLabel()
+    {
+        LimitLabel.Text = _videoTimeLimitMinutes <= 0
+            ? "No limit"
+            : $"{_videoTimeLimitMinutes:0.##} min";
+        AutomationProperties.SetName(
+            LimitButton,
+            $"Recording time limit, {(_videoTimeLimitMinutes <= 0 ? "no limit" : _videoTimeLimitMinutes + " minutes")}");
     }
 
     private void ConfigurePresenter()
@@ -237,7 +273,7 @@ public sealed partial class CapturePickerWindow : Window
         }
 
         _completed = true;
-        _result.TrySetResult(mode is { } m ? new CapturePickerResult(m, _countdownEnabled, _countdownDuration) : null);
+        _result.TrySetResult(mode is { } m ? new CapturePickerResult(m, _countdownEnabled, _countdownDuration, _videoTimeLimitMinutes) : null);
         Close();
     }
 }
