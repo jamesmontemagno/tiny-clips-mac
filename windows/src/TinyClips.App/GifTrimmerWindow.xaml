@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="TinyClips.App.GifTrimmerWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:TinyClips.App"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Tiny Clips — Trim GIF"
+    mc:Ignorable="d">
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid
+            x:Name="AppTitleBar"
+            Grid.Row="0"
+            Height="48"
+            Padding="16,0">
+            <TextBlock
+                VerticalAlignment="Center"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Trim GIF" />
+        </Grid>
+
+        <!--  Preview  -->
+        <Grid
+            Grid.Row="1"
+            Margin="16,0,16,12"
+            Background="{ThemeResource SubtleFillColorTertiaryBrush}"
+            CornerRadius="{ThemeResource OverlayCornerRadius}">
+            <Image
+                x:Name="PreviewImage"
+                AutomationProperties.Name="GIF frame preview"
+                Stretch="Uniform" />
+        </Grid>
+
+        <!--  Controls  -->
+        <StackPanel
+            Grid.Row="2"
+            Margin="16,0,16,16"
+            Spacing="12">
+            <Grid>
+                <TextBlock
+                    HorizontalAlignment="Left"
+                    Style="{StaticResource CaptionTextBlockStyle}">
+                    <Run Text="Start frame: " /><Run x:Name="StartLabel" Text="1" />
+                </TextBlock>
+                <TextBlock
+                    x:Name="CountLabel"
+                    HorizontalAlignment="Center"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="0 frames" />
+                <TextBlock
+                    HorizontalAlignment="Right"
+                    Style="{StaticResource CaptionTextBlockStyle}">
+                    <Run Text="End frame: " /><Run x:Name="EndLabel" Text="1" />
+                </TextBlock>
+            </Grid>
+
+            <Slider
+                x:Name="StartSlider"
+                AutomationProperties.AutomationId="GifTrimStartSlider"
+                AutomationProperties.Name="Trim start frame"
+                Header="Trim start"
+                Minimum="0"
+                StepFrequency="1"
+                ValueChanged="OnStartChanged" />
+            <Slider
+                x:Name="EndSlider"
+                AutomationProperties.AutomationId="GifTrimEndSlider"
+                AutomationProperties.Name="Trim end frame"
+                Header="Trim end"
+                Minimum="0"
+                StepFrequency="1"
+                ValueChanged="OnEndChanged" />
+
+            <CommandBar DefaultLabelPosition="Right" IsOpen="False">
+                <AppBarButton
+                    x:Name="SaveTrimmedButton"
+                    AutomationProperties.AutomationId="GifSaveTrimmedButton"
+                    Click="OnSaveTrimmed"
+                    Icon="Trim"
+                    Label="Save trimmed" />
+                <AppBarButton
+                    AutomationProperties.AutomationId="GifSaveOriginalButton"
+                    Click="OnDone"
+                    Icon="Pictures"
+                    Label="Keep original" />
+                <CommandBar.SecondaryCommands>
+                    <AppBarButton
+                        AutomationProperties.AutomationId="GifTrimmerCloseButton"
+                        Click="OnDone"
+                        Label="Close" />
+                </CommandBar.SecondaryCommands>
+            </CommandBar>
+
+            <ProgressBar
+                x:Name="BusyBar"
+                IsIndeterminate="True"
+                Visibility="Collapsed" />
+        </StackPanel>
+    </Grid>
+</Window>

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="TinyClips.App.VideoTrimmerWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:TinyClips.App"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Tiny Clips — Trim Video"
+    mc:Ignorable="d">
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid
+            x:Name="AppTitleBar"
+            Grid.Row="0"
+            Height="48"
+            Padding="16,0">
+            <TextBlock
+                VerticalAlignment="Center"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Trim video" />
+        </Grid>
+
+        <!--  Preview  -->
+        <Grid
+            Grid.Row="1"
+            Margin="16,0,16,12"
+            Background="{ThemeResource SubtleFillColorTertiaryBrush}"
+            CornerRadius="{ThemeResource OverlayCornerRadius}">
+            <MediaPlayerElement
+                x:Name="Player"
+                AreTransportControlsEnabled="True"
+                AutomationProperties.AutomationId="VideoTrimmerPlayer"
+                AutomationProperties.Name="Video preview"
+                Stretch="Uniform" />
+        </Grid>
+
+        <!--  Controls  -->
+        <StackPanel
+            Grid.Row="2"
+            Margin="16,0,16,16"
+            Spacing="12">
+            <Grid>
+                <TextBlock
+                    HorizontalAlignment="Left"
+                    Style="{StaticResource CaptionTextBlockStyle}">
+                    <Run Text="Start: " /><Run x:Name="StartLabel" Text="0:00.0" />
+                </TextBlock>
+                <TextBlock
+                    x:Name="DurationLabel"
+                    HorizontalAlignment="Center"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="Duration: 0:00.0" />
+                <TextBlock
+                    HorizontalAlignment="Right"
+                    Style="{StaticResource CaptionTextBlockStyle}">
+                    <Run Text="End: " /><Run x:Name="EndLabel" Text="0:00.0" />
+                </TextBlock>
+            </Grid>
+
+            <Slider
+                x:Name="StartSlider"
+                AutomationProperties.AutomationId="VideoTrimStartSlider"
+                AutomationProperties.Name="Trim start"
+                Header="Trim start"
+                Maximum="1000"
+                Minimum="0"
+                StepFrequency="1"
+                ValueChanged="OnStartChanged" />
+            <Slider
+                x:Name="EndSlider"
+                AutomationProperties.AutomationId="VideoTrimEndSlider"
+                AutomationProperties.Name="Trim end"
+                Header="Trim end"
+                Maximum="1000"
+                Minimum="0"
+                StepFrequency="1"
+                Value="1000"
+                ValueChanged="OnEndChanged" />
+
+            <CommandBar DefaultLabelPosition="Right" IsOpen="False">
+                <AppBarButton
+                    x:Name="SaveTrimmedButton"
+                    AutomationProperties.AutomationId="VideoSaveTrimmedButton"
+                    Click="OnSaveTrimmed"
+                    Icon="Trim"
+                    Label="Save trimmed" />
+                <AppBarButton
+                    AutomationProperties.AutomationId="VideoSaveOriginalButton"
+                    Click="OnDone"
+                    Icon="Video"
+                    Label="Keep original" />
+                <CommandBar.SecondaryCommands>
+                    <AppBarButton
+                        AutomationProperties.AutomationId="VideoTrimmerCloseButton"
+                        Click="OnDone"
+                        Label="Close" />
+                </CommandBar.SecondaryCommands>
+            </CommandBar>
+
+            <ProgressBar
+                x:Name="BusyBar"
+                IsIndeterminate="True"
+                Visibility="Collapsed" />
+        </StackPanel>
+    </Grid>
+</Window>

@@ -427,6 +427,28 @@
                     </Grid>
                 </Border>
 
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Open trimmer after recording" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Review and trim the start and end before saving." />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="ShowVideoTrimmerToggle"
+                            AutomationProperties.Name="Open video trimmer after recording"
+                            IsOn="{x:Bind ViewModel.ShowTrimmer, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
                 <!--  GIF  -->
                 <TextBlock
                     Margin="4,16,0,4"
@@ -509,6 +531,28 @@
                                 AutomationProperties.Name="Enable GIF countdown"
                                 IsOn="{x:Bind ViewModel.GifCountdownEnabled, Mode=TwoWay}" />
                         </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Open trimmer after recording" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Drop frames from the start and end before saving." />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="ShowGifTrimmerToggle"
+                            AutomationProperties.Name="Open GIF trimmer after recording"
+                            IsOn="{x:Bind ViewModel.ShowGifTrimmer, Mode=TwoWay}" />
                     </Grid>
                 </Border>
 

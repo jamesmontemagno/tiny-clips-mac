@@ -101,6 +101,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private double _videoCountdownDuration;
 
+    [ObservableProperty]
+    private bool _showTrimmer;
+
     // GIF
     [ObservableProperty]
     private double _gifFrameRate;
@@ -113,6 +116,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private double _gifCountdownDuration;
+
+    [ObservableProperty]
+    private bool _showGifTrimmer;
 
     // Mouse clicks (Pro)
     [ObservableProperty]
@@ -169,11 +175,13 @@ public sealed partial class SettingsViewModel : ObservableObject
             VideoRecordingTimeLimitMinutes = _settings.VideoRecordingTimeLimitMinutes;
             VideoCountdownEnabled = _settings.VideoCountdownEnabled;
             VideoCountdownDuration = _settings.VideoCountdownDuration;
+            ShowTrimmer = _settings.ShowTrimmer;
 
             GifFrameRate = _settings.GifFrameRate;
             GifMaxWidth = _settings.GifMaxWidth;
             GifCountdownEnabled = _settings.GifCountdownEnabled;
             GifCountdownDuration = _settings.GifCountdownDuration;
+            ShowGifTrimmer = _settings.ShowGifTrimmer;
 
             ShowMouseClicksInVideo = _settings.ShowMouseClickVisualsInVideo;
             ShowMouseClicksInGif = _settings.ShowMouseClickVisualsInGif;
@@ -242,6 +250,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnVideoCountdownDurationChanged(double value) =>
         Persist(() => _settings.VideoCountdownDuration = (int)Math.Round(value));
 
+    partial void OnShowTrimmerChanged(bool value) => Persist(() => _settings.ShowTrimmer = value);
+
     partial void OnGifFrameRateChanged(double value) => Persist(() => _settings.GifFrameRate = value);
 
     partial void OnGifMaxWidthChanged(double value) => Persist(() => _settings.GifMaxWidth = (int)Math.Round(value));
@@ -250,6 +260,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnGifCountdownDurationChanged(double value) =>
         Persist(() => _settings.GifCountdownDuration = (int)Math.Round(value));
+
+    partial void OnShowGifTrimmerChanged(bool value) => Persist(() => _settings.ShowGifTrimmer = value);
 
     partial void OnShowMouseClicksInVideoChanged(bool value) => Persist(() => _settings.ShowMouseClickVisualsInVideo = value);
 

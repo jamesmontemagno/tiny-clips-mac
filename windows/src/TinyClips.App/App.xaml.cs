@@ -38,6 +38,8 @@ public partial class App : Application
     private GuideWindow? _guideWindow;
     private OnboardingWindow? _onboardingWindow;
     private ScreenshotEditorWindow? _editorWindow;
+    private Window? _trimmerWindow;
+    private string? _lastTrimmerSourcePath;
     private MenuFlyoutItem? _videoItem;
     private MenuFlyoutItem? _gifItem;
     private GlobalHotKeyManager? _hotKeyManager;
@@ -387,15 +389,71 @@ public partial class App : Application
         _dispatcher?.TryEnqueue(async () =>
         {
             UpdateRecordingState();
-            if (!string.IsNullOrEmpty(path))
+            if (string.IsNullOrEmpty(path))
             {
-                var type = Path.GetExtension(path).Equals(".gif", StringComparison.OrdinalIgnoreCase)
-                    ? CaptureType.Gif
-                    : CaptureType.Video;
-                await CopyToClipboardAsync(path, type);
-                RevealInExplorer(path);
-                ShowSaveToast(path);
+                return;
             }
+
+            var type = Path.GetExtension(path).Equals(".gif", StringComparison.OrdinalIgnoreCase)
+                ? CaptureType.Gif
+                : CaptureType.Video;
+
+            var settings = Services.GetRequiredService<ICaptureSettings>();
+            var showTrimmer = type == CaptureType.Gif ? settings.ShowGifTrimmer : settings.ShowTrimmer;
+            if (showTrimmer)
+            {
+                OpenTrimmer(path, type);
+            }
+            else
+            {
+                await FinalizeClipAsync(path, type);
+            }
+        });
+    }
+
+    private async Task FinalizeClipAsync(string path, CaptureType type)
+    {
+        await CopyToClipboardAsync(path, type);
+        RevealInExplorer(path);
+        ShowSaveToast(path);
+    }
+
+    private void OpenTrimmer(string path, CaptureType type)
+    {
+        _trimmerWindow?.Close();
+        _lastTrimmerSourcePath = path;
+
+        if (type == CaptureType.Gif)
+        {
+            var gifTrimmer = new GifTrimmerWindow(path);
+            gifTrimmer.Completed += OnTrimmerCompleted;
+            _trimmerWindow = gifTrimmer;
+        }
+        else
+        {
+            var videoTrimmer = new VideoTrimmerWindow(path);
+            videoTrimmer.Completed += OnTrimmerCompleted;
+            _trimmerWindow = videoTrimmer;
+        }
+
+        _trimmerWindow.Closed += (_, _) => _trimmerWindow = null;
+        _trimmerWindow.Activate();
+    }
+
+    private void OnTrimmerCompleted(object? sender, string? trimmedPath)
+    {
+        _dispatcher?.TryEnqueue(async () =>
+        {
+            var path = trimmedPath ?? _lastTrimmerSourcePath;
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+
+            var type = Path.GetExtension(path).Equals(".gif", StringComparison.OrdinalIgnoreCase)
+                ? CaptureType.Gif
+                : CaptureType.Video;
+            await FinalizeClipAsync(path, type);
         });
     }
 
@@ -614,6 +672,7 @@ public partial class App : Application
         _guideWindow?.Close();
         _onboardingWindow?.Close();
         _editorWindow?.Close();
+        _trimmerWindow?.Close();
         Application.Current.Exit();
         // No persistent host window keeps the process alive, so force termination
         // to guarantee the user can always quit from the tray menu.
