@@ -30,7 +30,6 @@ public sealed partial class SettingsWindow : Window
             App.Services.GetRequiredService<ICaptureSettings>(),
             App.Services.GetRequiredService<IHotKeyService>(),
             App.Services.GetRequiredService<ILaunchAtLoginService>(),
-            App.Services.GetRequiredService<IEntitlementService>(),
             App.Services.GetRequiredService<IAudioDeviceService>());
 
         InitializeComponent();
@@ -265,7 +264,6 @@ public sealed partial class SettingsWindow : Window
         MouseClicksSection.Visibility = sectionTag == "MouseClicks" ? Visibility.Visible : Visibility.Collapsed;
         BrandingSection.Visibility = sectionTag == "Branding" ? Visibility.Visible : Visibility.Collapsed;
         HotkeysSection.Visibility = sectionTag == "Hotkeys" ? Visibility.Visible : Visibility.Collapsed;
-        ProSection.Visibility = sectionTag == "Pro" ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void OnBrowseSaveDirectory(object sender, RoutedEventArgs e)

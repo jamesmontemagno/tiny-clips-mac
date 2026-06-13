@@ -242,6 +242,111 @@
                         ToolTipService.ToolTip="Delete selected (Del)">
                         <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE74D;" />
                     </Button>
+
+                    <AppBarSeparator Width="1" />
+
+                    <Button
+                        x:Name="BackgroundButton"
+                        AutomationProperties.AutomationId="EditorBackgroundButton"
+                        AutomationProperties.Name="Background and padding"
+                        ToolTipService.ToolTip="Background &amp; padding">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE7F4;" />
+                            <TextBlock VerticalAlignment="Center" Text="Background" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout>
+                                <ScrollViewer
+                                    MaxHeight="540"
+                                    HorizontalScrollMode="Disabled"
+                                    VerticalScrollBarVisibility="Auto">
+                                    <StackPanel Width="288" Spacing="12">
+                                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Background" />
+                                        <ComboBox
+                                            x:Name="BgStyleCombo"
+                                            HorizontalAlignment="Stretch"
+                                            AutomationProperties.AutomationId="EditorBgStyleCombo"
+                                            AutomationProperties.Name="Background style"
+                                            Header="Style"
+                                            SelectionChanged="OnBgStyleChanged">
+                                            <ComboBoxItem Content="Transparent" Tag="Transparent" />
+                                            <ComboBoxItem Content="Solid color" Tag="Solid" />
+                                            <ComboBoxItem Content="Gradient" Tag="Gradient" />
+                                        </ComboBox>
+
+                                        <TextBlock
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Text="Solid presets" />
+                                        <GridView
+                                            x:Name="SolidPresetGrid"
+                                            Padding="0"
+                                            AutomationProperties.Name="Solid background presets"
+                                            SelectionMode="None" />
+
+                                        <TextBlock
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Text="Gradient presets" />
+                                        <GridView
+                                            x:Name="GradientPresetGrid"
+                                            Padding="0"
+                                            AutomationProperties.Name="Gradient background presets"
+                                            SelectionMode="None" />
+
+                                        <StackPanel x:Name="CustomColorPanel" Spacing="12">
+                                            <TextBlock
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Style="{StaticResource CaptionTextBlockStyle}"
+                                                Text="Custom color" />
+                                            <ColorPicker
+                                                x:Name="BgColorPicker"
+                                                ColorChanged="OnBgCustomColorChanged"
+                                                ColorSpectrumShape="Box"
+                                                IsAlphaEnabled="False"
+                                                IsColorPreviewVisible="True"
+                                                IsColorSliderVisible="True"
+                                                IsHexInputVisible="True"
+                                                IsMoreButtonVisible="False" />
+                                            <Button
+                                                HorizontalAlignment="Stretch"
+                                                AutomationProperties.AutomationId="EditorApplyCustomBgButton"
+                                                Click="OnApplyCustomSolidBackground"
+                                                Content="Use as solid background" />
+                                        </StackPanel>
+
+                                        <Slider
+                                            x:Name="PaddingSlider"
+                                            AutomationProperties.AutomationId="EditorPaddingSlider"
+                                            AutomationProperties.Name="Padding"
+                                            Header="Padding"
+                                            Maximum="160"
+                                            Minimum="0"
+                                            StepFrequency="2"
+                                            ValueChanged="OnPaddingChanged" />
+                                        <Slider
+                                            x:Name="CornerSlider"
+                                            AutomationProperties.AutomationId="EditorCornerSlider"
+                                            AutomationProperties.Name="Corner radius"
+                                            Header="Corners"
+                                            Maximum="60"
+                                            Minimum="0"
+                                            StepFrequency="1"
+                                            ValueChanged="OnCornerChanged" />
+                                        <Slider
+                                            x:Name="ShadowSlider"
+                                            AutomationProperties.AutomationId="EditorShadowSlider"
+                                            AutomationProperties.Name="Shadow"
+                                            Header="Shadow"
+                                            Maximum="40"
+                                            Minimum="0"
+                                            StepFrequency="1"
+                                            ValueChanged="OnShadowChanged" />
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
                 </StackPanel>
 
                 <!--  Output actions  -->
@@ -296,9 +401,16 @@
             Background="{ThemeResource SubtleFillColorTertiaryBrush}"
             CornerRadius="{ThemeResource OverlayCornerRadius}"
             SizeChanged="OnImageHostSizeChanged">
-            <Image
-                x:Name="PreviewImage"
-                Stretch="Uniform" />
+            <Canvas x:Name="CanvasLayer" IsHitTestVisible="False">
+                <Border
+                    x:Name="CanvasBackground"
+                    Visibility="Collapsed" />
+                <Border x:Name="ImageCard">
+                    <Image
+                        x:Name="PreviewImage"
+                        Stretch="Fill" />
+                </Border>
+            </Canvas>
             <Canvas
                 x:Name="OverlayCanvas"
                 Background="Transparent"

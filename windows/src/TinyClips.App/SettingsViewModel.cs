@@ -22,32 +22,20 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly ICaptureSettings _settings;
     private readonly IHotKeyService _hotKeys;
     private readonly ILaunchAtLoginService _launchAtLoginService;
-    private readonly IEntitlementService _entitlement;
     private readonly IAudioDeviceService _audioDevices;
     private bool _loading;
 
     /// <summary>Raised when the selected theme changes so the window can re-apply it live.</summary>
     public event Action? ThemeChanged;
 
-    public SettingsViewModel(ICaptureSettings settings, IHotKeyService hotKeys, ILaunchAtLoginService launchAtLogin, IEntitlementService entitlement, IAudioDeviceService audioDevices)
+    public SettingsViewModel(ICaptureSettings settings, IHotKeyService hotKeys, ILaunchAtLoginService launchAtLogin, IAudioDeviceService audioDevices)
     {
         _settings = settings;
         _hotKeys = hotKeys;
         _launchAtLoginService = launchAtLogin;
-        _entitlement = entitlement;
         _audioDevices = audioDevices;
         Load();
     }
-
-    /// <summary>True when Pro features are unlocked. Pro-only controls bind their IsEnabled to this.</summary>
-    public bool IsPro => _entitlement.IsProUnlocked;
-
-    /// <summary>Inverse of <see cref="IsPro"/>, used to show the upsell note for locked features.</summary>
-    public bool IsNotPro => !_entitlement.IsProUnlocked;
-
-    public string ProStatusText => _entitlement.IsProUnlocked
-        ? "Tiny Clips Pro is unlocked. Thank you for your support!"
-        : "Mouse-click visuals and branding overlays are Pro features. Pro will be available as a purchase in the Microsoft Store build.";
 
     // General
     [ObservableProperty]
@@ -143,7 +131,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _showGifTrimmer;
 
-    // Mouse clicks (Pro)
+    // Mouse clicks
     [ObservableProperty]
     private bool _showMouseClicksInVideo;
 
@@ -182,10 +170,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         ? VideoMouseClickColorHex
         : GifMouseClickColorHex;
 
-    /// <summary>True when the GIF click controls should be editable (Pro and not mirroring video).</summary>
-    public bool GifClicksEditable => IsPro && !GifMouseClicksUseVideoSettings;
+    /// <summary>True when the GIF click controls should be editable (i.e. not mirroring the video settings).</summary>
+    public bool GifClicksEditable => !GifMouseClicksUseVideoSettings;
 
-    // Branding (Pro)
+    // Branding
     [ObservableProperty]
     private bool _showBrandingOverlay;
     public string ScreenshotHotKeyDisplay => _hotKeys.GetBinding(CaptureType.Screenshot).DisplayString;

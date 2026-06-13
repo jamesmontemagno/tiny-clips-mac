@@ -6,6 +6,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas.Brushes;
 using Microsoft.Graphics.Canvas.Effects;
 using Microsoft.Graphics.Canvas.Geometry;
 using Microsoft.Graphics.Canvas.Text;
@@ -97,6 +98,57 @@ public sealed partial class ScreenshotEditorWindow : Window
     private Point _pendingTextOrigin;
     private bool _textBoxFocused;
 
+    // -- Export background / padding ------------------------------------------
+
+    private enum ExportBackgroundStyle
+    {
+        Transparent,
+        Solid,
+        Gradient,
+    }
+
+    private sealed record BackgroundPreset(string Id, string Label, ExportBackgroundStyle Style, Color Primary, Color? Secondary);
+
+    private ExportBackgroundStyle _bgStyle = ExportBackgroundStyle.Transparent;
+    private Color _bgColor = Color.FromArgb(255, 245, 245, 250);
+    private Color _bgColor2 = Color.FromArgb(255, 214, 230, 252);
+    private double _canvasPadding;
+    private double _canvasCornerRadius;
+    private double _canvasShadow;
+    private bool _bgInitializing;
+
+    private static readonly BackgroundPreset[] SolidPresets =
+    {
+        new("white", "White", ExportBackgroundStyle.Solid, Color.FromArgb(255, 255, 255, 255), null),
+        new("ink", "Ink", ExportBackgroundStyle.Solid, Color.FromArgb(255, 20, 23, 26), null),
+        new("coral", "Coral", ExportBackgroundStyle.Solid, Color.FromArgb(255, 255, 122, 107), null),
+        new("lemon", "Lemon", ExportBackgroundStyle.Solid, Color.FromArgb(255, 255, 224, 64), null),
+        new("mint", "Mint", ExportBackgroundStyle.Solid, Color.FromArgb(255, 105, 219, 158), null),
+        new("sky", "Sky", ExportBackgroundStyle.Solid, Color.FromArgb(255, 87, 171, 245), null),
+        new("lilac", "Lilac", ExportBackgroundStyle.Solid, Color.FromArgb(255, 179, 148, 240), null),
+        new("bubblegum", "Bubblegum", ExportBackgroundStyle.Solid, Color.FromArgb(255, 255, 107, 194), null),
+        new("tangerine", "Tangerine", ExportBackgroundStyle.Solid, Color.FromArgb(255, 255, 143, 41), null),
+        new("lagoon", "Lagoon", ExportBackgroundStyle.Solid, Color.FromArgb(255, 0, 184, 199), null),
+        new("plum", "Plum", ExportBackgroundStyle.Solid, Color.FromArgb(255, 99, 46, 148), null),
+        new("slate", "Slate", ExportBackgroundStyle.Solid, Color.FromArgb(255, 86, 101, 115), null),
+    };
+
+    private static readonly BackgroundPreset[] GradientPresets =
+    {
+        new("sunset", "Sunset", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 255, 122, 94), Color.FromArgb(255, 255, 219, 79)),
+        new("ocean", "Ocean", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 38, 135, 232), Color.FromArgb(255, 46, 224, 191)),
+        new("candy", "Candy", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 255, 107, 173), Color.FromArgb(255, 140, 199, 255)),
+        new("forest", "Forest", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 41, 143, 89), Color.FromArgb(255, 184, 224, 107)),
+        new("ember", "Ember", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 56, 20, 13), Color.FromArgb(255, 255, 115, 41)),
+        new("aurora", "Aurora", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 71, 240, 184), Color.FromArgb(255, 133, 107, 255)),
+        new("peach", "Peach", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 255, 184, 133), Color.FromArgb(255, 250, 107, 138)),
+        new("glacier", "Glacier", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 186, 240, 255), Color.FromArgb(255, 107, 148, 245)),
+        new("neon", "Neon", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 13, 255, 138), Color.FromArgb(255, 255, 20, 179)),
+        new("mango", "Mango", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 255, 199, 51), Color.FromArgb(255, 255, 66, 46)),
+        new("midnight", "Midnight", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 13, 18, 46), Color.FromArgb(255, 0, 148, 209)),
+        new("prism", "Prism", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 250, 41, 97), Color.FromArgb(255, 46, 219, 237)),
+    };
+
     public ScreenshotEditorWindow(string filePath)
     {
         _filePath = filePath;
@@ -123,9 +175,70 @@ public sealed partial class ScreenshotEditorWindow : Window
         RedactionCombo.SelectedIndex = 1;
         SelectTool(EditTool.Crop);
 
+        InitializeBackgroundControls();
+
         RootGrid.KeyDown += OnRootKeyDown;
 
         _ = LoadAsync();
+    }
+
+    private void InitializeBackgroundControls()
+    {
+        _bgInitializing = true;
+
+        foreach (var preset in SolidPresets)
+        {
+            SolidPresetGrid.Items.Add(CreatePresetSwatch(preset));
+        }
+
+        foreach (var preset in GradientPresets)
+        {
+            GradientPresetGrid.Items.Add(CreatePresetSwatch(preset));
+        }
+
+        BgStyleCombo.SelectedIndex = 0;
+        BgColorPicker.Color = _bgColor;
+        PaddingSlider.Value = _canvasPadding;
+        CornerSlider.Value = _canvasCornerRadius;
+        ShadowSlider.Value = _canvasShadow;
+        UpdateSliderHeaders();
+        UpdateBackgroundStyleUi();
+        ImageCard.Shadow = new ThemeShadow();
+
+        _bgInitializing = false;
+    }
+
+    private Button CreatePresetSwatch(BackgroundPreset preset)
+    {
+        Brush fill = preset.Style == ExportBackgroundStyle.Gradient && preset.Secondary is { } secondary
+            ? new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 1),
+                GradientStops =
+                {
+                    new GradientStop { Color = preset.Primary, Offset = 0 },
+                    new GradientStop { Color = secondary, Offset = 1 },
+                },
+            }
+            : new SolidColorBrush(preset.Primary);
+
+        var button = new Button
+        {
+            Width = 30,
+            Height = 30,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0),
+            CornerRadius = new CornerRadius(6),
+            Background = fill,
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)),
+            Tag = preset,
+        };
+        ToolTipService.SetToolTip(button, preset.Label);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, $"{preset.Label} background");
+        button.Click += OnPresetSwatchClick;
+        return button;
     }
 
     private async Task LoadAsync()
@@ -161,6 +274,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         PreviewImage.Source = source;
 
         ClearSelection();
+        LayoutCanvas();
     }
 
     // -- Tool selection -------------------------------------------------------
@@ -282,6 +396,121 @@ public sealed partial class ScreenshotEditorWindow : Window
     }
 
     private double CounterRadius(double scale) => Math.Max(12, 22 * scale);
+
+    // -- Export background handlers -------------------------------------------
+
+    private void OnPresetSwatchClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: BackgroundPreset preset })
+        {
+            _bgStyle = preset.Style;
+            _bgColor = preset.Primary;
+            _bgColor2 = preset.Secondary ?? preset.Primary;
+
+            _bgInitializing = true;
+            BgStyleCombo.SelectedIndex = preset.Style == ExportBackgroundStyle.Gradient ? 2 : 1;
+            BgColorPicker.Color = _bgColor;
+            _bgInitializing = false;
+
+            UpdateBackgroundStyleUi();
+            LayoutCanvas();
+        }
+    }
+
+    private void OnBgStyleChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_bgInitializing)
+        {
+            return;
+        }
+
+        _bgStyle = BgStyleCombo.SelectedIndex switch
+        {
+            1 => ExportBackgroundStyle.Solid,
+            2 => ExportBackgroundStyle.Gradient,
+            _ => ExportBackgroundStyle.Transparent,
+        };
+        UpdateBackgroundStyleUi();
+        LayoutCanvas();
+    }
+
+    private void UpdateBackgroundStyleUi()
+    {
+        SolidPresetGrid.Visibility = _bgStyle == ExportBackgroundStyle.Solid ? Visibility.Visible : Visibility.Collapsed;
+        GradientPresetGrid.Visibility = _bgStyle == ExportBackgroundStyle.Gradient ? Visibility.Visible : Visibility.Collapsed;
+        CustomColorPanel.Visibility = _bgStyle == ExportBackgroundStyle.Solid ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnBgCustomColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+    {
+        if (_bgInitializing)
+        {
+            return;
+        }
+
+        _bgColor = args.NewColor;
+        if (_bgStyle == ExportBackgroundStyle.Solid)
+        {
+            LayoutCanvas();
+        }
+    }
+
+    private void OnApplyCustomSolidBackground(object sender, RoutedEventArgs e)
+    {
+        _bgStyle = ExportBackgroundStyle.Solid;
+        _bgColor = BgColorPicker.Color;
+
+        _bgInitializing = true;
+        BgStyleCombo.SelectedIndex = 1;
+        _bgInitializing = false;
+
+        UpdateBackgroundStyleUi();
+        LayoutCanvas();
+    }
+
+    private void OnPaddingChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_bgInitializing)
+        {
+            return;
+        }
+
+        _canvasPadding = e.NewValue;
+        UpdateSliderHeaders();
+        LayoutCanvas();
+        RedrawOverlay();
+    }
+
+    private void OnCornerChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_bgInitializing)
+        {
+            return;
+        }
+
+        _canvasCornerRadius = e.NewValue;
+        UpdateSliderHeaders();
+        LayoutCanvas();
+    }
+
+    private void OnShadowChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_bgInitializing)
+        {
+            return;
+        }
+
+        _canvasShadow = e.NewValue;
+        UpdateSliderHeaders();
+        LayoutCanvas();
+    }
+
+    private void UpdateSliderHeaders()
+    {
+        PaddingSlider.Header = $"Padding — {(int)_canvasPadding} px";
+        CornerSlider.Header = $"Corners — {(int)_canvasCornerRadius} px";
+        ShadowSlider.Header = $"Shadow — {(int)_canvasShadow}";
+    }
 
     // -- Pointer interaction --------------------------------------------------
 
@@ -651,10 +880,69 @@ public sealed partial class ScreenshotEditorWindow : Window
             return (1, 0, 0);
         }
 
-        var scale = Math.Min(hostW / imgW, hostH / imgH);
-        var offsetX = (hostW - imgW * scale) / 2.0;
-        var offsetY = (hostH - imgH * scale) / 2.0;
+        // The composite (background frame) is the image plus padding on every side.
+        var pad = _canvasPadding;
+        var compW = imgW + pad * 2;
+        var compH = imgH + pad * 2;
+        var scale = Math.Min(hostW / compW, hostH / compH);
+        var frameOffsetX = (hostW - compW * scale) / 2.0;
+        var frameOffsetY = (hostH - compH * scale) / 2.0;
+        // Offsets returned are the image card's top-left (inside the padded frame),
+        // so annotation pixel<->canvas mapping stays aligned with the screenshot.
+        var offsetX = frameOffsetX + pad * scale;
+        var offsetY = frameOffsetY + pad * scale;
         return (scale, offsetX, offsetY);
+    }
+
+    private void LayoutCanvas()
+    {
+        if (_bitmap is null)
+        {
+            return;
+        }
+
+        double imgW = _bitmap.PixelWidth;
+        double imgH = _bitmap.PixelHeight;
+        var (scale, imageOffX, imageOffY) = ImageLayout();
+        var pad = _canvasPadding * scale;
+
+        // Background frame spans image + padding on all sides.
+        Canvas.SetLeft(CanvasBackground, imageOffX - pad);
+        Canvas.SetTop(CanvasBackground, imageOffY - pad);
+        CanvasBackground.Width = imgW * scale + pad * 2;
+        CanvasBackground.Height = imgH * scale + pad * 2;
+        CanvasBackground.CornerRadius = new CornerRadius(0);
+        CanvasBackground.Background = _bgStyle == ExportBackgroundStyle.Transparent ? null : MakeBackgroundBrush();
+        CanvasBackground.Visibility = _bgStyle == ExportBackgroundStyle.Transparent
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+        // Image card sits inside the frame, rounded + elevated to match export.
+        Canvas.SetLeft(ImageCard, imageOffX);
+        Canvas.SetTop(ImageCard, imageOffY);
+        ImageCard.Width = imgW * scale;
+        ImageCard.Height = imgH * scale;
+        ImageCard.CornerRadius = new CornerRadius(_canvasCornerRadius * scale);
+        ImageCard.Translation = new Vector3(0, 0, (float)(_canvasShadow > 0 ? Math.Max(8, _canvasShadow) : 0));
+    }
+
+    private Brush MakeBackgroundBrush()
+    {
+        if (_bgStyle == ExportBackgroundStyle.Gradient)
+        {
+            return new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 1),
+                GradientStops =
+                {
+                    new GradientStop { Color = _bgColor, Offset = 0 },
+                    new GradientStop { Color = _bgColor2, Offset = 1 },
+                },
+            };
+        }
+
+        return new SolidColorBrush(_bgColor);
     }
 
     private Point CanvasToPixel(Point canvas)
@@ -673,7 +961,11 @@ public sealed partial class ScreenshotEditorWindow : Window
         return new Point(pixel.X * scale + offX, pixel.Y * scale + offY);
     }
 
-    private void OnImageHostSizeChanged(object sender, SizeChangedEventArgs e) => RedrawOverlay();
+    private void OnImageHostSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        LayoutCanvas();
+        RedrawOverlay();
+    }
 
     // -- Live overlay rendering ----------------------------------------------
 
@@ -945,7 +1237,8 @@ public sealed partial class ScreenshotEditorWindow : Window
         try
         {
             // Bake annotations first so they crop with the image, then crop.
-            var flattened = await RenderToBitmapAsync();
+            // The export background is applied at save time, not during crop.
+            var flattened = await RenderToBitmapAsync(includeBackground: false);
             var cropped = await CropAsync(flattened, rect);
             flattened.Dispose();
             await SetBitmapAsync(cropped);
@@ -1017,7 +1310,7 @@ public sealed partial class ScreenshotEditorWindow : Window
     /// Flattens the current bitmap plus all annotations into a new <see cref="SoftwareBitmap"/>
     /// at full resolution using Win2D. Returns a copy even when there are no annotations.
     /// </summary>
-    private async Task<SoftwareBitmap> RenderToBitmapAsync()
+    private async Task<SoftwareBitmap> RenderToBitmapAsync(bool includeBackground = true)
     {
         if (_bitmap is null)
         {
@@ -1027,34 +1320,106 @@ public sealed partial class ScreenshotEditorWindow : Window
         await Task.CompletedTask;
         var device = CanvasDevice.GetSharedDevice();
         using var source = CanvasBitmap.CreateFromSoftwareBitmap(device, _bitmap);
-        var width = (float)_bitmap.PixelWidth;
-        var height = (float)_bitmap.PixelHeight;
+        var imgW = (float)_bitmap.PixelWidth;
+        var imgH = (float)_bitmap.PixelHeight;
 
-        using var target = new CanvasRenderTarget(device, width, height, 96);
+        var hasBackground = _bgStyle != ExportBackgroundStyle.Transparent
+            || _canvasPadding > 0
+            || _canvasCornerRadius > 0
+            || _canvasShadow > 0;
+
+        // Simple path: no background/padding/corners/shadow, or caller opted out (crop pre-bake).
+        if (!includeBackground || !hasBackground)
+        {
+            using var flatTarget = new CanvasRenderTarget(device, imgW, imgH, 96);
+            using (var ds = flatTarget.CreateDrawingSession())
+            {
+                ds.Clear(Colors.Transparent);
+                ds.DrawImage(source);
+                foreach (var ann in _annotations.Where(a => a.Tool == EditTool.Redact))
+                {
+                    DrawRedaction(ds, source, ann);
+                }
+                foreach (var ann in _annotations.Where(a => a.Tool != EditTool.Redact))
+                {
+                    DrawAnnotationToSession(ds, ann);
+                }
+            }
+
+            return SoftwareBitmap.CreateCopyFromBuffer(
+                flatTarget.GetPixelBytes().AsBuffer(),
+                BitmapPixelFormat.Bgra8,
+                (int)imgW,
+                (int)imgH,
+                BitmapAlphaMode.Premultiplied);
+        }
+
+        // Composited path: padded background frame, rounded screenshot card, optional shadow.
+        var pad = (float)Math.Round(_canvasPadding);
+        var corner = (float)_canvasCornerRadius;
+        var outW = imgW + pad * 2;
+        var outH = imgH + pad * 2;
+
+        using var target = new CanvasRenderTarget(device, outW, outH, 96);
         using (var ds = target.CreateDrawingSession())
         {
             ds.Clear(Colors.Transparent);
 
-            // Redactions sample the underlying image, so draw the base first, then redactions,
-            // then the rest of the annotations on top.
-            ds.DrawImage(source);
-
-            foreach (var ann in _annotations.Where(a => a.Tool == EditTool.Redact))
+            var fullRect = new Rect(0, 0, outW, outH);
+            if (_bgStyle == ExportBackgroundStyle.Solid)
             {
-                DrawRedaction(ds, source, ann);
+                ds.FillRectangle(fullRect, _bgColor);
+            }
+            else if (_bgStyle == ExportBackgroundStyle.Gradient)
+            {
+                using var brush = new CanvasLinearGradientBrush(device, _bgColor, _bgColor2)
+                {
+                    StartPoint = new Vector2(0, 0),
+                    EndPoint = new Vector2(outW, outH),
+                };
+                ds.FillRectangle(fullRect, brush);
             }
 
-            foreach (var ann in _annotations.Where(a => a.Tool != EditTool.Redact))
+            using var cardGeo = CanvasGeometry.CreateRoundedRectangle(device, pad, pad, imgW, imgH, corner, corner);
+
+            if (_canvasShadow > 0)
             {
-                DrawAnnotationToSession(ds, ann);
+                using var shadowList = new CanvasCommandList(device);
+                using (var sds = shadowList.CreateDrawingSession())
+                {
+                    sds.FillGeometry(cardGeo, Colors.Black);
+                }
+
+                using var shadow = new ShadowEffect
+                {
+                    Source = shadowList,
+                    BlurAmount = (float)_canvasShadow,
+                    ShadowColor = Color.FromArgb(120, 0, 0, 0),
+                };
+                ds.DrawImage(shadow, new Vector2(0, (float)(_canvasShadow * 0.35)));
+            }
+
+            using (ds.CreateLayer(1f, cardGeo))
+            {
+                ds.Transform = Matrix3x2.CreateTranslation(pad, pad);
+                ds.DrawImage(source);
+                foreach (var ann in _annotations.Where(a => a.Tool == EditTool.Redact))
+                {
+                    DrawRedaction(ds, source, ann);
+                }
+                foreach (var ann in _annotations.Where(a => a.Tool != EditTool.Redact))
+                {
+                    DrawAnnotationToSession(ds, ann);
+                }
+                ds.Transform = Matrix3x2.Identity;
             }
         }
 
         return SoftwareBitmap.CreateCopyFromBuffer(
             target.GetPixelBytes().AsBuffer(),
             BitmapPixelFormat.Bgra8,
-            (int)width,
-            (int)height,
+            (int)outW,
+            (int)outH,
             BitmapAlphaMode.Premultiplied);
     }
 

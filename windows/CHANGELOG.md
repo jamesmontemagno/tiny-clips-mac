@@ -5,7 +5,19 @@ own `CHANGELOG.md` at the repository root.
 
 ## [Unreleased]
 
+### Changed
+- **No Pro gating on Windows** — the Pro concept was removed entirely from the Windows app. All
+  features (mouse-click overlays, separate GIF click styles, branding, uploads, etc.) are always
+  available; the Pro settings section, upsell banners, and the `IEntitlementService`/`ProFeature`
+  abstraction were deleted to keep the app simple.
+
 ### Added
+- **Screenshot editor: export background, padding, corners & shadow** — a new **Background**
+  toolbar control adds a styled backdrop behind the screenshot (Transparent, Solid, or Gradient)
+  with 12 solid + 12 gradient presets and a custom color picker, plus **Padding** (0–160 px),
+  **Corner radius** (0–60 px), and **Shadow** (0–40) sliders. The screenshot is rendered as a
+  rounded, elevated card composited over the chosen background at full resolution on save/copy,
+  mirroring the macOS editor's export background feature.
 - **Screenshot editor: redaction strength & number-size levels** — the Redact tool now offers
   **Light / Medium / Heavy** blur strength and the Number badge tool offers **50%–200%** size
   presets, both shown contextually in the toolbar (mirrors the macOS app's inspector controls).

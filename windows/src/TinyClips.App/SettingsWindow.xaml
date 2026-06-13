@@ -75,11 +75,6 @@
                     Content="Hotkeys"
                     Icon="Keyboard"
                     Tag="Hotkeys" />
-                <NavigationViewItem
-                    AutomationProperties.AutomationId="ProNavigationItem"
-                    Content="Pro"
-                    Icon="Shop"
-                    Tag="Pro" />
             </NavigationView.MenuItems>
 
             <ScrollViewer Padding="0,0,0,24">
@@ -743,18 +738,11 @@
                         x:Name="MouseClicksSection"
                         Spacing="8"
                             Visibility="Collapsed">
-<!--  MOUSE CLICKS (Pro)  -->
+<!--  MOUSE CLICKS  -->
                 <TextBlock
                     Margin="4,16,0,4"
                     Style="{StaticResource SubtitleTextBlockStyle}"
                     Text="Mouse clicks" />
-
-                <InfoBar
-                    x:Name="ProUpsellInfoBar"
-                    IsClosable="False"
-                    IsOpen="{x:Bind ViewModel.IsNotPro, Mode=OneWay}"
-                    Message="{x:Bind ViewModel.ProStatusText, Mode=OneWay}"
-                    Severity="Informational" />
 
                 <Border Style="{StaticResource SettingCardStyle}">
                     <Grid ColumnSpacing="16">
@@ -774,7 +762,6 @@
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="ShowMouseClicksInVideoToggle"
                             AutomationProperties.Name="Show mouse clicks in video"
-                            IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             IsOn="{x:Bind ViewModel.ShowMouseClicksInVideo, Mode=TwoWay}" />
                     </Grid>
                 </Border>
@@ -793,7 +780,6 @@
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="ShowMouseClicksInGifToggle"
                             AutomationProperties.Name="Show mouse clicks in GIF"
-                            IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             IsOn="{x:Bind ViewModel.ShowMouseClicksInGif, Mode=TwoWay}" />
                     </Grid>
                 </Border>
@@ -816,7 +802,6 @@
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="GifUsesVideoClickSettingsToggle"
                             AutomationProperties.Name="GIF uses video click settings"
-                            IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             IsOn="{x:Bind ViewModel.GifMouseClicksUseVideoSettings, Mode=TwoWay}" />
                     </Grid>
                 </Border>
@@ -841,7 +826,6 @@
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="VideoMouseClickSizeNumberBox"
                             AutomationProperties.Name="Video mouse click highlight size"
-                            IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             Maximum="200"
                             Minimum="20"
                             SpinButtonPlacementMode="Inline"
@@ -864,7 +848,6 @@
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="VideoMouseClickOpacityNumberBox"
                             AutomationProperties.Name="Video mouse click highlight opacity"
-                            IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             LargeChange="0.1"
                             Maximum="1.0"
                             Minimum="0.1"
@@ -895,7 +878,7 @@
                             <DropDownButton
                                 AutomationProperties.AutomationId="VideoMouseClickColorButton"
                                 AutomationProperties.Name="Pick video mouse click color"
-                                IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}">
+                                >
                                 <Grid Width="28" Height="28">
                                     <Ellipse Fill="{ThemeResource ControlFillColorDefaultBrush}" />
                                     <Ellipse
@@ -920,8 +903,7 @@
                                 VerticalAlignment="Center"
                                 AutomationProperties.AutomationId="VideoMouseClickColorTextBox"
                                 AutomationProperties.Name="Video mouse click highlight color hex"
-                                IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
-                                Text="{x:Bind ViewModel.VideoMouseClickColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    Text="{x:Bind ViewModel.VideoMouseClickColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1040,7 +1022,7 @@
                         x:Name="BrandingSection"
                         Spacing="8"
                             Visibility="Collapsed">
-<!--  BRANDING (Pro)  -->
+<!--  BRANDING  -->
                 <TextBlock
                     Margin="4,16,0,4"
                     Style="{StaticResource SubtitleTextBlockStyle}"
@@ -1064,7 +1046,6 @@
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="ShowBrandingOverlayToggle"
                             AutomationProperties.Name="Show branding overlay"
-                            IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             IsOn="{x:Bind ViewModel.ShowBrandingOverlay, Mode=TwoWay}" />
                     </Grid>
                 </Border>
@@ -1204,32 +1185,6 @@
                         </Grid>
                     </StackPanel>
                 </Border>
-                    </StackPanel>
-
-                    <StackPanel
-                        x:Name="ProSection"
-                        Spacing="8"
-                        Visibility="Collapsed">
-                        <TextBlock
-                            Margin="4,8,0,4"
-                            Style="{StaticResource SubtitleTextBlockStyle}"
-                            Text="Pro" />
-
-                        <InfoBar
-                            IsClosable="False"
-                            IsOpen="True"
-                            Message="{x:Bind ViewModel.ProStatusText, Mode=OneWay}"
-                            Severity="Informational" />
-
-                        <Border Style="{StaticResource SettingCardStyle}">
-                            <StackPanel Spacing="8">
-                                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Pro features" />
-                                <TextBlock
-                                    Style="{StaticResource CaptionTextBlockStyle}"
-                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                    Text="Mouse-click visuals and branding overlays are grouped in their own sections for quick setup." />
-                            </StackPanel>
-                        </Border>
                     </StackPanel>
                 </Grid>
             </ScrollViewer>
