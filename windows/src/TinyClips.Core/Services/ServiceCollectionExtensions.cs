@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using TinyClips.Core.Capture;
 
 namespace TinyClips.Core.Services;
 
@@ -13,6 +14,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IFileNameService, FileNameService>();
         services.AddSingleton<IClipStorageService, ClipStorageService>();
         services.AddSingleton<IHotKeyService, HotKeyService>();
+        services.AddSingleton<IMonitorService, MonitorService>();
+        services.AddSingleton<IScreenCaptureService, ScreenCaptureService>();
+        services.AddSingleton<IScreenshotService, ScreenshotService>();
         return services;
     }
 }

@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
+using TinyClips.Core.Capture;
 using TinyClips.Core.Models;
 using TinyClips.Core.Services;
 
@@ -48,7 +49,7 @@ public partial class App : Application
         var screenshotItem = new MenuFlyoutItem
         {
             Text = "Screenshot",
-            Command = new RelayCommand(() => Debug.WriteLine("TODO: Screenshot capture not implemented yet."))
+            Command = new AsyncRelayCommand(CaptureScreenshotAsync)
         };
         menuFlyout.Items.Add(screenshotItem);
 
@@ -93,6 +94,39 @@ public partial class App : Application
         };
 
         _taskbarIcon.ForceCreate();
+    }
+
+    private async Task CaptureScreenshotAsync()
+    {
+        try
+        {
+            // Give the tray menu a moment to dismiss so it isn't part of the capture.
+            await Task.Delay(150);
+
+            var screenshots = Services.GetRequiredService<IScreenshotService>();
+            var path = await screenshots.CaptureFullScreenAsync();
+
+            RevealInExplorer(path);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Screenshot capture failed: {ex}");
+        }
+    }
+
+    private static void RevealInExplorer(string path)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"")
+            {
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to reveal file in Explorer: {ex}");
+        }
     }
 
     private void OpenSettingsWindow()
