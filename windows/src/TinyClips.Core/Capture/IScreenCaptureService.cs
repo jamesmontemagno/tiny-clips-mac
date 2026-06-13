@@ -15,4 +15,16 @@ public interface IScreenCaptureService
         PixelRect? region = null,
         bool includeCursor = false,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Captures a single frame of the given target (monitor or window) using
+    /// Windows.Graphics.Capture. When <paramref name="region"/> is supplied (monitor
+    /// targets only) the frame is cropped to that monitor-relative rectangle.
+    /// Pixels are returned tightly packed as BGRA8.
+    /// </summary>
+    Task<CapturedFrame> CaptureAsync(
+        CaptureTarget target,
+        PixelRect? region = null,
+        bool includeCursor = false,
+        CancellationToken cancellationToken = default);
 }

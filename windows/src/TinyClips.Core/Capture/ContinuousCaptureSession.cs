@@ -15,7 +15,7 @@ namespace TinyClips.Core.Capture;
 /// </summary>
 internal sealed class ContinuousCaptureSession : IDisposable
 {
-    private readonly nint _hMonitor;
+    private readonly CaptureTarget _target;
     private readonly PixelRect? _region;
     private readonly bool _includeCursor;
     private readonly TimeSpan _minFrameInterval;
@@ -43,9 +43,9 @@ internal sealed class ContinuousCaptureSession : IDisposable
     /// <summary>Output height in pixels (region height, or full monitor height), rounded down to even.</summary>
     public int OutputHeight { get; private set; }
 
-    public ContinuousCaptureSession(nint hMonitor, PixelRect? region, int targetFps, bool includeCursor)
+    public ContinuousCaptureSession(CaptureTarget target, PixelRect? region, int targetFps, bool includeCursor)
     {
-        _hMonitor = hMonitor;
+        _target = target;
         _region = region;
         _includeCursor = includeCursor;
         var fps = Math.Clamp(targetFps, 1, 120);
@@ -67,8 +67,8 @@ internal sealed class ContinuousCaptureSession : IDisposable
             ?? throw new InvalidOperationException("Failed to create the WinRT IDirect3DDevice.");
         _context = _d3dDevice.ImmediateContext;
 
-        var item = WgcInterop.CreateCaptureItemForMonitor(_hMonitor)
-            ?? throw new InvalidOperationException("Failed to create a GraphicsCaptureItem for the monitor.");
+        var item = _target.CreateItem()
+            ?? throw new InvalidOperationException("Failed to create a GraphicsCaptureItem for the target.");
 
         var size = item.Size;
         _fullWidth = size.Width;

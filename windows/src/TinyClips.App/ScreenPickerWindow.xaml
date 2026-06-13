@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="TinyClips.App.ScreenPickerWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid x:Name="RootGrid">
+        <Grid.Background>
+            <SolidColorBrush Color="Black" Opacity="0.45" />
+        </Grid.Background>
+        <Border
+            MaxWidth="720"
+            Padding="24"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource OverlayCornerRadius}">
+            <StackPanel Spacing="16">
+                <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Choose a screen" />
+                <GridView
+                    x:Name="ScreenList"
+                    AutomationProperties.AutomationId="ScreenList"
+                    IsItemClickEnabled="True"
+                    ItemClick="OnScreenClick"
+                    SelectionMode="None">
+                    <GridView.ItemTemplate>
+                        <DataTemplate>
+                            <Border
+                                Width="200"
+                                Height="130"
+                                Margin="4"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource ControlCornerRadius}">
+                                <StackPanel
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Spacing="8">
+                                    <FontIcon
+                                        HorizontalAlignment="Center"
+                                        FontFamily="Segoe Fluent Icons"
+                                        FontSize="32"
+                                        Glyph="&#xE7F4;" />
+                                    <TextBlock
+                                        HorizontalAlignment="Center"
+                                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                                        Text="{Binding Title}" />
+                                    <TextBlock
+                                        HorizontalAlignment="Center"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="{Binding Subtitle}" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </GridView.ItemTemplate>
+                </GridView>
+                <Button
+                    HorizontalAlignment="Right"
+                    AutomationProperties.AutomationId="ScreenPickerCancel"
+                    Click="OnCancel"
+                    Content="Cancel" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

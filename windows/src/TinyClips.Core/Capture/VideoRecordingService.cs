@@ -43,7 +43,7 @@ public sealed class VideoRecordingService : IVideoRecordingService
 
     public event EventHandler<string?>? RecordingCompleted;
 
-    public async Task StartAsync(CancellationToken cancellationToken = default)
+    public async Task StartAsync(CaptureTarget? target = null, PixelRect? region = null, CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -53,8 +53,9 @@ public sealed class VideoRecordingService : IVideoRecordingService
                 throw new InvalidOperationException("A recording is already in progress.");
             }
 
-            var monitor = _monitors.GetPrimaryMonitor()
-                ?? throw new InvalidOperationException("No monitor was found to record.");
+            var captureTarget = target ?? CaptureTarget.Monitor(
+                (_monitors.GetPrimaryMonitor()
+                    ?? throw new InvalidOperationException("No monitor was found to record.")).HMonitor);
 
             var fps = Math.Clamp(_settings.VideoFrameRate, 1, 60);
             _frameDuration = TimeSpan.FromSeconds(1.0 / fps);
@@ -68,7 +69,7 @@ public sealed class VideoRecordingService : IVideoRecordingService
                     SingleWriter = true,
                 });
 
-                _capture = new ContinuousCaptureSession(monitor.HMonitor, region: null, fps, includeCursor: true);
+                _capture = new ContinuousCaptureSession(captureTarget, region, fps, includeCursor: true);
                 _capture.FrameReady += OnFrameReady;
                 _capture.Start();
 

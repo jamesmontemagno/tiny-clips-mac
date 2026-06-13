@@ -19,8 +19,15 @@ public sealed partial class ScreenCaptureService : IScreenCaptureService
     private const int SettleFrames = 2;
     private const int CaptureTimeoutMs = 4000;
 
-    public async Task<CapturedFrame> CaptureMonitorAsync(
+    public Task<CapturedFrame> CaptureMonitorAsync(
         nint hMonitor,
+        PixelRect? region = null,
+        bool includeCursor = false,
+        CancellationToken cancellationToken = default)
+        => CaptureAsync(CaptureTarget.Monitor(hMonitor), region, includeCursor, cancellationToken);
+
+    public async Task<CapturedFrame> CaptureAsync(
+        CaptureTarget target,
         PixelRect? region = null,
         bool includeCursor = false,
         CancellationToken cancellationToken = default)
@@ -43,8 +50,8 @@ public sealed partial class ScreenCaptureService : IScreenCaptureService
             device = WgcInterop.CreateDirect3DDevice(d3dDevice)
                 ?? throw new InvalidOperationException("Failed to create the WinRT IDirect3DDevice.");
 
-            var item = WgcInterop.CreateCaptureItemForMonitor(hMonitor)
-                ?? throw new InvalidOperationException("Failed to create a GraphicsCaptureItem for the monitor.");
+            var item = target.CreateItem()
+                ?? throw new InvalidOperationException("Failed to create a GraphicsCaptureItem for the target.");
 
             var size = item.Size;
             framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(

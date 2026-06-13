@@ -149,7 +149,13 @@ public partial class App : Application
         return item;
     }
 
-    private async Task CaptureScreenshotAsync()
+    private Task CaptureScreenshotAsync() => BeginCaptureAsync(CaptureType.Screenshot);
+
+    /// <summary>
+    /// Shows the capture picker bar (Region / Screen / Window + countdown), resolves the
+    /// chosen target, runs the countdown, then performs the capture or starts recording.
+    /// </summary>
+    private async Task BeginCaptureAsync(CaptureType type)
     {
         try
         {
@@ -157,23 +163,105 @@ public partial class App : Application
             await Task.Delay(150);
 
             var settings = Services.GetRequiredService<ICaptureSettings>();
-            if (settings.ScreenshotCountdownEnabled && settings.ScreenshotCountdownDuration > 0)
+            var (cdEnabled, cdDuration) = GetCountdown(settings, type);
+
+            var pick = await CapturePickerWindow.RunAsync(type, cdEnabled, cdDuration);
+            if (pick is null)
             {
-                await CountdownWindow.RunAsync(settings.ScreenshotCountdownDuration);
+                return;
             }
 
-            var screenshots = Services.GetRequiredService<IScreenshotService>();
-            var path = await screenshots.CaptureFullScreenAsync();
+            var resolved = await ResolveTargetAsync(pick.Mode);
+            if (resolved is not { } selection)
+            {
+                return;
+            }
 
-            await CopyToClipboardAsync(path, CaptureType.Screenshot);
-            RevealInExplorer(path);
-            ShowSaveToast(path);
+            if (pick.CountdownEnabled && pick.CountdownDuration > 0)
+            {
+                await CountdownWindow.RunAsync(pick.CountdownDuration);
+            }
+
+            switch (type)
+            {
+                case CaptureType.Screenshot:
+                    var screenshots = Services.GetRequiredService<IScreenshotService>();
+                    var path = await screenshots.CaptureTargetAsync(selection.Target, selection.Region);
+                    await CopyToClipboardAsync(path, CaptureType.Screenshot);
+                    RevealInExplorer(path);
+                    ShowSaveToast(path);
+                    break;
+
+                case CaptureType.Video:
+                    await Services.GetRequiredService<IVideoRecordingService>().StartAsync(selection.Target, selection.Region);
+                    UpdateRecordingState();
+                    break;
+
+                case CaptureType.Gif:
+                    await Services.GetRequiredService<IGifRecordingService>().StartAsync(selection.Target, selection.Region);
+                    UpdateRecordingState();
+                    break;
+            }
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"Screenshot capture failed: {ex}");
+            Debug.WriteLine($"Capture failed: {ex}");
+            UpdateRecordingState();
         }
     }
+
+    private async Task<TargetSelection?> ResolveTargetAsync(CapturePickerMode mode)
+    {
+        var monitors = Services.GetRequiredService<IMonitorService>();
+
+        switch (mode)
+        {
+            case CapturePickerMode.Region:
+            {
+                var monitor = monitors.GetPrimaryMonitor();
+                if (monitor is null)
+                {
+                    return null;
+                }
+
+                var region = await RegionSelectWindow.RunAsync(monitor);
+                return region is { } r
+                    ? new TargetSelection(CaptureTarget.Monitor(monitor.HMonitor), r)
+                    : null;
+            }
+
+            case CapturePickerMode.Screen:
+            {
+                var all = monitors.GetMonitors();
+                var chosen = all.Count <= 1
+                    ? all.FirstOrDefault() ?? monitors.GetPrimaryMonitor()
+                    : await ScreenPickerWindow.RunAsync(all);
+                return chosen is { } monitor
+                    ? new TargetSelection(CaptureTarget.Monitor(monitor.HMonitor), null)
+                    : null;
+            }
+
+            case CapturePickerMode.Window:
+            {
+                var hwnd = await WindowPickerWindow.RunAsync();
+                return hwnd is { } h
+                    ? new TargetSelection(CaptureTarget.Window(h), null)
+                    : null;
+            }
+
+            default:
+                return null;
+        }
+    }
+
+    private static (bool Enabled, int Duration) GetCountdown(ICaptureSettings settings, CaptureType type) => type switch
+    {
+        CaptureType.Video => (settings.VideoCountdownEnabled, settings.VideoCountdownDuration),
+        CaptureType.Gif => (settings.GifCountdownEnabled, settings.GifCountdownDuration),
+        _ => (settings.ScreenshotCountdownEnabled, settings.ScreenshotCountdownDuration),
+    };
+
+    private readonly record struct TargetSelection(CaptureTarget Target, PixelRect? Region);
 
     private async Task CaptureRegionAsync()
     {
@@ -226,17 +314,7 @@ public partial class App : Application
                 return;
             }
 
-            // Let the tray menu dismiss before the recording starts.
-            await Task.Delay(150);
-
-            var settings = Services.GetRequiredService<ICaptureSettings>();
-            if (settings.VideoCountdownEnabled && settings.VideoCountdownDuration > 0)
-            {
-                await CountdownWindow.RunAsync(settings.VideoCountdownDuration);
-            }
-
-            await video.StartAsync();
-            UpdateRecordingState();
+            await BeginCaptureAsync(CaptureType.Video);
         }
         catch (Exception ex)
         {
@@ -263,16 +341,7 @@ public partial class App : Application
                 return;
             }
 
-            await Task.Delay(150);
-
-            var settings = Services.GetRequiredService<ICaptureSettings>();
-            if (settings.GifCountdownEnabled && settings.GifCountdownDuration > 0)
-            {
-                await CountdownWindow.RunAsync(settings.GifCountdownDuration);
-            }
-
-            await gif.StartAsync();
-            UpdateRecordingState();
+            await BeginCaptureAsync(CaptureType.Gif);
         }
         catch (Exception ex)
         {

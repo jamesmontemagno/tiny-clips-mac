@@ -42,7 +42,7 @@ public sealed class GifRecordingService : IGifRecordingService
 
     public event EventHandler<string?>? RecordingCompleted;
 
-    public async Task StartAsync(CancellationToken cancellationToken = default)
+    public async Task StartAsync(CaptureTarget? target = null, PixelRect? region = null, CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -52,13 +52,14 @@ public sealed class GifRecordingService : IGifRecordingService
                 throw new InvalidOperationException("A GIF recording is already in progress.");
             }
 
-            var monitor = _monitors.GetPrimaryMonitor()
-                ?? throw new InvalidOperationException("No monitor was found to record.");
+            var captureTarget = target ?? CaptureTarget.Monitor(
+                (_monitors.GetPrimaryMonitor()
+                    ?? throw new InvalidOperationException("No monitor was found to record.")).HMonitor);
 
             _fps = Math.Clamp(_settings.GifFrameRate, 1, 50);
             _frames = new List<CapturedFrame>();
 
-            _capture = new ContinuousCaptureSession(monitor.HMonitor, region: null, (int)Math.Round(_fps), includeCursor: true);
+            _capture = new ContinuousCaptureSession(captureTarget, region, (int)Math.Round(_fps), includeCursor: true);
             _capture.FrameReady += OnFrameReady;
             _capture.Start();
 

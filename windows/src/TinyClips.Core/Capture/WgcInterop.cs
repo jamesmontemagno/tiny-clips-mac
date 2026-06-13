@@ -97,7 +97,17 @@ internal static partial class WgcInterop
         return device;
     }
 
-    internal static unsafe GraphicsCaptureItem CreateCaptureItemForMonitor(nint hMonitor)
+    private delegate int CreateItemCall(IGraphicsCaptureItemInterop interop, out nint itemPtr);
+
+    internal static GraphicsCaptureItem CreateCaptureItemForMonitor(nint hMonitor)
+        => CreateCaptureItem((IGraphicsCaptureItemInterop interop, out nint p) =>
+            interop.CreateForMonitor(hMonitor, in GraphicsCaptureItemGuid, out p));
+
+    internal static GraphicsCaptureItem CreateCaptureItemForWindow(nint hWnd)
+        => CreateCaptureItem((IGraphicsCaptureItemInterop interop, out nint p) =>
+            interop.CreateForWindow(hWnd, in GraphicsCaptureItemGuid, out p));
+
+    private static unsafe GraphicsCaptureItem CreateCaptureItem(CreateItemCall create)
     {
         using var factory = ActivationFactory.Get("Windows.Graphics.Capture.GraphicsCaptureItem");
         nint interopPtr = 0;
@@ -110,8 +120,8 @@ internal static partial class WgcInterop
             var interop = ComInterfaceMarshaller<IGraphicsCaptureItemInterop>.ConvertToManaged((void*)interopPtr)!;
             interopPtr = 0;
 
-            interop.CreateForMonitor(hMonitor, in GraphicsCaptureItemGuid, out itemPtr)
-                .ThrowIfFailed("IGraphicsCaptureItemInterop.CreateForMonitor");
+            create(interop, out itemPtr)
+                .ThrowIfFailed("IGraphicsCaptureItemInterop.CreateForMonitor/Window");
 
             var item = MarshalInspectable<GraphicsCaptureItem>.FromAbi(itemPtr);
             itemPtr = 0;

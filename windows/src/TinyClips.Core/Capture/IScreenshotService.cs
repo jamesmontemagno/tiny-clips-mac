@@ -15,4 +15,11 @@ public interface IScreenshotService
     /// encodes it per the user's screenshot settings and saves it. Returns the saved path.
     /// </summary>
     Task<string> CaptureRegionAsync(PixelRect region, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Captures the given target (a specific monitor or a window), with an optional
+    /// monitor-relative region, encodes it per the user's screenshot settings and saves
+    /// it. Returns the saved file path.
+    /// </summary>
+    Task<string> CaptureTargetAsync(CaptureTarget target, PixelRect? region = null, CancellationToken cancellationToken = default);
 }
