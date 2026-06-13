@@ -59,71 +59,79 @@ public sealed class VideoRecordingService : IVideoRecordingService
             var fps = Math.Clamp(_settings.VideoFrameRate, 1, 60);
             _frameDuration = TimeSpan.FromSeconds(1.0 / fps);
 
-            _channel = Channel.CreateBounded<TimestampedFrame>(new BoundedChannelOptions(fps * 4)
+            try
             {
-                FullMode = BoundedChannelFullMode.DropWrite,
-                SingleReader = true,
-                SingleWriter = true,
-            });
+                _channel = Channel.CreateBounded<TimestampedFrame>(new BoundedChannelOptions(fps * 4)
+                {
+                    FullMode = BoundedChannelFullMode.DropWrite,
+                    SingleReader = true,
+                    SingleWriter = true,
+                });
 
-            _capture = new ContinuousCaptureSession(monitor.HMonitor, region: null, fps, includeCursor: true);
-            _capture.FrameReady += OnFrameReady;
-            _capture.Start();
+                _capture = new ContinuousCaptureSession(monitor.HMonitor, region: null, fps, includeCursor: true);
+                _capture.FrameReady += OnFrameReady;
+                _capture.Start();
 
-            var width = _capture.OutputWidth;
-            var height = _capture.OutputHeight;
+                var width = _capture.OutputWidth;
+                var height = _capture.OutputHeight;
 
-            _outputPath = _storage.GenerateFilePath(CaptureType.Video);
-            var directory = Path.GetDirectoryName(_outputPath);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
+                _outputPath = _storage.GenerateFilePath(CaptureType.Video);
+                var directory = Path.GetDirectoryName(_outputPath);
+                if (!string.IsNullOrEmpty(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                _fileStream = new FileStream(_outputPath, FileMode.Create, FileAccess.ReadWrite, FileShare.Read);
+                var randomAccessStream = _fileStream.AsRandomAccessStream();
+
+                var profile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.HD1080p);
+                profile.Audio = null;
+                profile.Video.Width = (uint)width;
+                profile.Video.Height = (uint)height;
+                profile.Video.FrameRate.Numerator = (uint)fps;
+                profile.Video.FrameRate.Denominator = 1;
+                profile.Video.PixelAspectRatio.Numerator = 1;
+                profile.Video.PixelAspectRatio.Denominator = 1;
+                profile.Video.Bitrate = (uint)Math.Clamp((long)width * height * fps / 10, 2_000_000, 24_000_000);
+
+                var videoProps = VideoEncodingProperties.CreateUncompressed(MediaEncodingSubtypes.Bgra8, (uint)width, (uint)height);
+                videoProps.FrameRate.Numerator = (uint)fps;
+                videoProps.FrameRate.Denominator = 1;
+
+                var videoDescriptor = new VideoStreamDescriptor(videoProps);
+                var mediaStreamSource = new MediaStreamSource(videoDescriptor) { BufferTime = TimeSpan.Zero };
+                mediaStreamSource.Starting += (_, args) => args.Request.SetActualStartPosition(TimeSpan.Zero);
+                mediaStreamSource.SampleRequested += OnSampleRequested;
+
+                var transcoder = new MediaTranscoder { HardwareAccelerationEnabled = true };
+                var prepare = await transcoder
+                    .PrepareMediaStreamSourceTranscodeAsync(mediaStreamSource, randomAccessStream, profile)
+                    .AsTask(cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (!prepare.CanTranscode)
+                {
+                    throw new InvalidOperationException($"Cannot encode video: {prepare.FailureReason}.");
+                }
+
+                _transcodeTask = prepare.TranscodeAsync().AsTask();
+                IsRecording = true;
+
+                var limitMinutes = _settings.VideoRecordingTimeLimitMinutes;
+                if (limitMinutes > 0)
+                {
+                    _limitTimer = new Timer(
+                        _ => _ = StopAsync(),
+                        null,
+                        TimeSpan.FromMinutes(limitMinutes),
+                        Timeout.InfiniteTimeSpan);
+                }
             }
-
-            _fileStream = new FileStream(_outputPath, FileMode.Create, FileAccess.ReadWrite, FileShare.Read);
-            var randomAccessStream = _fileStream.AsRandomAccessStream();
-
-            var profile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.HD1080p);
-            profile.Audio = null;
-            profile.Video.Width = (uint)width;
-            profile.Video.Height = (uint)height;
-            profile.Video.FrameRate.Numerator = (uint)fps;
-            profile.Video.FrameRate.Denominator = 1;
-            profile.Video.PixelAspectRatio.Numerator = 1;
-            profile.Video.PixelAspectRatio.Denominator = 1;
-            profile.Video.Bitrate = (uint)Math.Clamp((long)width * height * fps / 10, 2_000_000, 24_000_000);
-
-            var videoProps = VideoEncodingProperties.CreateUncompressed(MediaEncodingSubtypes.Bgra8, (uint)width, (uint)height);
-            videoProps.FrameRate.Numerator = (uint)fps;
-            videoProps.FrameRate.Denominator = 1;
-
-            var videoDescriptor = new VideoStreamDescriptor(videoProps);
-            var mediaStreamSource = new MediaStreamSource(videoDescriptor) { BufferTime = TimeSpan.Zero };
-            mediaStreamSource.Starting += (_, args) => args.Request.SetActualStartPosition(TimeSpan.Zero);
-            mediaStreamSource.SampleRequested += OnSampleRequested;
-
-            var transcoder = new MediaTranscoder { HardwareAccelerationEnabled = true };
-            var prepare = await transcoder
-                .PrepareMediaStreamSourceTranscodeAsync(mediaStreamSource, randomAccessStream, profile)
-                .AsTask(cancellationToken)
-                .ConfigureAwait(false);
-
-            if (!prepare.CanTranscode)
+            catch
             {
-                throw new InvalidOperationException($"Cannot encode video: {prepare.FailureReason}.");
-            }
-
-            _transcodeTask = prepare.TranscodeAsync().AsTask();
-            IsRecording = true;
-
-            var limitMinutes = _settings.VideoRecordingTimeLimitMinutes;
-            if (limitMinutes > 0)
-            {
-                _limitTimer = new Timer(
-                    _ => _ = StopAsync(),
-                    null,
-                    TimeSpan.FromMinutes(limitMinutes),
-                    Timeout.InfiniteTimeSpan);
+                CleanupFailedStart();
+                throw;
             }
         }
         finally
@@ -135,6 +143,34 @@ public sealed class VideoRecordingService : IVideoRecordingService
     private void OnFrameReady(CapturedFrame frame, TimeSpan pts)
     {
         _channel?.Writer.TryWrite(new TimestampedFrame(frame.BgraPixels, pts));
+    }
+
+    private void CleanupFailedStart()
+    {
+        _limitTimer?.Dispose();
+        _limitTimer = null;
+        _capture?.Dispose();
+        _capture = null;
+        _channel?.Writer.TryComplete();
+        _channel = null;
+        _transcodeTask = null;
+        _fileStream?.Dispose();
+        _fileStream = null;
+
+        if (!string.IsNullOrEmpty(_outputPath))
+        {
+            try
+            {
+                File.Delete(_outputPath);
+            }
+            catch
+            {
+                // Best-effort cleanup of the partial file.
+            }
+        }
+
+        _outputPath = null;
+        IsRecording = false;
     }
 
     private async void OnSampleRequested(MediaStreamSource sender, MediaStreamSourceSampleRequestedEventArgs args)

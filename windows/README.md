@@ -4,7 +4,18 @@ A native **WinUI 3 / Windows App SDK** port of Tiny Clips — a tray-based scree
 (screenshots, video, GIF). See the full design in
 [`/plans/windows-winui3-port-plan.md`](../plans/windows-winui3-port-plan.md).
 
-> Status: **Phase 0 (foundations)** — tray-first app shell, DI, settings/entitlement services, CI.
+> Status: **Phase 1 (capture core) complete** — tray app with screenshot, region capture,
+> MP4 video + animated GIF recording, global hotkeys, pre-capture countdown, save toasts,
+> and a native Settings window.
+
+## Features
+
+- **Screenshot** (PNG/JPEG, scale, quality) — full screen or drag-selected **region**.
+- **Video recording** → hardware-accelerated **H.264 MP4** (configurable frame rate, time limit).
+- **GIF recording** → animated GIF (frame rate, max-width downscale, infinite loop).
+- **Global hotkeys** — Screenshot `Ctrl+Shift+5`, Video `Ctrl+Shift+6`, GIF `Ctrl+Shift+7`.
+- **Pre-capture countdown** and **save toast notifications** (both opt-in via Settings).
+- **System-tray** Fluent menu (rounded/acrylic), light/dark/system theming, **Settings** window.
 
 ## Requirements
 
@@ -52,8 +63,9 @@ dotnet run --project windows/src/TinyClips.App/TinyClips.App.csproj -c Debug -p:
 dotnet test windows/tests/TinyClips.Core.Tests/TinyClips.Core.Tests.csproj -c Debug
 ```
 
-The app launches **tray-only** (no window). Right-click the tray icon for the menu;
-**Settings** opens a placeholder window, **Exit** quits.
+The app launches **tray-only** (no window). Left- or right-click the tray icon for the Fluent
+menu: **Screenshot**, **Capture Region**, **Record Video**, **Record GIF**, **Settings**, **Exit**.
+Recording items toggle to **Stop Recording** while active. Global hotkeys work app-wide.
 
 ## CI
 

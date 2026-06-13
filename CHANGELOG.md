@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - "Captured on Tiny Clips" branding overlay: a global setting (off by default) that burns a semi-transparent watermark into the bottom-right corner of screenshots, video recordings, and GIFs.
 - Recommendation link for installing ClickLight was added to mouse click settings for enhanced click animation visuals.
+- **Windows (WinUI 3) port — Phase 1 capture core:** native system-tray app with screenshot and drag-to-select region capture, hardware-accelerated H.264 MP4 video recording, animated GIF recording, app-wide global hotkeys (Ctrl+Shift+5/6/7), pre-capture countdown, save toast notifications, and a Fluent Settings window. Plus winget packaging templates and a packaging guide.
 
 ### Fixed
 - Start recording panel now falls back to the system default microphone when the previously selected device is no longer connected, and clears the stale saved selection.
