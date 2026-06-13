@@ -1,13 +1,17 @@
 using System.Diagnostics;
+using System.IO;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using H.NotifyIcon;
 using H.NotifyIcon.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.Windows.AppNotifications;
+using Microsoft.Windows.AppNotifications.Builder;
 using TinyClips.Core.Capture;
 using TinyClips.Core.Models;
 using TinyClips.Core.Services;
@@ -18,8 +22,18 @@ public partial class App : Application
 {
     private static readonly FontFamily FluentIconFont = new("Segoe Fluent Icons");
 
+    // Segoe Fluent Icons glyphs.
+    private const string GlyphScreenshot = "\uE722";
+    private const string GlyphVideo = "\uE714";
+    private const string GlyphGif = "\uE786";
+    private const string GlyphStop = "\uE71A";
+
     private TaskbarIcon? _taskbarIcon;
     private SettingsWindow? _settingsWindow;
+    private MenuFlyoutItem? _videoItem;
+    private MenuFlyoutItem? _gifItem;
+    private GlobalHotKeyManager? _hotKeyManager;
+    private DispatcherQueue? _dispatcher;
 
     public static IServiceProvider Services { get; private set; } = null!;
 
@@ -35,7 +49,12 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        _dispatcher = DispatcherQueue.GetForCurrentThread();
+
+        RegisterNotifications();
+        WireRecordingEvents();
         CreateTrayIcon();
+        RegisterGlobalHotKeys();
     }
 
     private void CreateTrayIcon()
@@ -51,21 +70,23 @@ public partial class App : Application
 
         menuFlyout.Items.Add(CreateMenuItem(
             text: "Screenshot",
-            glyph: "\uE722",
+            glyph: GlyphScreenshot,
             acceleratorText: hotKeys.GetBinding(CaptureType.Screenshot).DisplayString,
             command: new AsyncRelayCommand(CaptureScreenshotAsync)));
 
-        menuFlyout.Items.Add(CreateMenuItem(
+        _videoItem = CreateMenuItem(
             text: "Record Video",
-            glyph: "\uE714",
+            glyph: GlyphVideo,
             acceleratorText: hotKeys.GetBinding(CaptureType.Video).DisplayString,
-            command: new RelayCommand(() => Debug.WriteLine("TODO: Video capture not implemented yet."))));
+            command: new AsyncRelayCommand(ToggleVideoAsync));
+        menuFlyout.Items.Add(_videoItem);
 
-        menuFlyout.Items.Add(CreateMenuItem(
+        _gifItem = CreateMenuItem(
             text: "Record GIF",
-            glyph: "\uE786",
+            glyph: GlyphGif,
             acceleratorText: hotKeys.GetBinding(CaptureType.Gif).DisplayString,
-            command: new RelayCommand(() => Debug.WriteLine("TODO: GIF capture not implemented yet."))));
+            command: new AsyncRelayCommand(ToggleGifAsync));
+        menuFlyout.Items.Add(_gifItem);
 
         menuFlyout.Items.Add(new MenuFlyoutSeparator());
 
@@ -129,10 +150,185 @@ public partial class App : Application
             var path = await screenshots.CaptureFullScreenAsync();
 
             RevealInExplorer(path);
+            ShowSaveToast(path);
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"Screenshot capture failed: {ex}");
+        }
+    }
+
+    private async Task ToggleVideoAsync()
+    {
+        var video = Services.GetRequiredService<IVideoRecordingService>();
+        var gif = Services.GetRequiredService<IGifRecordingService>();
+
+        try
+        {
+            if (video.IsRecording)
+            {
+                await video.StopAsync();
+                return;
+            }
+
+            if (gif.IsRecording)
+            {
+                return;
+            }
+
+            // Let the tray menu dismiss before the recording starts.
+            await Task.Delay(150);
+            await video.StartAsync();
+            UpdateRecordingState();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Video recording toggle failed: {ex}");
+            UpdateRecordingState();
+        }
+    }
+
+    private async Task ToggleGifAsync()
+    {
+        var video = Services.GetRequiredService<IVideoRecordingService>();
+        var gif = Services.GetRequiredService<IGifRecordingService>();
+
+        try
+        {
+            if (gif.IsRecording)
+            {
+                await gif.StopAsync();
+                return;
+            }
+
+            if (video.IsRecording)
+            {
+                return;
+            }
+
+            await Task.Delay(150);
+            await gif.StartAsync();
+            UpdateRecordingState();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"GIF recording toggle failed: {ex}");
+            UpdateRecordingState();
+        }
+    }
+
+    private void WireRecordingEvents()
+    {
+        var video = Services.GetRequiredService<IVideoRecordingService>();
+        var gif = Services.GetRequiredService<IGifRecordingService>();
+        video.RecordingCompleted += OnRecordingCompleted;
+        gif.RecordingCompleted += OnRecordingCompleted;
+    }
+
+    private void OnRecordingCompleted(object? sender, string? path)
+    {
+        _dispatcher?.TryEnqueue(() =>
+        {
+            UpdateRecordingState();
+            if (!string.IsNullOrEmpty(path))
+            {
+                RevealInExplorer(path);
+                ShowSaveToast(path);
+            }
+        });
+    }
+
+    private void UpdateRecordingState()
+    {
+        var video = Services.GetRequiredService<IVideoRecordingService>();
+        var gif = Services.GetRequiredService<IGifRecordingService>();
+
+        if (_videoItem is not null)
+        {
+            var recording = video.IsRecording;
+            _videoItem.Text = recording ? "Stop Recording" : "Record Video";
+            if (_videoItem.Icon is FontIcon icon)
+            {
+                icon.Glyph = recording ? GlyphStop : GlyphVideo;
+            }
+
+            _videoItem.IsEnabled = !gif.IsRecording;
+        }
+
+        if (_gifItem is not null)
+        {
+            var recording = gif.IsRecording;
+            _gifItem.Text = recording ? "Stop Recording" : "Record GIF";
+            if (_gifItem.Icon is FontIcon icon)
+            {
+                icon.Glyph = recording ? GlyphStop : GlyphGif;
+            }
+
+            _gifItem.IsEnabled = !video.IsRecording;
+        }
+    }
+
+    private static void RegisterNotifications()
+    {
+        try
+        {
+            AppNotificationManager.Default.Register();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Notification registration failed: {ex}");
+        }
+    }
+
+    private void ShowSaveToast(string path)
+    {
+        try
+        {
+            var settings = Services.GetRequiredService<ICaptureSettings>();
+            if (!settings.ShowSaveNotifications)
+            {
+                return;
+            }
+
+            var notification = new AppNotificationBuilder()
+                .AddText("Saved to Tiny Clips")
+                .AddText(Path.GetFileName(path))
+                .BuildNotification();
+
+            AppNotificationManager.Default.Show(notification);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to show save notification: {ex}");
+        }
+    }
+
+    private void RegisterGlobalHotKeys()
+    {
+        if (_dispatcher is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var hotKeys = Services.GetRequiredService<IHotKeyService>();
+            _hotKeyManager = new GlobalHotKeyManager(_dispatcher);
+
+            var screenshot = hotKeys.GetBinding(CaptureType.Screenshot);
+            _hotKeyManager.Add(screenshot.ModifiersValue, screenshot.VirtualKey, () => _ = CaptureScreenshotAsync());
+
+            var videoBinding = hotKeys.GetBinding(CaptureType.Video);
+            _hotKeyManager.Add(videoBinding.ModifiersValue, videoBinding.VirtualKey, () => _ = ToggleVideoAsync());
+
+            var gifBinding = hotKeys.GetBinding(CaptureType.Gif);
+            _hotKeyManager.Add(gifBinding.ModifiersValue, gifBinding.VirtualKey, () => _ = ToggleGifAsync());
+
+            _hotKeyManager.Start();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Global hotkey registration failed: {ex}");
         }
     }
 
@@ -164,6 +360,21 @@ public partial class App : Application
 
     private void ExitApplication()
     {
+        try
+        {
+            var video = Services.GetRequiredService<IVideoRecordingService>();
+            if (video.IsRecording)
+            {
+                video.StopAsync().GetAwaiter().GetResult();
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to stop recording on exit: {ex}");
+        }
+
+        _hotKeyManager?.Dispose();
+        _hotKeyManager = null;
         _taskbarIcon?.Dispose();
         _taskbarIcon = null;
         _settingsWindow?.Close();
@@ -190,4 +401,3 @@ public partial class App : Application
         }
     }
 }
-
