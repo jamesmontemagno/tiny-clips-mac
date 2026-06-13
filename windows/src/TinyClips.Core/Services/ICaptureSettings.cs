@@ -11,6 +11,7 @@ public interface ICaptureSettings
     bool CopyGifToClipboard { get; set; }
     bool ShowInExplorer { get; set; }
     bool ShowSaveNotifications { get; set; }
+    bool LaunchAtLogin { get; set; }
     string FileNameTemplate { get; set; }
     bool UploadcareEnabled { get; set; }
     bool ClipsManagerShowAutoTags { get; set; }

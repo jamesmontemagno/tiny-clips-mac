@@ -158,15 +158,37 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
-                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Copy screenshots to the clipboard" />
-                        </StackPanel>
-                        <ToggleSwitch
-                            Grid.Column="1"
-                            VerticalAlignment="Center"
-                            AutomationProperties.AutomationId="CopyScreenshotToggle"
-                            AutomationProperties.Name="Copy screenshots to the clipboard"
-                            IsOn="{x:Bind ViewModel.CopyScreenshotToClipboard, Mode=TwoWay}" />
-                    </Grid>
+                           <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Launch at login" />
+                           <TextBlock
+                               Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Start Tiny Clips when I sign in to Windows." />
+                       </StackPanel>
+                       <ToggleSwitch
+                           Grid.Column="1"
+                           VerticalAlignment="Center"
+                           AutomationProperties.AutomationId="LaunchAtLoginToggle"
+                           AutomationProperties.Name="Launch at login"
+                           IsOn="{x:Bind ViewModel.LaunchAtLogin, Mode=TwoWay}" />
+                   </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                   <Grid ColumnSpacing="16">
+                       <Grid.ColumnDefinitions>
+                           <ColumnDefinition Width="*" />
+                           <ColumnDefinition Width="Auto" />
+                       </Grid.ColumnDefinitions>
+                       <StackPanel VerticalAlignment="Center">
+                           <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Copy screenshots to the clipboard" />
+                       </StackPanel>
+                       <ToggleSwitch
+                           Grid.Column="1"
+                           VerticalAlignment="Center"
+                           AutomationProperties.AutomationId="CopyScreenshotToggle"
+                           AutomationProperties.Name="Copy screenshots to the clipboard"
+                           IsOn="{x:Bind ViewModel.CopyScreenshotToClipboard, Mode=TwoWay}" />
+                   </Grid>
                 </Border>
 
                 <!--  SCREENSHOT  -->

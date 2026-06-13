@@ -39,6 +39,9 @@ public partial class App : Application
     private ScreenshotEditorWindow? _editorWindow;
     private Window? _trimmerWindow;
     private string? _lastTrimmerSourcePath;
+    private RecordingIndicatorWindow? _recordingIndicator;
+    private DispatcherTimer? _recordingTimer;
+    private DateTime _recordingStartedUtc;
     private MenuFlyoutItem? _videoItem;
     private MenuFlyoutItem? _gifItem;
     private GlobalHotKeyManager? _hotKeyManager;
@@ -214,11 +217,13 @@ public partial class App : Application
                 case CaptureType.Video:
                     await Services.GetRequiredService<IVideoRecordingService>().StartAsync(selection.Target, selection.Region);
                     UpdateRecordingState();
+                    ShowRecordingIndicator(CaptureType.Video);
                     break;
 
                 case CaptureType.Gif:
                     await Services.GetRequiredService<IGifRecordingService>().StartAsync(selection.Target, selection.Region);
                     UpdateRecordingState();
+                    ShowRecordingIndicator(CaptureType.Gif);
                     break;
             }
         }
@@ -226,6 +231,7 @@ public partial class App : Application
         {
             Debug.WriteLine($"Capture failed: {ex}");
             UpdateRecordingState();
+            HideRecordingIndicatorIfNotRecording();
         }
     }
 
@@ -324,7 +330,7 @@ public partial class App : Application
         {
             if (video.IsRecording)
             {
-                await video.StopAsync();
+                await StopActiveRecordingAsync();
                 return;
             }
 
@@ -351,7 +357,7 @@ public partial class App : Application
         {
             if (gif.IsRecording)
             {
-                await gif.StopAsync();
+                await StopActiveRecordingAsync();
                 return;
             }
 
@@ -366,6 +372,7 @@ public partial class App : Application
         {
             Debug.WriteLine($"GIF recording toggle failed: {ex}");
             UpdateRecordingState();
+            HideRecordingIndicatorIfNotRecording();
         }
     }
 
@@ -382,6 +389,7 @@ public partial class App : Application
         _dispatcher?.TryEnqueue(async () =>
         {
             UpdateRecordingState();
+            HideRecordingIndicator();
             if (string.IsNullOrEmpty(path))
             {
                 return;
@@ -402,6 +410,97 @@ public partial class App : Application
                 await FinalizeClipAsync(path, type);
             }
         });
+    }
+
+    private async Task StopActiveRecordingAsync()
+    {
+        try
+        {
+            var video = Services.GetRequiredService<IVideoRecordingService>();
+            var gif = Services.GetRequiredService<IGifRecordingService>();
+
+            if (video.IsRecording)
+            {
+                await video.StopAsync();
+            }
+            else if (gif.IsRecording)
+            {
+                await gif.StopAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to stop active recording: {ex}");
+        }
+        finally
+        {
+            UpdateRecordingState();
+            HideRecordingIndicatorIfNotRecording();
+        }
+    }
+
+    private void ShowRecordingIndicator(CaptureType type)
+    {
+        HideRecordingIndicator();
+
+        _recordingStartedUtc = DateTime.UtcNow;
+
+        var hotKeys = Services.GetRequiredService<IHotKeyService>();
+        var window = new RecordingIndicatorWindow(hotKeys.GetBinding(type).DisplayString);
+        window.StopRequested = () => _ = StopActiveRecordingAsync();
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_recordingIndicator, window))
+            {
+                StopRecordingTimer();
+                _recordingIndicator = null;
+            }
+        };
+
+        _recordingIndicator = window;
+        window.UpdateElapsed(TimeSpan.Zero);
+        window.ShowNear();
+
+        _recordingTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _recordingTimer.Tick += OnRecordingTimerTick;
+        _recordingTimer.Start();
+    }
+
+    private void OnRecordingTimerTick(object? sender, object e)
+    {
+        _recordingIndicator?.UpdateElapsed(DateTime.UtcNow - _recordingStartedUtc);
+    }
+
+    private void HideRecordingIndicatorIfNotRecording()
+    {
+        var video = Services.GetRequiredService<IVideoRecordingService>();
+        var gif = Services.GetRequiredService<IGifRecordingService>();
+
+        if (!video.IsRecording && !gif.IsRecording)
+        {
+            HideRecordingIndicator();
+        }
+    }
+
+    private void HideRecordingIndicator()
+    {
+        StopRecordingTimer();
+
+        var window = _recordingIndicator;
+        _recordingIndicator = null;
+        window?.ClosePanel();
+    }
+
+    private void StopRecordingTimer()
+    {
+        if (_recordingTimer is null)
+        {
+            return;
+        }
+
+        _recordingTimer.Stop();
+        _recordingTimer.Tick -= OnRecordingTimerTick;
+        _recordingTimer = null;
     }
 
     private async Task FinalizeClipAsync(string path, CaptureType type)
@@ -654,6 +753,7 @@ public partial class App : Application
         _onboardingWindow?.Close();
         _editorWindow?.Close();
         _trimmerWindow?.Close();
+        HideRecordingIndicator();
         Application.Current.Exit();
         // No persistent host window keeps the process alive, so force termination
         // to guarantee the user can always quit from the tray menu.

@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IClipStorageService, ClipStorageService>();
         services.AddSingleton<IClipsLibraryService, ClipsLibraryService>();
         services.AddSingleton<IHotKeyService, HotKeyService>();
+        services.AddSingleton<ILaunchAtLoginService, LaunchAtLoginService>();
         services.AddSingleton<IMonitorService, MonitorService>();
         services.AddSingleton<IScreenCaptureService, ScreenCaptureService>();
         services.AddSingleton<IScreenshotService, ScreenshotService>();

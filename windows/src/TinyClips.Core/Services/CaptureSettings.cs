@@ -53,6 +53,12 @@ public sealed class CaptureSettings : ICaptureSettings
         set => _settings.Set("showSaveNotifications", value);
     }
 
+    public bool LaunchAtLogin
+    {
+        get => _settings.Get("launchAtLogin", false);
+        set => _settings.Set("launchAtLogin", value);
+    }
+
     public string FileNameTemplate
     {
         get => _settings.Get("fileNameTemplate", "TinyClips {date} at {time}");
@@ -546,6 +552,7 @@ public sealed class CaptureSettings : ICaptureSettings
         CopyGifToClipboard = false;
         ShowInExplorer = false;
         ShowSaveNotifications = false;
+        LaunchAtLogin = false;
         FileNameTemplate = "TinyClips {date} at {time}";
         UploadcareEnabled = false;
         ClipsManagerShowAutoTags = true;

@@ -20,16 +20,18 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly ICaptureSettings _settings;
     private readonly IHotKeyService _hotKeys;
+    private readonly ILaunchAtLoginService _launchAtLoginService;
     private readonly IEntitlementService _entitlement;
     private bool _loading;
 
     /// <summary>Raised when the selected theme changes so the window can re-apply it live.</summary>
     public event Action? ThemeChanged;
 
-    public SettingsViewModel(ICaptureSettings settings, IHotKeyService hotKeys, IEntitlementService entitlement)
+    public SettingsViewModel(ICaptureSettings settings, IHotKeyService hotKeys, ILaunchAtLoginService launchAtLogin, IEntitlementService entitlement)
     {
         _settings = settings;
         _hotKeys = hotKeys;
+        _launchAtLoginService = launchAtLogin;
         _entitlement = entitlement;
         Load();
     }
@@ -59,6 +61,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _showSaveNotifications;
+
+    [ObservableProperty]
+    private bool _launchAtLogin;
 
     [ObservableProperty]
     private bool _copyScreenshotToClipboard;
@@ -160,6 +165,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             FileNameTemplate = _settings.FileNameTemplate;
             ShowInExplorer = _settings.ShowInExplorer;
             ShowSaveNotifications = _settings.ShowSaveNotifications;
+            LaunchAtLogin = _settings.LaunchAtLogin;
             CopyScreenshotToClipboard = _settings.CopyScreenshotToClipboard;
 
             ScreenshotFormatIndex = _settings.ImageFormat == ImageFormat.Png ? 0 : 1;
@@ -219,6 +225,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnShowInExplorerChanged(bool value) => Persist(() => _settings.ShowInExplorer = value);
 
     partial void OnShowSaveNotificationsChanged(bool value) => Persist(() => _settings.ShowSaveNotifications = value);
+
+    partial void OnLaunchAtLoginChanged(bool value)
+    {
+        Persist(() =>
+        {
+            _settings.LaunchAtLogin = value;
+            _launchAtLoginService.Apply(value);
+        });
+    }
 
     partial void OnCopyScreenshotToClipboardChanged(bool value) => Persist(() => _settings.CopyScreenshotToClipboard = value);
 
