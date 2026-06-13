@@ -144,6 +144,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private double _videoMouseClickOpacity;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MouseClickPreviewColorHex))]
+    private string _videoMouseClickColorHex = "#FFD60A";
+
+    /// <summary>Hex color surfaced to the settings preview swatch.</summary>
+    public string MouseClickPreviewColorHex => VideoMouseClickColorHex;
+
     // Branding (Pro)
     [ObservableProperty]
     private bool _showBrandingOverlay;
@@ -198,6 +205,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             GifMouseClicksUseVideoSettings = _settings.GifMouseClicksUseVideoSettings;
             VideoMouseClickSize = _settings.VideoMouseClickSize;
             VideoMouseClickOpacity = _settings.VideoMouseClickOpacity;
+            VideoMouseClickColorHex = _settings.VideoMouseClickColorHex;
             ShowBrandingOverlay = _settings.ShowBrandingOverlay;
         }
         finally
@@ -293,6 +301,15 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnVideoMouseClickSizeChanged(double value) => Persist(() => _settings.VideoMouseClickSize = value);
 
     partial void OnVideoMouseClickOpacityChanged(double value) => Persist(() => _settings.VideoMouseClickOpacity = value);
+
+    partial void OnVideoMouseClickColorHexChanged(string value) => Persist(() =>
+    {
+        _settings.VideoMouseClickColorHex = value;
+        if (_settings.GifMouseClicksUseVideoSettings)
+        {
+            _settings.GifMouseClickColorHex = value;
+        }
+    });
 
     partial void OnShowBrandingOverlayChanged(bool value) => Persist(() => _settings.ShowBrandingOverlay = value);
 

@@ -1,11 +1,16 @@
 using System;
+using System.ComponentModel;
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using TinyClips.Core.Services;
 using Windows.Graphics;
 using Windows.Storage;
 using Windows.Storage.Pickers;
+using Windows.UI;
 
 namespace TinyClips.App;
 
@@ -32,14 +37,50 @@ public sealed partial class SettingsWindow : Window
         AppWindow.Resize(new SizeInt32(1040, 820));
 
         ApplyTheme();
+        UpdateMouseClickPreview();
         ViewModel.ThemeChanged += ApplyTheme;
+        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         Closed += OnClosed;
     }
 
     private void OnClosed(object sender, WindowEventArgs args)
     {
         ViewModel.ThemeChanged -= ApplyTheme;
+        ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
         Closed -= OnClosed;
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SettingsViewModel.MouseClickPreviewColorHex) ||
+            e.PropertyName == nameof(SettingsViewModel.VideoMouseClickColorHex))
+        {
+            UpdateMouseClickPreview();
+        }
+    }
+
+    private void UpdateMouseClickPreview()
+    {
+        MouseClickPreviewRing.Stroke = new SolidColorBrush(ParseHexColor(ViewModel.MouseClickPreviewColorHex));
+    }
+
+    private static Color ParseHexColor(string? hex)
+    {
+        var s = (hex ?? string.Empty).Trim().TrimStart('#');
+        if (s.Length == 8)
+        {
+            s = s[2..];
+        }
+
+        if (s.Length == 6 &&
+            byte.TryParse(s.AsSpan(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) &&
+            byte.TryParse(s.AsSpan(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) &&
+            byte.TryParse(s.AsSpan(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
+        {
+            return Color.FromArgb(255, r, g, b);
+        }
+
+        return Color.FromArgb(255, 255, 214, 10);
     }
 
     private void ApplyTheme()

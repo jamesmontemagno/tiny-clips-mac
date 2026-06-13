@@ -28,6 +28,11 @@ public sealed class GifRecordingService : IGifRecordingService
     private double _fps;
     private int _stopping;
 
+    private MouseClickMonitor? _clickMonitor;
+    private MouseClickOverlayStyle _clickStyle;
+    private int _clickOriginX;
+    private int _clickOriginY;
+
     public GifRecordingService(
         IMonitorService monitors,
         IClipStorageService storage,
@@ -63,6 +68,8 @@ public sealed class GifRecordingService : IGifRecordingService
             _capture.FrameReady += OnFrameReady;
             _capture.Start();
 
+            StartMouseClickOverlay(captureTarget, region);
+
             IsRecording = true;
         }
         finally
@@ -73,6 +80,19 @@ public sealed class GifRecordingService : IGifRecordingService
 
     private void OnFrameReady(CapturedFrame frame, TimeSpan pts)
     {
+        if (_clickMonitor is { } monitor)
+        {
+            MouseClickOverlayCompositor.Draw(
+                frame.BgraPixels,
+                frame.Width,
+                frame.Height,
+                pts.TotalSeconds,
+                monitor.GetClicks(),
+                _clickOriginX,
+                _clickOriginY,
+                _clickStyle);
+        }
+
         lock (_frameLock)
         {
             if (_frames is { Count: < MaxFrames })
@@ -80,6 +100,27 @@ public sealed class GifRecordingService : IGifRecordingService
                 _frames.Add(frame);
             }
         }
+    }
+
+    private void StartMouseClickOverlay(CaptureTarget target, PixelRect? region)
+    {
+        if (target.IsWindow || !_settings.ShouldShowMouseClickVisuals(CaptureType.Gif))
+        {
+            return;
+        }
+
+        var monitor = _monitors.GetMonitors().FirstOrDefault(m => m.HMonitor == target.HMonitor)
+            ?? _monitors.GetPrimaryMonitor();
+        if (monitor == null)
+        {
+            return;
+        }
+
+        _clickOriginX = monitor.X + (region?.X ?? 0);
+        _clickOriginY = monitor.Y + (region?.Y ?? 0);
+        _clickStyle = _settings.MouseClickOverlayStyleFor(CaptureType.Gif);
+        _clickMonitor = new MouseClickMonitor();
+        _clickMonitor.Start();
     }
 
     public async Task<string?> StopAsync()
@@ -98,6 +139,8 @@ public sealed class GifRecordingService : IGifRecordingService
             }
 
             _capture?.Stop();
+            _clickMonitor?.Dispose();
+            _clickMonitor = null;
 
             List<CapturedFrame> frames;
             lock (_frameLock)

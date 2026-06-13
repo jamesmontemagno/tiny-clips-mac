@@ -6,6 +6,12 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Added
+- **Mouse-click visual overlays** in video and GIF recordings: a global low-level mouse hook
+  (`MouseClickMonitor`) records click timing/position, and `MouseClickOverlayCompositor` draws
+  expanding, fading pulse rings into each captured frame (parity with the macOS
+  `MouseClickOverlayProcessor`). Honors the per-type enable toggle and is gated to monitor/region
+  targets (window targets are skipped, matching the mac restriction).
+- Mouse-click **highlight color** setting with a live preview swatch in the Mouse Clicks section.
 - Region / Screen / Window **capture picker** shown before each capture, with `R` / `S` / `W`
   shortcuts and an inline pre-capture countdown (parity with the macOS picker).
 - Per-window and per-monitor capture targets (`CaptureTarget`) wired through screenshot, video,
@@ -51,6 +57,14 @@ own `CHANGELOG.md` at the repository root.
   finishes.
 
 ### Fixed
+- **Drag jitter** when moving the capture picker and recording indicator — dragging is now
+  cursor-anchored, so the windows follow the pointer smoothly instead of jumping.
+- **Screenshot editor crash** — removed a reference to a nonexistent WinUI resource key
+  (`AccentFillColorSelectedContentBackgroundBrush`) that threw during XAML parse and silently
+  prevented the editor from opening; opening is also now wrapped with a reveal/toast fallback.
+- **Countdown** is now a compact rounded square instead of a large background panel.
+- **Region outline is now hollow** (a punched-out frame) so the content being recorded is
+  visible through the middle.
 - **Recorded MP4 was vertically flipped** — video frames are now written with the correct
   top-down orientation (the GIF path was already correct).
 - **Screenshot editor** now reliably opens and comes to the foreground after a screenshot.

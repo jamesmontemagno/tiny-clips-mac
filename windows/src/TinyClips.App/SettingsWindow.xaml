@@ -798,6 +798,43 @@
                             Value="{x:Bind ViewModel.VideoMouseClickOpacity, Mode=TwoWay}" />
                     </Grid>
                 </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Highlight color" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Hex color (e.g. #FFD60A) used for the click pulse ring." />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="12">
+                            <Grid Width="40" Height="40">
+                                <Ellipse Fill="{ThemeResource ControlFillColorDefaultBrush}" />
+                                <Ellipse
+                                    x:Name="MouseClickPreviewRing"
+                                    Width="30"
+                                    Height="30"
+                                    StrokeThickness="4" />
+                            </Grid>
+                            <TextBox
+                                Width="120"
+                                VerticalAlignment="Center"
+                                AutomationProperties.AutomationId="VideoMouseClickColorTextBox"
+                                AutomationProperties.Name="Mouse click highlight color hex"
+                                IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
+                                Text="{x:Bind ViewModel.VideoMouseClickColorHex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
                     </StackPanel>
 
                     <StackPanel

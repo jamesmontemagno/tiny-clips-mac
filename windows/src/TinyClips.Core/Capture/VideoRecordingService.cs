@@ -29,6 +29,11 @@ public sealed class VideoRecordingService : IVideoRecordingService
     private Timer? _limitTimer;
     private int _stopping;
 
+    private MouseClickMonitor? _clickMonitor;
+    private MouseClickOverlayStyle _clickStyle;
+    private int _clickOriginX;
+    private int _clickOriginY;
+
     public VideoRecordingService(
         IMonitorService monitors,
         IClipStorageService storage,
@@ -72,6 +77,8 @@ public sealed class VideoRecordingService : IVideoRecordingService
                 _capture = new ContinuousCaptureSession(captureTarget, region, fps, includeCursor: true);
                 _capture.FrameReady += OnFrameReady;
                 _capture.Start();
+
+                StartMouseClickOverlay(captureTarget, region);
 
                 var width = _capture.OutputWidth;
                 var height = _capture.OutputHeight;
@@ -143,7 +150,50 @@ public sealed class VideoRecordingService : IVideoRecordingService
 
     private void OnFrameReady(CapturedFrame frame, TimeSpan pts)
     {
+        DrawClickOverlay(frame, pts);
         _channel?.Writer.TryWrite(new TimestampedFrame(CreateBottomUpVideoBuffer(frame), pts));
+    }
+
+    private void StartMouseClickOverlay(CaptureTarget target, PixelRect? region)
+    {
+        // Mouse-click visuals only map reliably onto a (possibly cropped) monitor;
+        // window targets move/resize, so skip them — matching the mac restriction.
+        if (target.IsWindow || !_settings.ShouldShowMouseClickVisuals(CaptureType.Video))
+        {
+            return;
+        }
+
+        var monitor = _monitors.GetMonitors().FirstOrDefault(m => m.HMonitor == target.HMonitor)
+            ?? _monitors.GetPrimaryMonitor();
+        if (monitor == null)
+        {
+            return;
+        }
+
+        _clickOriginX = monitor.X + (region?.X ?? 0);
+        _clickOriginY = monitor.Y + (region?.Y ?? 0);
+        _clickStyle = _settings.MouseClickOverlayStyleFor(CaptureType.Video);
+        _clickMonitor = new MouseClickMonitor();
+        _clickMonitor.Start();
+    }
+
+    private void DrawClickOverlay(CapturedFrame frame, TimeSpan pts)
+    {
+        var monitor = _clickMonitor;
+        if (monitor == null)
+        {
+            return;
+        }
+
+        MouseClickOverlayCompositor.Draw(
+            frame.BgraPixels,
+            frame.Width,
+            frame.Height,
+            pts.TotalSeconds,
+            monitor.GetClicks(),
+            _clickOriginX,
+            _clickOriginY,
+            _clickStyle);
     }
 
     private static byte[] CreateBottomUpVideoBuffer(CapturedFrame frame)
@@ -169,6 +219,8 @@ public sealed class VideoRecordingService : IVideoRecordingService
     {
         _limitTimer?.Dispose();
         _limitTimer = null;
+        _clickMonitor?.Dispose();
+        _clickMonitor = null;
         _capture?.Dispose();
         _capture = null;
         _channel?.Writer.TryComplete();
@@ -245,6 +297,9 @@ public sealed class VideoRecordingService : IVideoRecordingService
 
             _limitTimer?.Dispose();
             _limitTimer = null;
+
+            _clickMonitor?.Dispose();
+            _clickMonitor = null;
 
             // Stop new frames, then let the encoder drain what's buffered.
             _capture?.Stop();
