@@ -173,12 +173,18 @@ public partial class App : Application
     /// Shows the capture picker bar (Region / Screen / Window + countdown), resolves the
     /// chosen target, runs the countdown, then performs the capture or starts recording.
     /// </summary>
-    private async Task BeginCaptureAsync(CaptureType type)
+    private async Task BeginCaptureAsync(CaptureType type, bool abortIfRecording = false)
     {
         try
         {
             // Give the tray menu a moment to dismiss so it isn't part of the capture.
             await Task.Delay(150);
+
+            // For an auto-reopened picker, bail out if a recording started during the delay.
+            if (abortIfRecording && (_isExiting || IsAnyRecordingActive()))
+            {
+                return;
+            }
 
             var settings = Services.GetRequiredService<ICaptureSettings>();
             var (cdEnabled, cdDuration) = GetCountdown(settings, type);
@@ -900,7 +906,7 @@ public partial class App : Application
             return;
         }
 
-        await BeginCaptureAsync(type);
+        await BeginCaptureAsync(type, abortIfRecording: true);
     }
 
     private static bool IsAnyRecordingActive()
