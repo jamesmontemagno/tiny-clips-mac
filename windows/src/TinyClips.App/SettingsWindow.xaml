@@ -12,11 +12,546 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid>
-        <TextBlock
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center"
-            FontSize="18"
-            Text="Tiny Clips Settings (placeholder)" />
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!--  Custom title bar  -->
+        <Grid
+            x:Name="AppTitleBar"
+            Grid.Row="0"
+            Height="48"
+            Padding="16,0">
+            <TextBlock
+                VerticalAlignment="Center"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Tiny Clips Settings" />
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" Padding="0,0,0,24">
+            <StackPanel
+                MaxWidth="760"
+                Margin="24,8,24,0"
+                HorizontalAlignment="Stretch"
+                Spacing="8">
+
+                <!--  GENERAL  -->
+                <TextBlock
+                    Margin="4,8,0,4"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="General" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Appearance" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Choose how Tiny Clips windows are themed." />
+                        </StackPanel>
+                        <ComboBox
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="ThemeComboBox"
+                            AutomationProperties.Name="Application theme"
+                            SelectedIndex="{x:Bind ViewModel.ThemeIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="Use system setting" />
+                            <ComboBoxItem Content="Light" />
+                            <ComboBoxItem Content="Dark" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Save location" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="{x:Bind ViewModel.SaveDirectory, Mode=OneWay}"
+                                TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <Button
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="BrowseSaveDirectoryButton"
+                            Click="OnBrowseSaveDirectory"
+                            Content="Browse&#x2026;" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="File name template" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Tokens: {date} {time}" />
+                        </StackPanel>
+                        <TextBox
+                            Grid.Column="1"
+                            Width="240"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="FileNameTemplateTextBox"
+                            AutomationProperties.Name="File name template"
+                            Text="{x:Bind ViewModel.FileNameTemplate, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Reveal in File Explorer after capture" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="ShowInExplorerToggle"
+                            AutomationProperties.Name="Reveal in File Explorer after capture"
+                            IsOn="{x:Bind ViewModel.ShowInExplorer, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Show a notification after saving" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="ShowSaveNotificationsToggle"
+                            AutomationProperties.Name="Show a notification after saving"
+                            IsOn="{x:Bind ViewModel.ShowSaveNotifications, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Copy screenshots to the clipboard" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="CopyScreenshotToggle"
+                            AutomationProperties.Name="Copy screenshots to the clipboard"
+                            IsOn="{x:Bind ViewModel.CopyScreenshotToClipboard, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <!--  SCREENSHOT  -->
+                <TextBlock
+                    Margin="4,16,0,4"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Screenshot" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Image format" />
+                        </StackPanel>
+                        <ComboBox
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="ScreenshotFormatComboBox"
+                            AutomationProperties.Name="Screenshot image format"
+                            SelectedIndex="{x:Bind ViewModel.ScreenshotFormatIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="PNG" />
+                            <ComboBoxItem Content="JPEG" />
+                        </ComboBox>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Scale" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Resize saved screenshots as a percentage of full resolution." />
+                        </StackPanel>
+                        <Slider
+                            Grid.Column="1"
+                            Width="220"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="ScreenshotScaleSlider"
+                            AutomationProperties.Name="Screenshot scale percentage"
+                            Maximum="100"
+                            Minimum="25"
+                            StepFrequency="5"
+                            TickFrequency="25"
+                            Value="{x:Bind ViewModel.ScreenshotScale, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="JPEG quality" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Only used when the image format is JPEG." />
+                        </StackPanel>
+                        <Slider
+                            Grid.Column="1"
+                            Width="220"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="JpegQualitySlider"
+                            AutomationProperties.Name="JPEG quality"
+                            Maximum="1.0"
+                            Minimum="0.1"
+                            StepFrequency="0.05"
+                            Value="{x:Bind ViewModel.JpegQuality, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Countdown before capture" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="12">
+                            <NumberBox
+                                Width="120"
+                                AutomationProperties.AutomationId="ScreenshotCountdownDurationNumberBox"
+                                AutomationProperties.Name="Screenshot countdown seconds"
+                                IsEnabled="{x:Bind ViewModel.ScreenshotCountdownEnabled, Mode=OneWay}"
+                                Maximum="10"
+                                Minimum="1"
+                                SpinButtonPlacementMode="Inline"
+                                Value="{x:Bind ViewModel.ScreenshotCountdownDuration, Mode=TwoWay}" />
+                            <ToggleSwitch
+                                AutomationProperties.AutomationId="ScreenshotCountdownToggle"
+                                AutomationProperties.Name="Enable screenshot countdown"
+                                IsOn="{x:Bind ViewModel.ScreenshotCountdownEnabled, Mode=TwoWay}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!--  VIDEO  -->
+                <TextBlock
+                    Margin="4,16,0,4"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Video" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Frame rate" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Frames per second for recorded video." />
+                        </StackPanel>
+                        <NumberBox
+                            Grid.Column="1"
+                            Width="120"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="VideoFrameRateNumberBox"
+                            AutomationProperties.Name="Video frame rate"
+                            Maximum="60"
+                            Minimum="10"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind ViewModel.VideoFrameRate, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Record system audio" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="RecordAudioToggle"
+                            AutomationProperties.Name="Record system audio"
+                            IsOn="{x:Bind ViewModel.RecordAudio, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Record microphone" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="RecordMicrophoneToggle"
+                            AutomationProperties.Name="Record microphone"
+                            IsOn="{x:Bind ViewModel.RecordMicrophone, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Recording time limit" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Stop recording automatically after this many minutes (0 = no limit)." />
+                        </StackPanel>
+                        <NumberBox
+                            Grid.Column="1"
+                            Width="120"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="VideoTimeLimitNumberBox"
+                            AutomationProperties.Name="Video recording time limit in minutes"
+                            Maximum="180"
+                            Minimum="0"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind ViewModel.VideoRecordingTimeLimitMinutes, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Countdown before recording" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="12">
+                            <NumberBox
+                                Width="120"
+                                AutomationProperties.AutomationId="VideoCountdownDurationNumberBox"
+                                AutomationProperties.Name="Video countdown seconds"
+                                IsEnabled="{x:Bind ViewModel.VideoCountdownEnabled, Mode=OneWay}"
+                                Maximum="10"
+                                Minimum="1"
+                                SpinButtonPlacementMode="Inline"
+                                Value="{x:Bind ViewModel.VideoCountdownDuration, Mode=TwoWay}" />
+                            <ToggleSwitch
+                                AutomationProperties.AutomationId="VideoCountdownToggle"
+                                AutomationProperties.Name="Enable video countdown"
+                                IsOn="{x:Bind ViewModel.VideoCountdownEnabled, Mode=TwoWay}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!--  GIF  -->
+                <TextBlock
+                    Margin="4,16,0,4"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="GIF" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Frame rate" />
+                        </StackPanel>
+                        <NumberBox
+                            Grid.Column="1"
+                            Width="120"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="GifFrameRateNumberBox"
+                            AutomationProperties.Name="GIF frame rate"
+                            Maximum="50"
+                            Minimum="5"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind ViewModel.GifFrameRate, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Maximum width" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="GIF frames are scaled down to at most this width (pixels)." />
+                        </StackPanel>
+                        <NumberBox
+                            Grid.Column="1"
+                            Width="120"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="GifMaxWidthNumberBox"
+                            AutomationProperties.Name="GIF maximum width"
+                            Maximum="1920"
+                            Minimum="240"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind ViewModel.GifMaxWidth, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Countdown before recording" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="12">
+                            <NumberBox
+                                Width="120"
+                                AutomationProperties.AutomationId="GifCountdownDurationNumberBox"
+                                AutomationProperties.Name="GIF countdown seconds"
+                                IsEnabled="{x:Bind ViewModel.GifCountdownEnabled, Mode=OneWay}"
+                                Maximum="10"
+                                Minimum="1"
+                                SpinButtonPlacementMode="Inline"
+                                Value="{x:Bind ViewModel.GifCountdownDuration, Mode=TwoWay}" />
+                            <ToggleSwitch
+                                AutomationProperties.AutomationId="GifCountdownToggle"
+                                AutomationProperties.Name="Enable GIF countdown"
+                                IsOn="{x:Bind ViewModel.GifCountdownEnabled, Mode=TwoWay}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!--  SHORTCUTS  -->
+                <TextBlock
+                    Margin="4,16,0,4"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Keyboard shortcuts" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Screenshot" />
+                            <Border
+                                Grid.Column="1"
+                                Padding="10,4"
+                                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                CornerRadius="{ThemeResource ControlCornerRadius}">
+                                <TextBlock FontFamily="Consolas" Text="{x:Bind ViewModel.ScreenshotHotKeyDisplay}" />
+                            </Border>
+                        </Grid>
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Record video" />
+                            <Border
+                                Grid.Column="1"
+                                Padding="10,4"
+                                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                CornerRadius="{ThemeResource ControlCornerRadius}">
+                                <TextBlock FontFamily="Consolas" Text="{x:Bind ViewModel.VideoHotKeyDisplay}" />
+                            </Border>
+                        </Grid>
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Record GIF" />
+                            <Border
+                                Grid.Column="1"
+                                Padding="10,4"
+                                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                CornerRadius="{ThemeResource ControlCornerRadius}">
+                                <TextBlock FontFamily="Consolas" Text="{x:Bind ViewModel.GifHotKeyDisplay}" />
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
     </Grid>
 </Window>

@@ -13,6 +13,13 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!--
+      MVVMTK0045 recommends partial-property [ObservableProperty] for WinRT AOT marshalling.
+      Our view models are only consumed via compiled x:Bind in C# and never cross the WinRT ABI,
+      and the toolkit's partial-property generator does not emit in this configuration, so the
+      hint does not apply here.
+    -->
+    <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

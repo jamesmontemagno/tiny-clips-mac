@@ -1,12 +1,66 @@
+using System;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+using TinyClips.Core.Services;
+using Windows.Graphics;
+using Windows.Storage;
+using Windows.Storage.Pickers;
 
 namespace TinyClips.App;
 
 public sealed partial class SettingsWindow : Window
 {
+    public SettingsViewModel ViewModel { get; }
+
     public SettingsWindow()
     {
+        ViewModel = new SettingsViewModel(
+            App.Services.GetRequiredService<ICaptureSettings>(),
+            App.Services.GetRequiredService<IHotKeyService>());
+
         InitializeComponent();
+
         ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
+
+        AppWindow.Resize(new SizeInt32(760, 820));
+
+        ApplyTheme();
+        ViewModel.ThemeChanged += ApplyTheme;
+        Closed += OnClosed;
+    }
+
+    private void OnClosed(object sender, WindowEventArgs args)
+    {
+        ViewModel.ThemeChanged -= ApplyTheme;
+        Closed -= OnClosed;
+    }
+
+    private void ApplyTheme()
+    {
+        RootGrid.RequestedTheme = ViewModel.ThemeIndex switch
+        {
+            1 => ElementTheme.Light,
+            2 => ElementTheme.Dark,
+            _ => ElementTheme.Default,
+        };
+    }
+
+    private async void OnBrowseSaveDirectory(object sender, RoutedEventArgs e)
+    {
+        var picker = new FolderPicker
+        {
+            SuggestedStartLocation = PickerLocationId.PicturesLibrary,
+        };
+        picker.FileTypeFilter.Add("*");
+
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+        StorageFolder? folder = await picker.PickSingleFolderAsync();
+        if (folder is not null)
+        {
+            ViewModel.SaveDirectory = folder.Path;
+        }
     }
 }
