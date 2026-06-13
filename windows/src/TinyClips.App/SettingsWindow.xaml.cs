@@ -16,7 +16,8 @@ public sealed partial class SettingsWindow : Window
     {
         ViewModel = new SettingsViewModel(
             App.Services.GetRequiredService<ICaptureSettings>(),
-            App.Services.GetRequiredService<IHotKeyService>());
+            App.Services.GetRequiredService<IHotKeyService>(),
+            App.Services.GetRequiredService<IEntitlementService>());
 
         InitializeComponent();
 

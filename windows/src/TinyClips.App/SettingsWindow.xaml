@@ -551,6 +551,161 @@
                         </Grid>
                     </StackPanel>
                 </Border>
+
+                <!--  MOUSE CLICKS (Pro)  -->
+                <TextBlock
+                    Margin="4,16,0,4"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Mouse clicks" />
+
+                <InfoBar
+                    x:Name="ProUpsellInfoBar"
+                    IsClosable="False"
+                    IsOpen="{x:Bind ViewModel.IsNotPro}"
+                    Message="{x:Bind ViewModel.ProStatusText}"
+                    Severity="Informational" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Show clicks in video" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Draw an animated highlight at each mouse click while recording video." />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="ShowMouseClicksInVideoToggle"
+                            AutomationProperties.Name="Show mouse clicks in video"
+                            IsEnabled="{x:Bind ViewModel.IsPro}"
+                            IsOn="{x:Bind ViewModel.ShowMouseClicksInVideo, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Show clicks in GIF" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="ShowMouseClicksInGifToggle"
+                            AutomationProperties.Name="Show mouse clicks in GIF"
+                            IsEnabled="{x:Bind ViewModel.IsPro}"
+                            IsOn="{x:Bind ViewModel.ShowMouseClicksInGif, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="GIF uses video click settings" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Reuse the video highlight size and opacity for GIF recordings." />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="GifUsesVideoClickSettingsToggle"
+                            AutomationProperties.Name="GIF uses video click settings"
+                            IsEnabled="{x:Bind ViewModel.IsPro}"
+                            IsOn="{x:Bind ViewModel.GifMouseClicksUseVideoSettings, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Highlight size" />
+                        </StackPanel>
+                        <NumberBox
+                            Grid.Column="1"
+                            Width="120"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="VideoMouseClickSizeNumberBox"
+                            AutomationProperties.Name="Mouse click highlight size"
+                            IsEnabled="{x:Bind ViewModel.IsPro}"
+                            Maximum="200"
+                            Minimum="20"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind ViewModel.VideoMouseClickSize, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Highlight opacity" />
+                        </StackPanel>
+                        <NumberBox
+                            Grid.Column="1"
+                            Width="120"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="VideoMouseClickOpacityNumberBox"
+                            AutomationProperties.Name="Mouse click highlight opacity"
+                            IsEnabled="{x:Bind ViewModel.IsPro}"
+                            LargeChange="0.1"
+                            Maximum="1.0"
+                            Minimum="0.1"
+                            SmallChange="0.05"
+                            SpinButtonPlacementMode="Inline"
+                            Value="{x:Bind ViewModel.VideoMouseClickOpacity, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
+                <!--  BRANDING (Pro)  -->
+                <TextBlock
+                    Margin="4,16,0,4"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Branding" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Branding overlay" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Add a small Tiny Clips watermark to the corner of captures." />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="ShowBrandingOverlayToggle"
+                            AutomationProperties.Name="Show branding overlay"
+                            IsEnabled="{x:Bind ViewModel.IsPro}"
+                            IsOn="{x:Bind ViewModel.ShowBrandingOverlay, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
             </StackPanel>
         </ScrollViewer>
     </Grid>

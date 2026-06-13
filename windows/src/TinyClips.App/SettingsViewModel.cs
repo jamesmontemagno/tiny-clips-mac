@@ -20,17 +20,29 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     private readonly ICaptureSettings _settings;
     private readonly IHotKeyService _hotKeys;
+    private readonly IEntitlementService _entitlement;
     private bool _loading;
 
     /// <summary>Raised when the selected theme changes so the window can re-apply it live.</summary>
     public event Action? ThemeChanged;
 
-    public SettingsViewModel(ICaptureSettings settings, IHotKeyService hotKeys)
+    public SettingsViewModel(ICaptureSettings settings, IHotKeyService hotKeys, IEntitlementService entitlement)
     {
         _settings = settings;
         _hotKeys = hotKeys;
+        _entitlement = entitlement;
         Load();
     }
+
+    /// <summary>True when Pro features are unlocked. Pro-only controls bind their IsEnabled to this.</summary>
+    public bool IsPro => _entitlement.IsProUnlocked;
+
+    /// <summary>Inverse of <see cref="IsPro"/>, used to show the upsell note for locked features.</summary>
+    public bool IsNotPro => !_entitlement.IsProUnlocked;
+
+    public string ProStatusText => _entitlement.IsProUnlocked
+        ? "Tiny Clips Pro is unlocked. Thank you for your support!"
+        : "Mouse-click visuals and branding overlays are Pro features. Pro will be available as a purchase in the Microsoft Store build.";
 
     // General
     [ObservableProperty]
@@ -99,7 +111,25 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private double _gifCountdownDuration;
 
-    // Shortcuts (read-only display)
+    // Mouse clicks (Pro)
+    [ObservableProperty]
+    private bool _showMouseClicksInVideo;
+
+    [ObservableProperty]
+    private bool _showMouseClicksInGif;
+
+    [ObservableProperty]
+    private bool _gifMouseClicksUseVideoSettings;
+
+    [ObservableProperty]
+    private double _videoMouseClickSize;
+
+    [ObservableProperty]
+    private double _videoMouseClickOpacity;
+
+    // Branding (Pro)
+    [ObservableProperty]
+    private bool _showBrandingOverlay;
     public string ScreenshotHotKeyDisplay => _hotKeys.GetBinding(CaptureType.Screenshot).DisplayString;
 
     public string VideoHotKeyDisplay => _hotKeys.GetBinding(CaptureType.Video).DisplayString;
@@ -140,6 +170,13 @@ public sealed partial class SettingsViewModel : ObservableObject
             GifMaxWidth = _settings.GifMaxWidth;
             GifCountdownEnabled = _settings.GifCountdownEnabled;
             GifCountdownDuration = _settings.GifCountdownDuration;
+
+            ShowMouseClicksInVideo = _settings.ShowMouseClickVisualsInVideo;
+            ShowMouseClicksInGif = _settings.ShowMouseClickVisualsInGif;
+            GifMouseClicksUseVideoSettings = _settings.GifMouseClicksUseVideoSettings;
+            VideoMouseClickSize = _settings.VideoMouseClickSize;
+            VideoMouseClickOpacity = _settings.VideoMouseClickOpacity;
+            ShowBrandingOverlay = _settings.ShowBrandingOverlay;
         }
         finally
         {
@@ -207,6 +244,18 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnGifCountdownDurationChanged(double value) =>
         Persist(() => _settings.GifCountdownDuration = (int)Math.Round(value));
+
+    partial void OnShowMouseClicksInVideoChanged(bool value) => Persist(() => _settings.ShowMouseClickVisualsInVideo = value);
+
+    partial void OnShowMouseClicksInGifChanged(bool value) => Persist(() => _settings.ShowMouseClickVisualsInGif = value);
+
+    partial void OnGifMouseClicksUseVideoSettingsChanged(bool value) => Persist(() => _settings.GifMouseClicksUseVideoSettings = value);
+
+    partial void OnVideoMouseClickSizeChanged(double value) => Persist(() => _settings.VideoMouseClickSize = value);
+
+    partial void OnVideoMouseClickOpacityChanged(double value) => Persist(() => _settings.VideoMouseClickOpacity = value);
+
+    partial void OnShowBrandingOverlayChanged(bool value) => Persist(() => _settings.ShowBrandingOverlay = value);
 
     private void Persist(Action apply)
     {
