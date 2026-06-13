@@ -124,7 +124,7 @@ public sealed partial class ScreenshotEditorWindow : Window
     private double _canvasCornerRadius;
     private double _canvasShadow;
     private bool _bgInitializing;
-    private bool _inspectorInitializing;
+    private bool _inspectorInitializing = true;
 
     private static readonly BackgroundPreset[] SolidPresets =
     {
