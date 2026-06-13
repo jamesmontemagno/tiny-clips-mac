@@ -57,6 +57,9 @@ own `CHANGELOG.md` at the repository root.
   finishes.
 
 ### Fixed
+- **Tray menu was clipped on its first open** — the SecondWindow context menu is now
+  warmed up invisibly at startup (DWM-cloaked) so the first menu is measured at the correct
+  display scale instead of being cut off at the bottom.
 - **Drag jitter** when moving the capture picker and recording indicator — dragging is now
   cursor-anchored, so the windows follow the pointer smoothly instead of jumping.
 - **Screenshot editor crash** — removed a reference to a nonexistent WinUI resource key

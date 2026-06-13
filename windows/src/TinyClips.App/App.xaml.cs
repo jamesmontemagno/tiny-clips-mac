@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
@@ -137,7 +138,85 @@ public partial class App : Application
         };
 
         _taskbarIcon.ForceCreate();
+
+        WarmUpTrayMenu();
     }
+
+    // Glyph constants for the tray menu live above; the SecondWindow context menu
+    // (H.NotifyIcon) sizes itself at scale 1.0 on its very first show because its
+    // internal flyout has no XamlRoot yet — on a high-DPI display that makes the
+    // popup window too small and clips the bottom items. After one show the size is
+    // cached and correct. To avoid the user ever seeing the clipped first menu we
+    // warm the hidden menu window up once at startup, made fully invisible via DWM
+    // cloaking, so the first user-visible menu is already measured correctly.
+    private void WarmUpTrayMenu()
+    {
+        if (_taskbarIcon is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var window = _taskbarIcon
+                .GetType()
+                .GetProperty("ContextMenuWindow", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+                ?.GetValue(_taskbarIcon) as Window;
+            if (window is null)
+            {
+                return;
+            }
+
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            if (hwnd == 0)
+            {
+                return;
+            }
+
+            int cloak = 1;
+            _ = DwmSetWindowAttribute(hwnd, DwmwaCloak, ref cloak, sizeof(int));
+            _ = ShowWindow(hwnd, SwShowNa);
+
+            var timer = _dispatcher?.CreateTimer();
+            if (timer is null)
+            {
+                HideWarmUpWindow(hwnd);
+                return;
+            }
+
+            timer.Interval = TimeSpan.FromMilliseconds(400);
+            timer.IsRepeating = false;
+            timer.Tick += (_, _) =>
+            {
+                HideWarmUpWindow(hwnd);
+                timer.Stop();
+            };
+            timer.Start();
+        }
+        catch
+        {
+            // Best-effort: if a future H.NotifyIcon version changes its internals,
+            // we simply fall back to the previous (first-show-clipped) behavior.
+        }
+    }
+
+    private static void HideWarmUpWindow(nint hwnd)
+    {
+        _ = ShowWindow(hwnd, SwHide);
+        int uncloak = 0;
+        _ = DwmSetWindowAttribute(hwnd, DwmwaCloak, ref uncloak, sizeof(int));
+    }
+
+    private const int DwmwaCloak = 13;
+    private const int SwHide = 0;
+    private const int SwShowNa = 8;
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(nint hwnd, int attr, ref int attrValue, int attrSize);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ShowWindow(nint hWnd, int nCmdShow);
 
     private static MenuFlyoutItem CreateMenuItem(string text, string glyph, string? acceleratorText, ICommand command)
     {
