@@ -8,14 +8,16 @@ using WinRT.Interop;
 namespace TinyClips.App;
 
 /// <summary>
-/// A borderless, always-on-top circular countdown shown before a capture begins. Counts down
+/// A borderless, always-on-top square countdown card shown before a capture begins. Counts down
 /// from the requested number of seconds and completes once it reaches zero. The window is
-/// clipped to a circle and excluded from screen capture so it never appears in a recording,
-/// and it hides itself before the countdown task completes so recording starts on a clean frame.
+/// clipped to a rounded square (matching the card) and excluded from screen capture so it never
+/// appears in a recording, and it hides itself before the countdown task completes so recording
+/// starts on a clean frame.
 /// </summary>
 public sealed partial class CountdownWindow : Window
 {
-    private const int SizeDip = 96;
+    private const int SizeDip = 132;
+    private const int CornerRadiusDip = 20;
     private const uint WdaExcludeFromCapture = 0x11;
 
     private readonly DispatcherQueueTimer _timer;
@@ -96,8 +98,10 @@ public sealed partial class CountdownWindow : Window
             AppWindow.Move(new PointInt32(x, y));
         }
 
-        // Clip the square window to a circle and keep it out of recordings.
-        var region = CreateEllipticRgn(0, 0, size + 1, size + 1);
+        // Clip the square window to a rounded square (matching the card) and keep it
+        // out of recordings.
+        var radius = (int)Math.Round(CornerRadiusDip * scale);
+        var region = CreateRoundRectRgn(0, 0, size + 1, size + 1, radius, radius);
         SetWindowRgn(hwnd, region, true);
         SetWindowDisplayAffinity(hwnd, WdaExcludeFromCapture);
     }
@@ -119,5 +123,5 @@ public sealed partial class CountdownWindow : Window
     private static extern int SetWindowRgn(nint hWnd, nint hRgn, [MarshalAs(UnmanagedType.Bool)] bool bRedraw);
 
     [DllImport("gdi32.dll")]
-    private static extern nint CreateEllipticRgn(int x1, int y1, int x2, int y2);
+    private static extern nint CreateRoundRectRgn(int x1, int y1, int x2, int y2, int cx, int cy);
 }

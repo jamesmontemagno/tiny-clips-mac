@@ -8,20 +8,23 @@
         <DesktopAcrylicBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid x:Name="RootGrid" Background="Transparent">
-        <!--  A thin ring sits just inside the circular window region.  -->
-        <Ellipse
-            Margin="2"
-            Stroke="{ThemeResource AccentFillColorDefaultBrush}"
-            StrokeThickness="3" />
+    <!--  A single rounded-square card. The window region is clipped to the same rounded
+          square (see code-behind) so the card fills the window edge-to-edge with no
+          mismatched "box in a box" frame.  -->
+    <Border
+        x:Name="RootBorder"
+        Background="Transparent"
+        BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+        BorderThickness="3"
+        CornerRadius="20">
         <TextBlock
             x:Name="CountText"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             AutomationProperties.LiveSetting="Assertive"
-            FontSize="48"
+            FontSize="64"
             FontWeight="SemiBold"
             Foreground="{ThemeResource TextFillColorPrimaryBrush}"
             Text="3" />
-    </Grid>
+    </Border>
 </Window>

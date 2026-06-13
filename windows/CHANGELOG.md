@@ -6,6 +6,11 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Changed
+- **Countdown overlay redesigned (clean rounded square)** — the pre-capture countdown is now a
+  single rounded-**square** card with a big centered number and a subtle accent border. The old
+  circular clip + inner ring (which read as a "box in a box") was removed; the window is clipped
+  to the same rounded square as the card so it fills edge-to-edge. Still excluded from recordings
+  and hidden before the first captured frame.
 - **System-tray popup redesigned (PowerToys-style)** — clicking the tray icon (left or right)
   now opens a compact custom popup with the three primary capture actions (Screenshot, Video,
   GIF) as large tiles across the top and a row of small icon buttons (Settings, Guide, Exit)
