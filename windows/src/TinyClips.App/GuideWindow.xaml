@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="TinyClips.App.GuideWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:TinyClips.App"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Tiny Clips — Guide"
+    mc:Ignorable="d">
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid
+            x:Name="AppTitleBar"
+            Grid.Row="0"
+            Height="48"
+            Padding="16,0">
+            <TextBlock
+                VerticalAlignment="Center"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Guide" />
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" Padding="0,0,0,24">
+            <StackPanel
+                MaxWidth="720"
+                Margin="24,8,24,0"
+                Spacing="8">
+
+                <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Getting started with Tiny Clips" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Text="Tiny Clips lives in your system tray. Click the tray icon any time to take a screenshot, record video, or capture a GIF." />
+
+                <!--  Capture modes  -->
+                <TextBlock
+                    Margin="4,16,0,4"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Capture modes" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <StackPanel Spacing="12">
+                        <local:GuideRow
+                            Glyph="&#xE722;"
+                            Subtitle="Capture a region, a single window, or a full screen as a PNG or JPEG."
+                            Title="Screenshot" />
+                        <local:GuideRow
+                            Glyph="&#xE714;"
+                            Subtitle="Record your screen to an MP4 video with a configurable frame rate."
+                            Title="Video" />
+                        <local:GuideRow
+                            Glyph="&#xE786;"
+                            Subtitle="Record a short, looping animated GIF, perfect for sharing."
+                            Title="GIF" />
+                    </StackPanel>
+                </Border>
+
+                <!--  Picker  -->
+                <TextBlock
+                    Margin="4,16,0,4"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Choosing what to capture" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <StackPanel Spacing="12">
+                        <local:GuideRow
+                            Glyph="&#xE7A8;"
+                            Subtitle="Press R to draw a rectangle around any area of the screen."
+                            Title="Region" />
+                        <local:GuideRow
+                            Glyph="&#xE7F4;"
+                            Subtitle="Press S to capture an entire monitor."
+                            Title="Screen" />
+                        <local:GuideRow
+                            Glyph="&#xE737;"
+                            Subtitle="Press W to capture a specific application window."
+                            Title="Window" />
+                    </StackPanel>
+                </Border>
+
+                <!--  Shortcuts  -->
+                <TextBlock
+                    Margin="4,16,0,4"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Keyboard shortcuts" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Screenshot" />
+                            <Border
+                                Grid.Column="1"
+                                Padding="10,4"
+                                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                CornerRadius="{ThemeResource ControlCornerRadius}">
+                                <TextBlock
+                                    x:Name="ScreenshotShortcut"
+                                    FontFamily="Consolas" />
+                            </Border>
+                        </Grid>
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Record video" />
+                            <Border
+                                Grid.Column="1"
+                                Padding="10,4"
+                                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                CornerRadius="{ThemeResource ControlCornerRadius}">
+                                <TextBlock
+                                    x:Name="VideoShortcut"
+                                    FontFamily="Consolas" />
+                            </Border>
+                        </Grid>
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Record GIF" />
+                            <Border
+                                Grid.Column="1"
+                                Padding="10,4"
+                                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                CornerRadius="{ThemeResource ControlCornerRadius}">
+                                <TextBlock
+                                    x:Name="GifShortcut"
+                                    FontFamily="Consolas" />
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Window>

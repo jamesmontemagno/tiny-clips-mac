@@ -35,6 +35,8 @@ public partial class App : Application
     private TaskbarIcon? _taskbarIcon;
     private SettingsWindow? _settingsWindow;
     private ClipsManagerWindow? _clipsWindow;
+    private GuideWindow? _guideWindow;
+    private OnboardingWindow? _onboardingWindow;
     private MenuFlyoutItem? _videoItem;
     private MenuFlyoutItem? _gifItem;
     private GlobalHotKeyManager? _hotKeyManager;
@@ -60,6 +62,7 @@ public partial class App : Application
         WireRecordingEvents();
         CreateTrayIcon();
         RegisterGlobalHotKeys();
+        ShowOnboardingIfNeeded();
     }
 
     private void CreateTrayIcon()
@@ -112,6 +115,12 @@ public partial class App : Application
             glyph: "\uE713",
             acceleratorText: null,
             command: new RelayCommand(OpenSettingsWindow)));
+
+        menuFlyout.Items.Add(CreateMenuItem(
+            text: "Guide",
+            glyph: "\uE897",
+            acceleratorText: null,
+            command: new RelayCommand(OpenGuideWindow)));
 
         menuFlyout.Items.Add(CreateMenuItem(
             text: "Exit",
@@ -541,6 +550,30 @@ public partial class App : Application
         _clipsWindow.Activate();
     }
 
+    private void OpenGuideWindow()
+    {
+        if (_guideWindow is null)
+        {
+            _guideWindow = new GuideWindow();
+            _guideWindow.Closed += (_, _) => _guideWindow = null;
+        }
+
+        _guideWindow.Activate();
+    }
+
+    private void ShowOnboardingIfNeeded()
+    {
+        var settings = Services.GetRequiredService<ICaptureSettings>();
+        if (settings.HasCompletedOnboarding)
+        {
+            return;
+        }
+
+        _onboardingWindow = new OnboardingWindow();
+        _onboardingWindow.Closed += (_, _) => _onboardingWindow = null;
+        _onboardingWindow.Activate();
+    }
+
     private void ExitApplication()
     {
         try
@@ -562,6 +595,8 @@ public partial class App : Application
         _taskbarIcon = null;
         _settingsWindow?.Close();
         _clipsWindow?.Close();
+        _guideWindow?.Close();
+        _onboardingWindow?.Close();
         Application.Current.Exit();
         // No persistent host window keeps the process alive, so force termination
         // to guarantee the user can always quit from the tray menu.
