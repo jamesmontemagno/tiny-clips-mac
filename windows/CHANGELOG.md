@@ -17,12 +17,21 @@ own `CHANGELOG.md` at the repository root.
 - **Pro feature gating** (`IEntitlementService` / `ProFeature`) for the direct build; mouse-click
   visuals, branding overlay, favorites, and upload are gated and surface an upsell when locked.
 - `windows/docs/dpi-and-coordinates.md` documenting the pixel-vs-DIP capture strategy.
+- **Screenshot editor** that opens after each screenshot (toggleable): drag-to-crop with
+  apply/reset, copy to clipboard, save (overwrite), and save-a-copy. Also reachable from the
+  Clips Manager **Edit** action on image clips.
+- **Video trimmer** with a preview player and start/end range sliders that renders a trimmed
+  `(trimmed)` MP4 via `MediaComposition`.
+- **GIF trimmer** that drops leading/trailing frames and re-encodes a `(trimmed)` GIF with
+  preserved per-frame delays.
+- Settings toggles to open the editor / trimmers automatically after capture
+  (**Screenshot**, **Video**, **GIF** sections).
 
 ### Notes
 - Captures are recorded to the configured output folders and surfaced by the Clips Manager by
   scanning those folders — no separate database to keep in sync.
-- Editors/trimmers, real-time mouse-click & branding compositing, microphone/system-audio
-  muxing, and MSIX/Store packaging are **not yet implemented** in this port.
+- Real-time mouse-click & branding compositing, microphone/system-audio muxing, and MSIX/Store
+  packaging are **not yet implemented** in this port.
 
 ## [0.1.0] — Phase 1 capture core
 
