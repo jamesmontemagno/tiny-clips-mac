@@ -18,11 +18,20 @@ own `CHANGELOG.md` at the repository root.
   abstraction were deleted to keep the app simple.
 
 ### Fixed
+- **Screenshot editor: tool rail clipping** — the vertical tool rail is now scrollable, so the
+  lower tools (Draw, Text, Number, Redact) are no longer cut off on shorter editor windows.
 - **Screenshot editor: arrow/line crash** — drawing an arrow or line that pointed up or to the
   left crashed the app (`ArgumentOutOfRangeException` from a negative-size `Rect`). Lines and
   arrows are now stored as directed endpoints and render correctly in any direction.
+- **Screenshot editor: editor failed to open** — the redesigned inspector sliders fired their
+  `ValueChanged` handlers during XAML load (before controls existed), throwing a
+  `NullReferenceException`/`XamlParseException` so the editor never appeared after a capture or via
+  "Open with Tiny Clips". The initialization guard now defaults on.
 
 ### Added
+- **Screenshot editor: shape fill color** — rectangles and ellipses can now be filled with a
+  color (with adjustable opacity). Fill is **off (transparent) by default**; enable it and pick a
+  color in the inspector.
 - **Screenshot editor: text font & color controls** — the Text tool now lets you pick a font
   family and size; numbered badges have an independent **number color** (default white) on top of
   the badge fill color.

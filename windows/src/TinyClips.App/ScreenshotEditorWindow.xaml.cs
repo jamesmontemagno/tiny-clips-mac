@@ -64,6 +64,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         public EditTool Tool { get; set; }
         public Rect Bounds { get; set; }
         public Color Color { get; set; }
+        public Color FillColor { get; set; } = Colors.Transparent;
         public double Thickness { get; set; }
         public string Text { get; set; } = string.Empty;
         public int Number { get; set; }
@@ -92,6 +93,8 @@ public sealed partial class ScreenshotEditorWindow : Window
     private EditTool _tool = EditTool.Crop;
     private Color _strokeColor = Colors.Red;
     private double _strokeThickness = 6;
+    private bool _fillEnabled;
+    private Color _fillColor = Color.FromArgb(96, 255, 213, 0);
     private double _numberScale = 1.0;
     private Color _numberTextColor = Colors.White;
     private double _textFontSize = 28;
@@ -223,6 +226,9 @@ public sealed partial class ScreenshotEditorWindow : Window
         StrokeSlider.Value = _strokeThickness;
         NumberSizeSlider.Value = _numberScale;
         FontSizeSlider.Value = _textFontSize;
+        FillCheck.IsChecked = _fillEnabled;
+        FillColorPicker.Color = _fillColor;
+        FillColorSwatch.Background = new SolidColorBrush(_fillEnabled ? _fillColor : Colors.Transparent);
         UpdateInspectorHeaders();
 
         _inspectorInitializing = false;
@@ -353,6 +359,7 @@ public sealed partial class ScreenshotEditorWindow : Window
 
         var showsStroke = tool is EditTool.Rectangle or EditTool.Ellipse or EditTool.Arrow
             or EditTool.Line or EditTool.Pen;
+        var showsFill = tool is EditTool.Rectangle or EditTool.Ellipse;
         var showsColor = tool is EditTool.Rectangle or EditTool.Ellipse or EditTool.Arrow
             or EditTool.Line or EditTool.Pen or EditTool.Text or EditTool.Counter;
         var showsText = tool is EditTool.Text;
@@ -361,6 +368,7 @@ public sealed partial class ScreenshotEditorWindow : Window
 
         ColorSection.Visibility = showsColor ? Visibility.Visible : Visibility.Collapsed;
         StrokeSection.Visibility = showsStroke ? Visibility.Visible : Visibility.Collapsed;
+        FillSection.Visibility = showsFill ? Visibility.Visible : Visibility.Collapsed;
         TextSection.Visibility = showsText ? Visibility.Visible : Visibility.Collapsed;
         CounterSection.Visibility = showsNumber ? Visibility.Visible : Visibility.Collapsed;
         RedactSection.Visibility = showsRedact ? Visibility.Visible : Visibility.Collapsed;
@@ -406,6 +414,7 @@ public sealed partial class ScreenshotEditorWindow : Window
 
         var isShape = ann.Tool is EditTool.Rectangle or EditTool.Ellipse or EditTool.Arrow
             or EditTool.Line or EditTool.Pen;
+        var isFillable = ann.Tool is EditTool.Rectangle or EditTool.Ellipse;
         var isText = ann.Tool is EditTool.Text;
         var isCounter = ann.Tool is EditTool.Counter;
         var isRedact = ann.Tool is EditTool.Redact;
@@ -413,6 +422,7 @@ public sealed partial class ScreenshotEditorWindow : Window
 
         ColorSection.Visibility = hasColor ? Visibility.Visible : Visibility.Collapsed;
         StrokeSection.Visibility = isShape ? Visibility.Visible : Visibility.Collapsed;
+        FillSection.Visibility = isFillable ? Visibility.Visible : Visibility.Collapsed;
         TextSection.Visibility = isText ? Visibility.Visible : Visibility.Collapsed;
         CounterSection.Visibility = isCounter ? Visibility.Visible : Visibility.Collapsed;
         RedactSection.Visibility = isRedact ? Visibility.Visible : Visibility.Collapsed;
@@ -426,6 +436,14 @@ public sealed partial class ScreenshotEditorWindow : Window
         if (isShape)
         {
             StrokeSlider.Value = ann.Thickness;
+        }
+        if (isFillable)
+        {
+            var hasFill = ann.FillColor.A > 0;
+            FillCheck.IsChecked = hasFill;
+            var pick = hasFill ? ann.FillColor : _fillColor;
+            FillColorPicker.Color = pick;
+            FillColorSwatch.Background = new SolidColorBrush(hasFill ? ann.FillColor : Colors.Transparent);
         }
         if (isText)
         {
@@ -507,6 +525,40 @@ public sealed partial class ScreenshotEditorWindow : Window
         if (_selectedAnnotation is { Tool: not EditTool.Counter and not EditTool.Text } ann)
         {
             ann.Thickness = _strokeThickness;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnFillToggled(object sender, RoutedEventArgs e)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        _fillEnabled = FillCheck.IsChecked == true;
+        FillColorSwatch.Background = new SolidColorBrush(_fillEnabled ? _fillColor : Colors.Transparent);
+        if (_selectedAnnotation is { Tool: EditTool.Rectangle or EditTool.Ellipse } ann)
+        {
+            ann.FillColor = _fillEnabled ? _fillColor : Colors.Transparent;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnFillColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        _fillColor = args.NewColor;
+        _fillEnabled = true;
+        FillCheck.IsChecked = true;
+        FillColorSwatch.Background = new SolidColorBrush(_fillColor);
+        if (_selectedAnnotation is { Tool: EditTool.Rectangle or EditTool.Ellipse } ann)
+        {
+            ann.FillColor = _fillColor;
             RedrawOverlay();
         }
     }
@@ -779,6 +831,9 @@ public sealed partial class ScreenshotEditorWindow : Window
         {
             Tool = _tool,
             Color = _strokeColor,
+            FillColor = (_tool is EditTool.Rectangle or EditTool.Ellipse && _fillEnabled)
+                ? _fillColor
+                : Colors.Transparent,
             Thickness = _strokeThickness,
             Redaction = _redactionLevel,
             Bounds = new Rect(pixel.X, pixel.Y, 0, 0),
@@ -1278,6 +1333,7 @@ public sealed partial class ScreenshotEditorWindow : Window
                     Height = b.Height * scale,
                     Stroke = brush,
                     StrokeThickness = thickness,
+                    Fill = new SolidColorBrush(ann.FillColor),
                 };
                 Canvas.SetLeft(rect, tl.X);
                 Canvas.SetTop(rect, tl.Y);
@@ -1294,6 +1350,7 @@ public sealed partial class ScreenshotEditorWindow : Window
                     Height = b.Height * scale,
                     Stroke = brush,
                     StrokeThickness = thickness,
+                    Fill = new SolidColorBrush(ann.FillColor),
                 };
                 Canvas.SetLeft(ellipse, tl.X);
                 Canvas.SetTop(ellipse, tl.Y);
@@ -1806,12 +1863,25 @@ public sealed partial class ScreenshotEditorWindow : Window
             case EditTool.Rectangle:
             {
                 var b = NormalizedBounds(ann);
+                if (ann.FillColor.A > 0)
+                {
+                    ds.FillRectangle((float)b.X, (float)b.Y, (float)b.Width, (float)b.Height, ann.FillColor);
+                }
                 ds.DrawRectangle((float)b.X, (float)b.Y, (float)b.Width, (float)b.Height, color, thickness);
                 break;
             }
             case EditTool.Ellipse:
             {
                 var b = NormalizedBounds(ann);
+                if (ann.FillColor.A > 0)
+                {
+                    ds.FillEllipse(
+                        (float)(b.X + b.Width / 2),
+                        (float)(b.Y + b.Height / 2),
+                        (float)(b.Width / 2),
+                        (float)(b.Height / 2),
+                        ann.FillColor);
+                }
                 ds.DrawEllipse(
                     (float)(b.X + b.Width / 2),
                     (float)(b.Y + b.Height / 2),

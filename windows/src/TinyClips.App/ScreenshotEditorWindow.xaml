@@ -114,6 +114,10 @@
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                 BorderThickness="1"
                 CornerRadius="{ThemeResource ControlCornerRadius}">
+                <ScrollViewer
+                    HorizontalScrollMode="Disabled"
+                    VerticalScrollBarVisibility="Auto"
+                    ZoomMode="Disabled">
                 <StackPanel Spacing="3">
                     <ToggleButton
                         x:Name="ToolSelect"
@@ -230,6 +234,7 @@
                         <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xED1A;" />
                     </ToggleButton>
                 </StackPanel>
+                </ScrollViewer>
             </Border>
 
             <!--  Inspector  -->
@@ -295,6 +300,46 @@
                                 Minimum="1"
                                 StepFrequency="1"
                                 ValueChanged="OnStrokeChanged" />
+                        </StackPanel>
+
+                        <!--  Fill (rectangle / ellipse)  -->
+                        <StackPanel x:Name="FillSection" Spacing="6">
+                            <CheckBox
+                                x:Name="FillCheck"
+                                AutomationProperties.AutomationId="EditorFillCheck"
+                                AutomationProperties.Name="Fill shape"
+                                Checked="OnFillToggled"
+                                Content="Fill shape"
+                                Unchecked="OnFillToggled" />
+                            <Button
+                                x:Name="FillColorButton"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Left"
+                                AutomationProperties.AutomationId="EditorFillColorButton"
+                                AutomationProperties.Name="Fill color">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Border
+                                        x:Name="FillColorSwatch"
+                                        Width="22"
+                                        Height="22"
+                                        Background="Transparent"
+                                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4" />
+                                    <TextBlock VerticalAlignment="Center" Text="Fill color" />
+                                </StackPanel>
+                                <Button.Flyout>
+                                    <Flyout>
+                                        <ColorPicker
+                                            x:Name="FillColorPicker"
+                                            ColorChanged="OnFillColorChanged"
+                                            ColorSpectrumShape="Ring"
+                                            IsAlphaEnabled="True"
+                                            IsColorChannelTextInputVisible="False"
+                                            IsHexInputVisible="True" />
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
                         </StackPanel>
 
                         <!--  Text  -->
