@@ -6,6 +6,9 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Added
+- **GIF trimmer preview playback** — a play/pause toggle animates the selected frame range in the
+  GIF trimmer, honoring per-frame delays and the chosen output speed so you can preview the result
+  before saving.
 - **Screenshot editor annotations** — parity with the macOS editor: rectangle, ellipse, arrow,
   line, freehand draw, text, numbered badges, and pixelated redaction, on top of the existing
   crop. Each annotation has a color picker and stroke-thickness selector; annotations can be
@@ -71,8 +74,17 @@ own `CHANGELOG.md` at the repository root.
   control (GIF output speed is applied to frame delays; video speed currently affects preview).
 - A new **Reopen capture picker after each capture** setting re-shows the picker when a capture
   finishes.
+- The **screenshot editor and video/GIF trimmers** now open maximized (full screen) for more
+  working room.
 
 ### Fixed
+- **Countdown lingered in recordings** — the countdown badge now hides itself before the final
+  frame and is excluded from screen capture, so it no longer appears in the recorded video/GIF and
+  no longer hangs at "1".
+- **Countdown styling** — redesigned as a clean circular badge (acrylic, clipped to a true circle
+  with a thin accent ring) instead of the previous "box in a box" look.
+- **Recording region outline** is now a bright, thicker red so it is clearly visible while
+  recording a region.
 - **Tray menu was clipped on its first open** — the SecondWindow context menu is now
   warmed up invisibly at startup (DWM-cloaked) so the first menu is measured at the correct
   display scale instead of being cut off at the bottom.

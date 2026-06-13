@@ -39,6 +39,7 @@ public sealed partial class VideoTrimmerWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.Resize(new Windows.Graphics.SizeInt32(900, 760));
+        (AppWindow.Presenter as Microsoft.UI.Windowing.OverlappedPresenter)?.Maximize();
 
         var settings = App.Services.GetRequiredService<ICaptureSettings>();
         RootGrid.RequestedTheme = settings.Theme switch

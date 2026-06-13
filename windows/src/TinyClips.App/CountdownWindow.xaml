@@ -9,24 +9,19 @@
     </Window.SystemBackdrop>
 
     <Grid x:Name="RootGrid" Background="Transparent">
-        <Border
-            Width="92"
-            Height="92"
+        <!--  A thin ring sits just inside the circular window region.  -->
+        <Ellipse
+            Margin="2"
+            Stroke="{ThemeResource AccentFillColorDefaultBrush}"
+            StrokeThickness="3" />
+        <TextBlock
+            x:Name="CountText"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
-            Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
-            BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
-            BorderThickness="1"
-            CornerRadius="16">
-            <TextBlock
-                x:Name="CountText"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                AutomationProperties.LiveSetting="Assertive"
-                FontSize="44"
-                FontWeight="SemiBold"
-                Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                Text="3" />
-        </Border>
+            AutomationProperties.LiveSetting="Assertive"
+            FontSize="48"
+            FontWeight="SemiBold"
+            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+            Text="3" />
     </Grid>
 </Window>

@@ -118,6 +118,15 @@
                 VerticalAlignment="Center"
                 Orientation="Horizontal"
                 Spacing="8">
+                <ToggleButton
+                    x:Name="PlayToggle"
+                    AutomationProperties.AutomationId="GifPlayToggle"
+                    AutomationProperties.Name="Play preview"
+                    Checked="OnPlayToggled"
+                    Unchecked="OnPlayToggled"
+                    ToolTipService.ToolTip="Preview playback of the selected frame range">
+                    <FontIcon FontSize="14" Glyph="&#xE768;" />
+                </ToggleButton>
                 <TextBlock
                     VerticalAlignment="Center"
                     Style="{StaticResource BodyStrongTextBlockStyle}"

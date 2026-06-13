@@ -1,16 +1,23 @@
+using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Windows.Graphics;
+using WinRT.Interop;
 
 namespace TinyClips.App;
 
 /// <summary>
-/// A borderless, always-on-top countdown shown before a capture begins. Counts down
-/// from the requested number of seconds and completes once it reaches zero.
+/// A borderless, always-on-top circular countdown shown before a capture begins. Counts down
+/// from the requested number of seconds and completes once it reaches zero. The window is
+/// clipped to a circle and excluded from screen capture so it never appears in a recording,
+/// and it hides itself before the countdown task completes so recording starts on a clean frame.
 /// </summary>
 public sealed partial class CountdownWindow : Window
 {
+    private const int SizeDip = 96;
+    private const uint WdaExcludeFromCapture = 0x11;
+
     private readonly DispatcherQueueTimer _timer;
     private readonly TaskCompletionSource _completed = new();
     private int _remaining;
@@ -39,13 +46,18 @@ public sealed partial class CountdownWindow : Window
         return window._completed.Task;
     }
 
-    private void OnTick(DispatcherQueueTimer sender, object args)
+    private async void OnTick(DispatcherQueueTimer sender, object args)
     {
         _remaining--;
         if (_remaining <= 0)
         {
             _timer.Stop();
             _timer.Tick -= OnTick;
+
+            // Hide immediately so the window is gone from the very first recorded frame,
+            // then give the compositor a beat before signalling completion.
+            AppWindow.Hide();
+            await Task.Delay(80);
             _completed.TrySetResult();
             Close();
             return;
@@ -72,10 +84,9 @@ public sealed partial class CountdownWindow : Window
     {
         var area = DisplayArea.Primary?.WorkArea;
 
-        // Window is sized to the compact badge (DIPs scaled to physical pixels).
-        const int sizeDip = 92;
-        var scale = GetScale();
-        var size = (int)Math.Round(sizeDip * scale);
+        var hwnd = WindowNative.GetWindowHandle(this);
+        var scale = GetScale(hwnd);
+        var size = (int)Math.Round(SizeDip * scale);
         AppWindow.Resize(new SizeInt32(size, size));
 
         if (area is { } work)
@@ -84,15 +95,29 @@ public sealed partial class CountdownWindow : Window
             var y = work.Y + ((work.Height - size) / 2);
             AppWindow.Move(new PointInt32(x, y));
         }
+
+        // Clip the square window to a circle and keep it out of recordings.
+        var region = CreateEllipticRgn(0, 0, size + 1, size + 1);
+        SetWindowRgn(hwnd, region, true);
+        SetWindowDisplayAffinity(hwnd, WdaExcludeFromCapture);
     }
 
-    private double GetScale()
+    private static double GetScale(nint hwnd)
     {
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var dpi = GetDpiForWindow(hwnd);
         return dpi <= 0 ? 1.0 : dpi / 96.0;
     }
 
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(nint hwnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowDisplayAffinity(nint hWnd, uint dwAffinity);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowRgn(nint hWnd, nint hRgn, [MarshalAs(UnmanagedType.Bool)] bool bRedraw);
+
+    [DllImport("gdi32.dll")]
+    private static extern nint CreateEllipticRgn(int x1, int y1, int x2, int y2);
 }

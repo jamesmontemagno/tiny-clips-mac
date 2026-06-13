@@ -15,7 +15,7 @@ namespace TinyClips.App;
 public sealed partial class RegionIndicatorWindow : Window
 {
     // Keep in sync with the Border BorderThickness in RegionIndicatorWindow.xaml (DIPs).
-    private const int BorderThicknessDip = 3;
+    private const int BorderThicknessDip = 4;
 
     private const int GwlExStyle = -20;
     private const long WsExLayered = 0x00080000;

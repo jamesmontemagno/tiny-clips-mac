@@ -29,6 +29,8 @@ public sealed partial class GifTrimmerWindow : Window
     private int _end;
     private double _speed = 1.0;
     private bool _ready;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _playTimer;
+    private int _playIndex;
 
     public GifTrimmerWindow(string filePath)
     {
@@ -42,6 +44,7 @@ public sealed partial class GifTrimmerWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.Resize(new Windows.Graphics.SizeInt32(900, 760));
+        (AppWindow.Presenter as Microsoft.UI.Windowing.OverlappedPresenter)?.Maximize();
 
         var settings = App.Services.GetRequiredService<ICaptureSettings>();
         RootGrid.RequestedTheme = settings.Theme switch
@@ -128,6 +131,7 @@ public sealed partial class GifTrimmerWindow : Window
             StartSlider.Value = _start;
         }
 
+        StopPlayback();
         UpdateLabels();
         _ = ShowFrameAsync(_start);
     }
@@ -146,6 +150,7 @@ public sealed partial class GifTrimmerWindow : Window
             EndSlider.Value = _end;
         }
 
+        StopPlayback();
         UpdateLabels();
         _ = ShowFrameAsync(_end);
     }
@@ -192,6 +197,74 @@ public sealed partial class GifTrimmerWindow : Window
         return (ushort)Math.Clamp(scaled, 2, ushort.MaxValue);
     }
 
+    // -- Preview playback -----------------------------------------------------
+
+    private void OnPlayToggled(object sender, RoutedEventArgs e)
+    {
+        if (!_ready)
+        {
+            PlayToggle.IsChecked = false;
+            return;
+        }
+
+        if (PlayToggle.IsChecked == true)
+        {
+            StartPlayback();
+        }
+        else
+        {
+            StopPlayback();
+        }
+    }
+
+    private void StartPlayback()
+    {
+        _playIndex = _start;
+        _playTimer ??= DispatcherQueue.CreateTimer();
+        _playTimer.Tick -= OnPlayTick;
+        _playTimer.Tick += OnPlayTick;
+        ScheduleNextPlayFrame();
+    }
+
+    private void ScheduleNextPlayFrame()
+    {
+        if (_playTimer is null)
+        {
+            return;
+        }
+
+        // GIF delays are in centiseconds; scale by speed and clamp to a sane minimum.
+        var centis = _playIndex >= 0 && _playIndex < _delays.Count ? _delays[_playIndex] : (ushort)10;
+        var ms = Math.Clamp((int)Math.Round(centis * 10 / _speed), 20, 5000);
+        _playTimer.Interval = TimeSpan.FromMilliseconds(ms);
+        _playTimer.Start();
+    }
+
+    private async void OnPlayTick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
+    {
+        sender.Stop();
+        if (PlayToggle.IsChecked != true)
+        {
+            return;
+        }
+
+        await ShowFrameAsync(_playIndex);
+        _playIndex++;
+        if (_playIndex > _end)
+        {
+            _playIndex = _start;
+        }
+
+        ScheduleNextPlayFrame();
+    }
+
+    private void StopPlayback()
+    {
+        _playTimer?.Stop();
+        PlayToggle.IsChecked = false;
+        _ = ShowFrameAsync(_start);
+    }
+
     // -- Output ---------------------------------------------------------------
 
     private async void OnSaveTrimmed(object sender, RoutedEventArgs e)
@@ -200,6 +273,8 @@ public sealed partial class GifTrimmerWindow : Window
         {
             return;
         }
+
+        StopPlayback();
 
         BusyBar.Visibility = Visibility.Visible;
         SaveTrimmedButton.IsEnabled = false;
@@ -280,6 +355,7 @@ public sealed partial class GifTrimmerWindow : Window
 
     private void OnWindowClosed(object sender, WindowEventArgs e)
     {
+        _playTimer?.Stop();
         foreach (var frame in _frames)
         {
             frame.Dispose();
