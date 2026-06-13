@@ -186,6 +186,33 @@ public sealed partial class ClipsManagerWindow : Window
         }
     }
 
+    private async void OnUploadClip(object sender, RoutedEventArgs e)
+    {
+        if (TagPath(sender) is null)
+        {
+            return;
+        }
+
+        // Upload/share is a Pro feature. The provider integration is intentionally not
+        // wired in the direct build yet; gate it behind Pro with an informational prompt.
+        if (!_entitlement.IsProUnlocked)
+        {
+            await ShowProUpsellAsync();
+            return;
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = "Upload & share",
+            Content = "Cloud upload and shareable links are coming soon to Tiny Clips Pro on Windows.",
+            CloseButtonText = "OK",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot,
+        };
+
+        await dialog.ShowAsync();
+    }
+
     private async System.Threading.Tasks.Task ShowProUpsellAsync()
     {
         var dialog = new ContentDialog
