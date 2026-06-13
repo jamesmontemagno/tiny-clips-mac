@@ -1,12 +1,11 @@
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using H.NotifyIcon;
-using H.NotifyIcon.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -44,8 +43,11 @@ public partial class App : Application
     private RegionIndicatorWindow? _recordingRegionIndicator;
     private DispatcherTimer? _recordingTimer;
     private DateTime _recordingStartedUtc;
-    private MenuFlyoutItem? _videoItem;
-    private MenuFlyoutItem? _gifItem;
+    private CaptureTile? _videoTile;
+    private CaptureTile? _gifTile;
+    private TrayPopupWindow? _trayPopup;
+    private const double TrayPopupWidth = 288;
+    private const double TrayPopupHeight = 196;
     private GlobalHotKeyManager? _hotKeyManager;
     private DispatcherQueue? _dispatcher;
     private bool _isExiting;
@@ -126,162 +128,187 @@ public partial class App : Application
 
         var hotKeys = Services.GetRequiredService<IHotKeyService>();
 
-        var menuFlyout = new MenuFlyout();
-
-        menuFlyout.Items.Add(CreateMenuItem(
-            text: "Screenshot",
-            glyph: GlyphScreenshot,
-            acceleratorText: hotKeys.GetBinding(CaptureType.Screenshot).DisplayString,
-            command: new AsyncRelayCommand(CaptureScreenshotAsync)));
-
-        _videoItem = CreateMenuItem(
-            text: "Record Video",
-            glyph: GlyphVideo,
-            acceleratorText: hotKeys.GetBinding(CaptureType.Video).DisplayString,
-            command: new AsyncRelayCommand(ToggleVideoAsync));
-        menuFlyout.Items.Add(_videoItem);
-
-        _gifItem = CreateMenuItem(
-            text: "Record GIF",
-            glyph: GlyphGif,
-            acceleratorText: hotKeys.GetBinding(CaptureType.Gif).DisplayString,
-            command: new AsyncRelayCommand(ToggleGifAsync));
-        menuFlyout.Items.Add(_gifItem);
-
-        menuFlyout.Items.Add(new MenuFlyoutSeparator());
-
-        menuFlyout.Items.Add(CreateMenuItem(
-            text: "Settings",
-            glyph: "\uE713",
-            acceleratorText: null,
-            command: new RelayCommand(OpenSettingsWindow)));
-
-        menuFlyout.Items.Add(CreateMenuItem(
-            text: "Guide",
-            glyph: "\uE897",
-            acceleratorText: null,
-            command: new RelayCommand(OpenGuideWindow)));
-
-        menuFlyout.Items.Add(CreateMenuItem(
-            text: "Exit",
-            glyph: "\uE7E8",
-            acceleratorText: null,
-            command: new RelayCommand(() => _ = ExitApplicationAsync())));
+        _trayPopup = new TrayPopupWindow(BuildTrayPopupContent(hotKeys));
 
         _taskbarIcon = new TaskbarIcon
         {
             ToolTipText = "Tiny Clips",
             IconSource = new BitmapImage(new Uri("ms-appx:///Assets/TrayIcon.ico")),
-            ContextFlyout = menuFlyout,
-            // SecondWindow renders the real WinUI MenuFlyout (rounded corners, acrylic,
-            // shadow, Fluent styling) instead of the legacy Win32 popup menu.
-            ContextMenuMode = ContextMenuMode.SecondWindow,
-            // Show the menu on either left- or right-click, with no delay on left-click.
-            MenuActivation = PopupActivationMode.LeftOrRightClick,
-            NoLeftClickDelay = true
+            NoLeftClickDelay = true,
         };
+
+        // We host our own PowerToys-style popup window rather than a context flyout, so
+        // both mouse buttons just open it next to the tray icon.
+        var showPopup = new RelayCommand(ShowTrayPopup);
+        _taskbarIcon.LeftClickCommand = showPopup;
+        _taskbarIcon.RightClickCommand = showPopup;
 
         _taskbarIcon.ForceCreate();
 
-        WarmUpTrayMenu();
+        UpdateRecordingState();
     }
 
-    // Glyph constants for the tray menu live above; the SecondWindow context menu
-    // (H.NotifyIcon) sizes itself at scale 1.0 on its very first show because its
-    // internal flyout has no XamlRoot yet — on a high-DPI display that makes the
-    // popup window too small and clips the bottom items. After one show the size is
-    // cached and correct. To avoid the user ever seeing the clipped first menu we
-    // warm the hidden menu window up once at startup, made fully invisible via DWM
-    // cloaking, so the first user-visible menu is already measured correctly.
-    private void WarmUpTrayMenu()
+    private void ShowTrayPopup()
     {
-        if (_taskbarIcon is null)
+        if (_trayPopup is null)
         {
             return;
         }
 
-        try
-        {
-            var window = _taskbarIcon
-                .GetType()
-                .GetProperty("ContextMenuWindow", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
-                ?.GetValue(_taskbarIcon) as Window;
-            if (window is null)
-            {
-                return;
-            }
-
-            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
-            if (hwnd == 0)
-            {
-                return;
-            }
-
-            int cloak = 1;
-            _ = DwmSetWindowAttribute(hwnd, DwmwaCloak, ref cloak, sizeof(int));
-            _ = ShowWindow(hwnd, SwShowNa);
-
-            var timer = _dispatcher?.CreateTimer();
-            if (timer is null)
-            {
-                HideWarmUpWindow(hwnd);
-                return;
-            }
-
-            timer.Interval = TimeSpan.FromMilliseconds(400);
-            timer.IsRepeating = false;
-            timer.Tick += (_, _) =>
-            {
-                HideWarmUpWindow(hwnd);
-                timer.Stop();
-            };
-            timer.Start();
-        }
-        catch
-        {
-            // Best-effort: if a future H.NotifyIcon version changes its internals,
-            // we simply fall back to the previous (first-show-clipped) behavior.
-        }
+        UpdateRecordingState();
+        _trayPopup.ShowNearCursor(TrayPopupWidth, TrayPopupHeight);
     }
 
-    private static void HideWarmUpWindow(nint hwnd)
+    // PowerToys-style "quick access" popup: three large capture tiles across the top,
+    // a divider, then a row of small icon buttons (Settings / Guide / Exit) at the bottom.
+    private UIElement BuildTrayPopupContent(IHotKeyService hotKeys)
     {
-        _ = ShowWindow(hwnd, SwHide);
-        int uncloak = 0;
-        _ = DwmSetWindowAttribute(hwnd, DwmwaCloak, ref uncloak, sizeof(int));
-    }
+        void Dismiss() => _trayPopup?.Hide();
 
-    private const int DwmwaCloak = 13;
-    private const int SwHide = 0;
-    private const int SwShowNa = 8;
-
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(nint hwnd, int attr, ref int attrValue, int attrSize);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ShowWindow(nint hWnd, int nCmdShow);
-
-    private static MenuFlyoutItem CreateMenuItem(string text, string glyph, string? acceleratorText, ICommand command)
-    {
-        var item = new MenuFlyoutItem
+        var root = new StackPanel
         {
-            Text = text,
-            Icon = new FontIcon
-            {
-                Glyph = glyph,
-                FontFamily = FluentIconFont
-            },
-            Command = command
+            Width = TrayPopupWidth,
+            Padding = new Thickness(12),
+            Spacing = 10,
         };
 
-        if (!string.IsNullOrEmpty(acceleratorText))
+        root.Children.Add(new TextBlock
         {
-            item.KeyboardAcceleratorTextOverride = acceleratorText;
+            Text = "Tiny Clips",
+            Margin = new Thickness(4, 2, 0, 0),
+            Style = TextStyle("BodyStrongTextBlockStyle"),
+        });
+
+        var tiles = new Grid { ColumnSpacing = 6 };
+        for (var i = 0; i < 3; i++)
+        {
+            tiles.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         }
 
-        return item;
+        var screenshot = CreateCaptureTile(
+            "Screenshot",
+            GlyphScreenshot,
+            hotKeys.GetBinding(CaptureType.Screenshot).DisplayString,
+            new AsyncRelayCommand(CaptureScreenshotAsync),
+            Dismiss);
+        Grid.SetColumn(screenshot.Button, 0);
+        tiles.Children.Add(screenshot.Button);
+
+        _videoTile = CreateCaptureTile(
+            "Video",
+            GlyphVideo,
+            hotKeys.GetBinding(CaptureType.Video).DisplayString,
+            new AsyncRelayCommand(ToggleVideoAsync),
+            Dismiss);
+        Grid.SetColumn(_videoTile.Button, 1);
+        tiles.Children.Add(_videoTile.Button);
+
+        _gifTile = CreateCaptureTile(
+            "GIF",
+            GlyphGif,
+            hotKeys.GetBinding(CaptureType.Gif).DisplayString,
+            new AsyncRelayCommand(ToggleGifAsync),
+            Dismiss);
+        Grid.SetColumn(_gifTile.Button, 2);
+        tiles.Children.Add(_gifTile.Button);
+
+        root.Children.Add(tiles);
+
+        root.Children.Add(new Border
+        {
+            Height = 1,
+            Margin = new Thickness(0, 2, 0, 2),
+            Background = ThemeBrush("DividerStrokeColorDefaultBrush"),
+        });
+
+        var footer = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 2,
+        };
+        footer.Children.Add(CreateFooterButton("\uE713", "Settings", new RelayCommand(OpenSettingsWindow), Dismiss));
+        footer.Children.Add(CreateFooterButton("\uE897", "Guide", new RelayCommand(OpenGuideWindow), Dismiss));
+        footer.Children.Add(CreateFooterButton("\uE7E8", "Exit", new RelayCommand(() => _ = ExitApplicationAsync()), Dismiss));
+        root.Children.Add(footer);
+
+        return new Border
+        {
+            Child = root,
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1),
+            BorderBrush = ThemeBrush("SurfaceStrokeColorDefaultBrush"),
+        };
     }
+
+    private sealed class CaptureTile
+    {
+        public required Button Button { get; init; }
+        public required FontIcon Icon { get; init; }
+        public required TextBlock Label { get; init; }
+    }
+
+    private CaptureTile CreateCaptureTile(string text, string glyph, string? accelerator, ICommand command, Action dismiss)
+    {
+        var icon = new FontIcon
+        {
+            Glyph = glyph,
+            FontFamily = FluentIconFont,
+            FontSize = 22,
+        };
+        var label = new TextBlock
+        {
+            Text = text,
+            FontSize = 12,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        var panel = new StackPanel { Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center };
+        panel.Children.Add(icon);
+        panel.Children.Add(label);
+
+        var button = new Button
+        {
+            Content = panel,
+            Command = command,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            Padding = new Thickness(4, 14, 4, 14),
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(8),
+        };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, text);
+        ToolTipService.SetToolTip(button, string.IsNullOrEmpty(accelerator) ? text : $"{text} ({accelerator})");
+        button.Click += (_, _) => dismiss();
+        return new CaptureTile { Button = button, Icon = icon, Label = label };
+    }
+
+    private Button CreateFooterButton(string glyph, string tooltip, ICommand command, Action dismiss)
+    {
+        var button = new Button
+        {
+            Content = new FontIcon { Glyph = glyph, FontFamily = FluentIconFont, FontSize = 16 },
+            Width = 40,
+            Height = 36,
+            Padding = new Thickness(0),
+            Command = command,
+            Background = new SolidColorBrush(Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(6),
+        };
+        ToolTipService.SetToolTip(button, tooltip);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, tooltip);
+        button.Click += (_, _) => dismiss();
+        return button;
+    }
+
+    private static Style? TextStyle(string key)
+        => Application.Current.Resources.TryGetValue(key, out var value) ? value as Style : null;
+
+    private static Brush? ThemeBrush(string key)
+        => Application.Current.Resources.TryGetValue(key, out var value) ? value as Brush : null;
 
     private Task CaptureScreenshotAsync() => BeginCaptureAsync(CaptureType.Screenshot);
 
@@ -731,34 +758,26 @@ public partial class App : Application
         var gif = Services.GetRequiredService<IGifRecordingService>();
         var hotKeys = Services.GetRequiredService<IHotKeyService>();
 
-        if (_videoItem is not null)
+        if (_videoTile is not null)
         {
             var recording = video.IsRecording;
-            _videoItem.Text = recording ? "Stop Recording" : "Record Video";
-            _videoItem.KeyboardAcceleratorTextOverride = recording
-                ? hotKeys.StopRecordingDisplayString
-                : hotKeys.GetBinding(CaptureType.Video).DisplayString;
-            if (_videoItem.Icon is FontIcon icon)
-            {
-                icon.Glyph = recording ? GlyphStop : GlyphVideo;
-            }
-
-            _videoItem.IsEnabled = !gif.IsRecording;
+            _videoTile.Label.Text = recording ? "Stop" : "Video";
+            _videoTile.Icon.Glyph = recording ? GlyphStop : GlyphVideo;
+            var accel = recording ? hotKeys.StopRecordingDisplayString : hotKeys.GetBinding(CaptureType.Video).DisplayString;
+            var label = recording ? "Stop recording" : "Record video";
+            ToolTipService.SetToolTip(_videoTile.Button, string.IsNullOrEmpty(accel) ? label : $"{label} ({accel})");
+            _videoTile.Button.IsEnabled = !gif.IsRecording;
         }
 
-        if (_gifItem is not null)
+        if (_gifTile is not null)
         {
             var recording = gif.IsRecording;
-            _gifItem.Text = recording ? "Stop Recording" : "Record GIF";
-            _gifItem.KeyboardAcceleratorTextOverride = recording
-                ? hotKeys.StopRecordingDisplayString
-                : hotKeys.GetBinding(CaptureType.Gif).DisplayString;
-            if (_gifItem.Icon is FontIcon icon)
-            {
-                icon.Glyph = recording ? GlyphStop : GlyphGif;
-            }
-
-            _gifItem.IsEnabled = !video.IsRecording;
+            _gifTile.Label.Text = recording ? "Stop" : "GIF";
+            _gifTile.Icon.Glyph = recording ? GlyphStop : GlyphGif;
+            var accel = recording ? hotKeys.StopRecordingDisplayString : hotKeys.GetBinding(CaptureType.Gif).DisplayString;
+            var label = recording ? "Stop recording" : "Record GIF";
+            ToolTipService.SetToolTip(_gifTile.Button, string.IsNullOrEmpty(accel) ? label : $"{label} ({accel})");
+            _gifTile.Button.IsEnabled = !video.IsRecording;
         }
     }
 

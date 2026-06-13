@@ -6,6 +6,12 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Changed
+- **System-tray popup redesigned (PowerToys-style)** — clicking the tray icon (left or right)
+  now opens a compact custom popup with the three primary capture actions (Screenshot, Video,
+  GIF) as large tiles across the top and a row of small icon buttons (Settings, Guide, Exit)
+  at the bottom, instead of a vertical context menu. The popup is a borderless acrylic window
+  anchored next to the cursor that light-dismisses on focus loss. This also resolves the
+  first-open clipping seen with the previous `MenuFlyout`-based menu on high-DPI displays.
 - **Screenshot editor: redesigned layout (left tool rail + inspector)** — tools now live in a
   vertical rail on the left with a contextual **inspector** panel beside them (mirroring the macOS
   app), and the output actions (Apply crop, Undo, Delete, Reset, Copy, Save) sit in a top bar.
@@ -18,6 +24,9 @@ own `CHANGELOG.md` at the repository root.
   abstraction were deleted to keep the app simple.
 
 ### Fixed
+- **Screenshot editor: background panel clipping** — the Background expander's padding/corner/shadow
+  sliders and style dropdown were cut off on the right edge of the inspector; the panel now stretches
+  to fit and no longer overflows.
 - **Screenshot editor: tool rail clipping** — the vertical tool rail is now scrollable, so the
   lower tools (Draw, Text, Number, Redact) are no longer cut off on shorter editor windows.
 - **Screenshot editor: arrow/line crash** — drawing an arrow or line that pointed up or to the
@@ -29,6 +38,8 @@ own `CHANGELOG.md` at the repository root.
   "Open with Tiny Clips". The initialization guard now defaults on.
 
 ### Added
+- **Screenshot editor: image dimensions** — the editor's top bar now shows the current image
+  size (`W × H px`) on the right, updating after a crop is applied.
 - **Screenshot editor: shape fill color** — rectangles and ellipses can now be filled with a
   color (with adjustable opacity). Fill is **off (transparent) by default**; enable it and pick a
   color in the inspector.
