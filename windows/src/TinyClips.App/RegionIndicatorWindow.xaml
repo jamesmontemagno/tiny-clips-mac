@@ -4,9 +4,5 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <Grid Background="Transparent">
-        <Border
-            BorderBrush="{ThemeResource SystemFillColorCriticalBrush}"
-            BorderThickness="3" />
-    </Grid>
+    <Grid Background="{ThemeResource SystemFillColorCriticalBrush}" />
 </Window>

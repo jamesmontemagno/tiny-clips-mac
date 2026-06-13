@@ -10,20 +10,20 @@
 
     <Grid x:Name="RootGrid" Background="Transparent">
         <Border
-            Width="120"
-            Height="120"
+            Width="92"
+            Height="92"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"
             BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
             BorderThickness="1"
-            CornerRadius="60">
+            CornerRadius="16">
             <TextBlock
                 x:Name="CountText"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 AutomationProperties.LiveSetting="Assertive"
-                FontSize="48"
+                FontSize="44"
                 FontWeight="SemiBold"
                 Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                 Text="3" />

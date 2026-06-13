@@ -21,6 +21,7 @@ public sealed partial class RegionIndicatorWindow : Window
     private const long WsExLayered = 0x00080000;
     private const long WsExTransparent = 0x00000020;
     private const uint WdaExcludeFromCapture = 0x11;
+    private const int RgnDiff = 4;
 
     private bool _closed;
 
@@ -51,6 +52,26 @@ public sealed partial class RegionIndicatorWindow : Window
         AppWindow.Show(false);
 
         ApplyOverlayStyles(hwnd);
+        PunchHole(hwnd, rect.Width, rect.Height, inset);
+    }
+
+    /// <summary>
+    /// Clips the window to just the border frame using a window region with the interior
+    /// removed, so the recorded area beneath stays fully visible to the user (a hollow
+    /// outline rather than an opaque overlay).
+    /// </summary>
+    private static void PunchHole(nint hwnd, int width, int height, int inset)
+    {
+        var outer = CreateRectRgn(0, 0, width, height);
+        var inner = CreateRectRgn(inset, inset, width - inset, height - inset);
+        var frame = CreateRectRgn(0, 0, 0, 0);
+
+        CombineRgn(frame, outer, inner, RgnDiff);
+        DeleteObject(outer);
+        DeleteObject(inner);
+
+        // SetWindowRgn takes ownership of 'frame'; do not delete it afterwards.
+        SetWindowRgn(hwnd, frame, true);
     }
 
     public void ClosePanel()
@@ -129,4 +150,17 @@ public sealed partial class RegionIndicatorWindow : Window
 
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(nint hwnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowRgn(nint hWnd, nint hRgn, [MarshalAs(UnmanagedType.Bool)] bool bRedraw);
+
+    [DllImport("gdi32.dll")]
+    private static extern nint CreateRectRgn(int x1, int y1, int x2, int y2);
+
+    [DllImport("gdi32.dll")]
+    private static extern int CombineRgn(nint hrgnDst, nint hrgnSrc1, nint hrgnSrc2, int fnCombineMode);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteObject(nint hObject);
 }

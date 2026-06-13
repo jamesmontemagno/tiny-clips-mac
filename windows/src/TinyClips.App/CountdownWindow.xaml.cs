@@ -72,8 +72,8 @@ public sealed partial class CountdownWindow : Window
     {
         var area = DisplayArea.Primary?.WorkArea;
 
-        // Window is sized to the compact circle (DIPs scaled to physical pixels).
-        const int sizeDip = 120;
+        // Window is sized to the compact badge (DIPs scaled to physical pixels).
+        const int sizeDip = 92;
         var scale = GetScale();
         var size = (int)Math.Round(sizeDip * scale);
         AppWindow.Resize(new SizeInt32(size, size));

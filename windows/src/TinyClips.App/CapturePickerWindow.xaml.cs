@@ -36,7 +36,8 @@ public sealed partial class CapturePickerWindow : Window
     private bool _completed;
 
     private bool _dragging;
-    private Windows.Foundation.Point _dragStart;
+    private POINT _dragCursorStart;
+    private PointInt32 _dragWindowStart;
 
     private CapturePickerWindow(CaptureType captureType, bool countdownEnabled, int countdownDuration)
     {
@@ -155,6 +156,8 @@ public sealed partial class CapturePickerWindow : Window
 
     // Drag-anywhere support: the R / S / W / timer / cancel buttons handle their own
     // pointer events (marking them handled), so a drag only starts on the bar background.
+    // Window movement is anchored to absolute cursor position (not element-relative,
+    // which feeds back and jitters as the window moves under the pointer).
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         if (sender is not UIElement element)
@@ -162,29 +165,28 @@ public sealed partial class CapturePickerWindow : Window
             return;
         }
 
-        _dragStart = e.GetCurrentPoint(element).Position;
+        GetCursorPos(out _dragCursorStart);
+        _dragWindowStart = AppWindow.Position;
         _dragging = element.CapturePointer(e.Pointer);
     }
 
     private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
     {
-        if (!_dragging || sender is not UIElement element)
+        if (!_dragging)
         {
             return;
         }
 
-        var current = e.GetCurrentPoint(element).Position;
-        var scale = GetScale();
-        var dx = (int)Math.Round((current.X - _dragStart.X) * scale);
-        var dy = (int)Math.Round((current.Y - _dragStart.Y) * scale);
+        GetCursorPos(out var current);
+        var dx = current.X - _dragCursorStart.X;
+        var dy = current.Y - _dragCursorStart.Y;
 
         if (dx == 0 && dy == 0)
         {
             return;
         }
 
-        var pos = AppWindow.Position;
-        AppWindow.Move(new PointInt32(pos.X + dx, pos.Y + dy));
+        AppWindow.Move(new PointInt32(_dragWindowStart.X + dx, _dragWindowStart.Y + dy));
     }
 
     private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -198,15 +200,15 @@ public sealed partial class CapturePickerWindow : Window
         element.ReleasePointerCapture(e.Pointer);
     }
 
-    private double GetScale()
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct POINT
     {
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var dpi = GetDpiForWindow(hwnd);
-        return dpi <= 0 ? 1.0 : dpi / 96.0;
+        public int X;
+        public int Y;
     }
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern uint GetDpiForWindow(nint hwnd);
+    private static extern bool GetCursorPos(out POINT lpPoint);
 
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {

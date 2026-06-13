@@ -773,21 +773,31 @@ public partial class App : Application
 
     private void OpenScreenshotEditor(string path)
     {
-        var oldWindow = _editorWindow;
-        _editorWindow = null;
-        oldWindow?.Close();
-
-        var window = new ScreenshotEditorWindow(path);
-        _editorWindow = window;
-        window.Closed += (_, _) =>
+        try
         {
-            if (ReferenceEquals(_editorWindow, window))
+            var oldWindow = _editorWindow;
+            _editorWindow = null;
+            oldWindow?.Close();
+
+            var window = new ScreenshotEditorWindow(path);
+            _editorWindow = window;
+            window.Closed += (_, _) =>
             {
-                _editorWindow = null;
-                ReopenPickerAfterCaptureIfNeeded(CaptureType.Screenshot);
-            }
-        };
-        ActivateWindowToForeground(window);
+                if (ReferenceEquals(_editorWindow, window))
+                {
+                    _editorWindow = null;
+                    ReopenPickerAfterCaptureIfNeeded(CaptureType.Screenshot);
+                }
+            };
+            ActivateWindowToForeground(window);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"OpenScreenshotEditor failed: {ex}");
+            RevealInExplorer(path);
+            ShowSaveToast(path);
+            ReopenPickerAfterCaptureIfNeeded(CaptureType.Screenshot);
+        }
     }
 
     private void ShowOnboardingIfNeeded()
