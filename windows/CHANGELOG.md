@@ -6,12 +6,28 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Changed
+- **Screenshot editor: redesigned layout (left tool rail + inspector)** — tools now live in a
+  vertical rail on the left with a contextual **inspector** panel beside them (mirroring the macOS
+  app), and the output actions (Apply crop, Undo, Delete, Reset, Copy, Save) sit in a top bar.
+  Selecting an annotation loads its properties into the inspector so they can be re-edited.
+- **Screenshot editor: continuous sizes** — stroke width (1–40 px), number-badge size (50%–400%),
+  and text font size (10–200 px) are now sliders instead of fixed presets.
 - **No Pro gating on Windows** — the Pro concept was removed entirely from the Windows app. All
   features (mouse-click overlays, separate GIF click styles, branding, uploads, etc.) are always
   available; the Pro settings section, upsell banners, and the `IEntitlementService`/`ProFeature`
   abstraction were deleted to keep the app simple.
 
+### Fixed
+- **Screenshot editor: arrow/line crash** — drawing an arrow or line that pointed up or to the
+  left crashed the app (`ArgumentOutOfRangeException` from a negative-size `Rect`). Lines and
+  arrows are now stored as directed endpoints and render correctly in any direction.
+
 ### Added
+- **Screenshot editor: text font & color controls** — the Text tool now lets you pick a font
+  family and size; numbered badges have an independent **number color** (default white) on top of
+  the badge fill color.
+- **Screenshot editor: Shift to constrain** — hold **Shift** while drawing a rectangle/ellipse for
+  a perfect square/circle, or while drawing a line/arrow to snap to horizontal, vertical, or 45°.
 - **Screenshot editor: export background, padding, corners & shadow** — a new **Background**
   toolbar control adds a styled backdrop behind the screenshot (Transparent, Solid, or Gradient)
   with 12 solid + 12 gradient presets and a custom color picker, plus **Padding** (0–160 px),

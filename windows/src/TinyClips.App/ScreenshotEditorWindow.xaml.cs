@@ -71,6 +71,11 @@ public sealed partial class ScreenshotEditorWindow : Window
         public RedactionLevel Redaction { get; set; } = RedactionLevel.Medium;
         public List<Vector2> Points { get; } = new();
 
+        // Text annotations: independent font + size; numbered badges: text color.
+        public Color TextColor { get; set; } = Colors.White;
+        public double FontSize { get; set; } = 28;
+        public string FontFamily { get; set; } = "Segoe UI";
+
         // Cached blurred preview for redaction annotations (invalidated on move / level change).
         public SoftwareBitmapSource? RedactPreview { get; set; }
         public Rect RedactPreviewBounds { get; set; }
@@ -88,6 +93,9 @@ public sealed partial class ScreenshotEditorWindow : Window
     private Color _strokeColor = Colors.Red;
     private double _strokeThickness = 6;
     private double _numberScale = 1.0;
+    private Color _numberTextColor = Colors.White;
+    private double _textFontSize = 28;
+    private string _textFontFamily = "Segoe UI";
     private RedactionLevel _redactionLevel = RedactionLevel.Medium;
     private int _counterValue = 1;
 
@@ -116,6 +124,7 @@ public sealed partial class ScreenshotEditorWindow : Window
     private double _canvasCornerRadius;
     private double _canvasShadow;
     private bool _bgInitializing;
+    private bool _inspectorInitializing;
 
     private static readonly BackgroundPreset[] SolidPresets =
     {
@@ -170,16 +179,60 @@ public sealed partial class ScreenshotEditorWindow : Window
 
         AnnotationColorPicker.Color = _strokeColor;
         ColorSwatch.Background = new SolidColorBrush(_strokeColor);
-        ThicknessCombo.SelectedIndex = 3;
-        NumberSizeCombo.SelectedIndex = 2;
+        NumberColorPicker.Color = _numberTextColor;
+        NumberColorSwatch.Background = new SolidColorBrush(_numberTextColor);
         RedactionCombo.SelectedIndex = 1;
-        SelectTool(EditTool.Crop);
 
+        InitializeInspectorControls();
         InitializeBackgroundControls();
+
+        SelectTool(EditTool.Crop);
 
         RootGrid.KeyDown += OnRootKeyDown;
 
         _ = LoadAsync();
+    }
+
+    private static readonly string[] FontChoices =
+    {
+        "Segoe UI",
+        "Segoe UI Semibold",
+        "Arial",
+        "Calibri",
+        "Cambria",
+        "Comic Sans MS",
+        "Consolas",
+        "Courier New",
+        "Georgia",
+        "Impact",
+        "Times New Roman",
+        "Trebuchet MS",
+        "Verdana",
+    };
+
+    private void InitializeInspectorControls()
+    {
+        _inspectorInitializing = true;
+
+        foreach (var font in FontChoices)
+        {
+            FontFamilyCombo.Items.Add(new ComboBoxItem { Content = font, Tag = font });
+        }
+        FontFamilyCombo.SelectedIndex = 0;
+
+        StrokeSlider.Value = _strokeThickness;
+        NumberSizeSlider.Value = _numberScale;
+        FontSizeSlider.Value = _textFontSize;
+        UpdateInspectorHeaders();
+
+        _inspectorInitializing = false;
+    }
+
+    private void UpdateInspectorHeaders()
+    {
+        StrokeSlider.Header = $"Stroke — {(int)_strokeThickness} px";
+        NumberSizeSlider.Header = $"Badge size — {(int)Math.Round(_numberScale * 100)}%";
+        FontSizeSlider.Header = $"Font size — {(int)_textFontSize} px";
     }
 
     private void InitializeBackgroundControls()
@@ -298,32 +351,112 @@ public sealed partial class ScreenshotEditorWindow : Window
             button.IsChecked = value == tool;
         }
 
-        var annotating = tool is not (EditTool.Select or EditTool.Crop);
         var showsStroke = tool is EditTool.Rectangle or EditTool.Ellipse or EditTool.Arrow
-            or EditTool.Line or EditTool.Pen or EditTool.Text;
+            or EditTool.Line or EditTool.Pen;
+        var showsColor = tool is EditTool.Rectangle or EditTool.Ellipse or EditTool.Arrow
+            or EditTool.Line or EditTool.Pen or EditTool.Text or EditTool.Counter;
+        var showsText = tool is EditTool.Text;
         var showsNumber = tool is EditTool.Counter;
         var showsRedact = tool is EditTool.Redact;
 
-        ThicknessCombo.Visibility = showsStroke ? Visibility.Visible : Visibility.Collapsed;
-        NumberSizeCombo.Visibility = showsNumber ? Visibility.Visible : Visibility.Collapsed;
-        RedactionCombo.Visibility = showsRedact ? Visibility.Visible : Visibility.Collapsed;
-        // Redaction has no color; everything else that annotates picks a color.
-        ColorButton.Visibility = (annotating && !showsRedact) ? Visibility.Visible : Visibility.Collapsed;
+        ColorSection.Visibility = showsColor ? Visibility.Visible : Visibility.Collapsed;
+        StrokeSection.Visibility = showsStroke ? Visibility.Visible : Visibility.Collapsed;
+        TextSection.Visibility = showsText ? Visibility.Visible : Visibility.Collapsed;
+        CounterSection.Visibility = showsNumber ? Visibility.Visible : Visibility.Collapsed;
+        RedactSection.Visibility = showsRedact ? Visibility.Visible : Visibility.Collapsed;
+
+        InspectorTitle.Text = tool switch
+        {
+            EditTool.Select => "Select & move",
+            EditTool.Crop => "Crop",
+            EditTool.Rectangle => "Rectangle",
+            EditTool.Ellipse => "Ellipse",
+            EditTool.Arrow => "Arrow",
+            EditTool.Line => "Line",
+            EditTool.Pen => "Draw",
+            EditTool.Text => "Text",
+            EditTool.Counter => "Number badge",
+            EditTool.Redact => "Redact",
+            _ => "Tool",
+        };
 
         HintText.Text = tool switch
         {
             EditTool.Crop => "Drag to select an area, then choose Apply crop.",
             EditTool.Select => "Click an annotation to select it; drag to move, Del to remove.",
-            EditTool.Text => "Click where you want to add text.",
+            EditTool.Text => "Click where you want to add text, then type.",
             EditTool.Counter => "Click to drop a numbered badge.",
             EditTool.Pen => "Drag to draw freehand.",
             EditTool.Redact => "Drag over content to redact it.",
+            EditTool.Rectangle or EditTool.Ellipse => "Drag to draw. Hold Shift for a perfect shape.",
+            EditTool.Line or EditTool.Arrow => "Drag in any direction. Hold Shift to snap.",
             _ => "Drag on the image to draw.",
         };
 
         ApplyCropButton.IsEnabled = false;
         SelectionRect.Visibility = Visibility.Collapsed;
         RedrawOverlay();
+    }
+
+    // While the Select tool is active, reveal the property controls for the chosen annotation
+    // and load its current values so the user can tweak color, size, font, etc.
+    private void ShowInspectorForSelection(Annotation ann)
+    {
+        _inspectorInitializing = true;
+
+        var isShape = ann.Tool is EditTool.Rectangle or EditTool.Ellipse or EditTool.Arrow
+            or EditTool.Line or EditTool.Pen;
+        var isText = ann.Tool is EditTool.Text;
+        var isCounter = ann.Tool is EditTool.Counter;
+        var isRedact = ann.Tool is EditTool.Redact;
+        var hasColor = isShape || isText || isCounter;
+
+        ColorSection.Visibility = hasColor ? Visibility.Visible : Visibility.Collapsed;
+        StrokeSection.Visibility = isShape ? Visibility.Visible : Visibility.Collapsed;
+        TextSection.Visibility = isText ? Visibility.Visible : Visibility.Collapsed;
+        CounterSection.Visibility = isCounter ? Visibility.Visible : Visibility.Collapsed;
+        RedactSection.Visibility = isRedact ? Visibility.Visible : Visibility.Collapsed;
+        InspectorTitle.Text = $"{ann.Tool} (selected)";
+
+        if (hasColor)
+        {
+            AnnotationColorPicker.Color = ann.Color;
+            ColorSwatch.Background = new SolidColorBrush(ann.Color);
+        }
+        if (isShape)
+        {
+            StrokeSlider.Value = ann.Thickness;
+        }
+        if (isText)
+        {
+            FontSizeSlider.Value = ann.FontSize;
+            SelectFontInCombo(ann.FontFamily);
+        }
+        if (isCounter)
+        {
+            NumberSizeSlider.Value = ann.SizeScale;
+            NumberColorPicker.Color = ann.TextColor;
+            NumberColorSwatch.Background = new SolidColorBrush(ann.TextColor);
+        }
+        if (isRedact)
+        {
+            RedactionCombo.SelectedIndex = (int)ann.Redaction;
+        }
+
+        UpdateInspectorHeaders();
+        _inspectorInitializing = false;
+    }
+
+    private void SelectFontInCombo(string font)
+    {
+        for (var i = 0; i < FontFamilyCombo.Items.Count; i++)
+        {
+            if (FontFamilyCombo.Items[i] is ComboBoxItem { Tag: string f } && f == font)
+            {
+                FontFamilyCombo.SelectedIndex = i;
+                return;
+            }
+        }
     }
 
     private IEnumerable<(ToggleButton Button, EditTool Tool)> ToolButtons()
@@ -351,32 +484,92 @@ public sealed partial class ScreenshotEditorWindow : Window
         }
     }
 
-    private void OnThicknessChanged(object sender, SelectionChangedEventArgs e)
+    private void OnNumberColorChanged(ColorPicker sender, ColorChangedEventArgs args)
     {
-        if (ThicknessCombo.SelectedItem is ComboBoxItem { Tag: string tag } && double.TryParse(tag, out var value))
+        _numberTextColor = args.NewColor;
+        NumberColorSwatch.Background = new SolidColorBrush(_numberTextColor);
+        if (_selectedAnnotation is { Tool: EditTool.Counter } ann)
         {
-            _strokeThickness = value;
-            if (_selectedAnnotation is not null)
+            ann.TextColor = _numberTextColor;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnStrokeChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        _strokeThickness = e.NewValue;
+        UpdateInspectorHeaders();
+        if (_selectedAnnotation is { Tool: not EditTool.Counter and not EditTool.Text } ann)
+        {
+            ann.Thickness = _strokeThickness;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnFontFamilyChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        if (FontFamilyCombo.SelectedItem is ComboBoxItem { Tag: string font })
+        {
+            _textFontFamily = font;
+            if (TextEditBox.Visibility == Visibility.Visible)
             {
-                _selectedAnnotation.Thickness = value;
+                TextEditBox.FontFamily = new FontFamily(font);
+            }
+            if (_selectedAnnotation is { Tool: EditTool.Text } ann)
+            {
+                ann.FontFamily = font;
                 RedrawOverlay();
             }
         }
     }
 
-    private void OnNumberSizeChanged(object sender, SelectionChangedEventArgs e)
+    private void OnFontSizeChanged(object sender, RangeBaseValueChangedEventArgs e)
     {
-        if (NumberSizeCombo.SelectedItem is ComboBoxItem { Tag: string tag } && double.TryParse(tag, out var value))
+        if (_inspectorInitializing)
         {
-            _numberScale = value;
-            if (_selectedAnnotation is { Tool: EditTool.Counter } ann)
-            {
-                ann.SizeScale = value;
-                var center = new Point(ann.Bounds.X + ann.Bounds.Width / 2, ann.Bounds.Y + ann.Bounds.Height / 2);
-                var radius = CounterRadius(value);
-                ann.Bounds = new Rect(center.X - radius, center.Y - radius, radius * 2, radius * 2);
-                RedrawOverlay();
-            }
+            return;
+        }
+
+        _textFontSize = e.NewValue;
+        UpdateInspectorHeaders();
+        if (TextEditBox.Visibility == Visibility.Visible)
+        {
+            var (scale, _, _) = ImageLayout();
+            TextEditBox.FontSize = Math.Max(10, _textFontSize * scale);
+        }
+        if (_selectedAnnotation is { Tool: EditTool.Text } ann)
+        {
+            ann.FontSize = _textFontSize;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnNumberSizeChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        _numberScale = e.NewValue;
+        UpdateInspectorHeaders();
+        if (_selectedAnnotation is { Tool: EditTool.Counter } ann)
+        {
+            ann.SizeScale = _numberScale;
+            var center = new Point(ann.Bounds.X + ann.Bounds.Width / 2, ann.Bounds.Y + ann.Bounds.Height / 2);
+            var radius = CounterRadius(_numberScale);
+            ann.Bounds = new Rect(center.X - radius, center.Y - radius, radius * 2, radius * 2);
+            RedrawOverlay();
         }
     }
 
@@ -547,6 +740,7 @@ public sealed partial class ScreenshotEditorWindow : Window
                 var origin = PixelToCanvas(new Point(hit.Bounds.X, hit.Bounds.Y));
                 _moveOffset = new Point(p.X - origin.X, p.Y - origin.Y);
                 OverlayCanvas.CapturePointer(e.Pointer);
+                ShowInspectorForSelection(hit);
             }
             RedrawOverlay();
             return;
@@ -568,6 +762,7 @@ public sealed partial class ScreenshotEditorWindow : Window
                 Color = _strokeColor,
                 Thickness = _strokeThickness,
                 SizeScale = _numberScale,
+                TextColor = _numberTextColor,
                 Number = _counterValue++,
                 Bounds = new Rect(center.X - radius, center.Y - radius, radius * 2, radius * 2),
             };
@@ -590,6 +785,12 @@ public sealed partial class ScreenshotEditorWindow : Window
         };
         if (_tool == EditTool.Pen)
         {
+            _activeAnnotation.Points.Add(new Vector2((float)pixel.X, (float)pixel.Y));
+        }
+        else if (_tool is EditTool.Line or EditTool.Arrow)
+        {
+            // Lines and arrows are stored as directed endpoints so they can point any direction.
+            _activeAnnotation.Points.Add(new Vector2((float)pixel.X, (float)pixel.Y));
             _activeAnnotation.Points.Add(new Vector2((float)pixel.X, (float)pixel.Y));
         }
         OverlayCanvas.CapturePointer(e.Pointer);
@@ -633,14 +834,38 @@ public sealed partial class ScreenshotEditorWindow : Window
             var startPixel = CanvasToPixel(_dragStart);
             if (_activeAnnotation.Tool is EditTool.Line or EditTool.Arrow)
             {
-                // Bounds encode the directed segment start->end.
-                _activeAnnotation.Bounds = new Rect(startPixel.X, startPixel.Y, pixel.X - startPixel.X, pixel.Y - startPixel.Y);
+                // Store the directed endpoints; keep Bounds as a normalized box for hit-testing.
+                var end = pixel;
+                if (IsShiftDown())
+                {
+                    end = ConstrainToAxisOrDiagonal(startPixel, pixel);
+                }
+                if (_activeAnnotation.Points.Count < 2)
+                {
+                    _activeAnnotation.Points.Add(new Vector2((float)end.X, (float)end.Y));
+                }
+                else
+                {
+                    _activeAnnotation.Points[1] = new Vector2((float)end.X, (float)end.Y);
+                }
+                var nx = Math.Min(startPixel.X, end.X);
+                var ny = Math.Min(startPixel.Y, end.Y);
+                _activeAnnotation.Bounds = new Rect(nx, ny, Math.Abs(end.X - startPixel.X), Math.Abs(end.Y - startPixel.Y));
             }
             else
             {
-                var x = Math.Min(pixel.X, startPixel.X);
-                var y = Math.Min(pixel.Y, startPixel.Y);
-                _activeAnnotation.Bounds = new Rect(x, y, Math.Abs(pixel.X - startPixel.X), Math.Abs(pixel.Y - startPixel.Y));
+                var endX = pixel.X;
+                var endY = pixel.Y;
+                // Shift constrains rectangles/ellipses to a perfect square/circle.
+                if (IsShiftDown() && _activeAnnotation.Tool is EditTool.Rectangle or EditTool.Ellipse)
+                {
+                    var side = Math.Max(Math.Abs(pixel.X - startPixel.X), Math.Abs(pixel.Y - startPixel.Y));
+                    endX = startPixel.X + Math.Sign(pixel.X - startPixel.X) * side;
+                    endY = startPixel.Y + Math.Sign(pixel.Y - startPixel.Y) * side;
+                }
+                var x = Math.Min(endX, startPixel.X);
+                var y = Math.Min(endY, startPixel.Y);
+                _activeAnnotation.Bounds = new Rect(x, y, Math.Abs(endX - startPixel.X), Math.Abs(endY - startPixel.Y));
             }
             RedrawOverlay(previewActive: true);
         }
@@ -713,6 +938,40 @@ public sealed partial class ScreenshotEditorWindow : Window
         return new Rect(x, y, Math.Abs(b.Width), Math.Abs(b.Height));
     }
 
+    private static (Vector2 Start, Vector2 End) Segment(Annotation ann)
+    {
+        if (ann.Points.Count >= 2)
+        {
+            return (ann.Points[0], ann.Points[^1]);
+        }
+        var s = new Vector2((float)ann.Bounds.X, (float)ann.Bounds.Y);
+        return (s, s);
+    }
+
+    private static bool IsShiftDown() =>
+        Microsoft.UI.Input.InputKeyboardSource
+            .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    private static Point ConstrainToAxisOrDiagonal(Point start, Point end)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var adx = Math.Abs(dx);
+        var ady = Math.Abs(dy);
+        // Snap to the nearest of horizontal, vertical, or 45° diagonal.
+        if (adx > ady * 2)
+        {
+            return new Point(end.X, start.Y);
+        }
+        if (ady > adx * 2)
+        {
+            return new Point(start.X, end.Y);
+        }
+        var len = Math.Max(adx, ady);
+        return new Point(start.X + Math.Sign(dx) * len, start.Y + Math.Sign(dy) * len);
+    }
+
     // -- Text entry -----------------------------------------------------------
 
     private void BeginTextEntry(Point canvasPoint)
@@ -720,7 +979,9 @@ public sealed partial class ScreenshotEditorWindow : Window
         _pendingTextOrigin = canvasPoint;
         _textBoxFocused = false;
         TextEditBox.Text = string.Empty;
-        TextEditBox.FontSize = Math.Max(14, _strokeThickness * 3);
+        var (scale, _, _) = ImageLayout();
+        TextEditBox.FontSize = Math.Max(10, _textFontSize * scale);
+        TextEditBox.FontFamily = new FontFamily(_textFontFamily);
         TextEditBox.Foreground = new SolidColorBrush(_strokeColor);
         Canvas.SetLeft(TextEditBox, canvasPoint.X);
         Canvas.SetTop(TextEditBox, canvasPoint.Y);
@@ -788,6 +1049,8 @@ public sealed partial class ScreenshotEditorWindow : Window
                 Color = _strokeColor,
                 Thickness = _strokeThickness,
                 Text = text,
+                FontSize = _textFontSize,
+                FontFamily = _textFontFamily,
                 Bounds = new Rect(pixel.X, pixel.Y, 0, 0),
             });
             RedrawOverlay();
@@ -1039,8 +1302,9 @@ public sealed partial class ScreenshotEditorWindow : Window
             }
             case EditTool.Line:
             {
-                var start = PixelToCanvas(new Point(ann.Bounds.X, ann.Bounds.Y));
-                var end = PixelToCanvas(new Point(ann.Bounds.X + ann.Bounds.Width, ann.Bounds.Y + ann.Bounds.Height));
+                var (s, en) = Segment(ann);
+                var start = PixelToCanvas(new Point(s.X, s.Y));
+                var end = PixelToCanvas(new Point(en.X, en.Y));
                 OverlayCanvas.Children.Add(new Line
                 {
                     X1 = start.X,
@@ -1056,8 +1320,9 @@ public sealed partial class ScreenshotEditorWindow : Window
             }
             case EditTool.Arrow:
             {
-                var start = PixelToCanvas(new Point(ann.Bounds.X, ann.Bounds.Y));
-                var end = PixelToCanvas(new Point(ann.Bounds.X + ann.Bounds.Width, ann.Bounds.Y + ann.Bounds.Height));
+                var (s, en) = Segment(ann);
+                var start = PixelToCanvas(new Point(s.X, s.Y));
+                var end = PixelToCanvas(new Point(en.X, en.Y));
                 AddArrowShapes(start, end, brush, thickness);
                 break;
             }
@@ -1132,7 +1397,8 @@ public sealed partial class ScreenshotEditorWindow : Window
                 {
                     Text = ann.Text,
                     Foreground = brush,
-                    FontSize = Math.Max(14, ann.Thickness * 3) * scale,
+                    FontSize = ann.FontSize * scale,
+                    FontFamily = new FontFamily(ann.FontFamily),
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 };
                 Canvas.SetLeft(text, tl.X);
@@ -1154,7 +1420,7 @@ public sealed partial class ScreenshotEditorWindow : Window
                 grid.Children.Add(new TextBlock
                 {
                     Text = ann.Number.ToString(),
-                    Foreground = new SolidColorBrush(Colors.White),
+                    Foreground = new SolidColorBrush(ann.TextColor),
                     FontWeight = Microsoft.UI.Text.FontWeights.Bold,
                     FontSize = diameter * 0.5,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -1557,9 +1823,10 @@ public sealed partial class ScreenshotEditorWindow : Window
             }
             case EditTool.Line:
             {
+                var (s, en) = Segment(ann);
                 ds.DrawLine(
-                    new Vector2((float)ann.Bounds.X, (float)ann.Bounds.Y),
-                    new Vector2((float)(ann.Bounds.X + ann.Bounds.Width), (float)(ann.Bounds.Y + ann.Bounds.Height)),
+                    s,
+                    en,
                     color,
                     thickness,
                     new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round });
@@ -1589,10 +1856,11 @@ public sealed partial class ScreenshotEditorWindow : Window
             }
             case EditTool.Text:
             {
-                var fontSize = (float)Math.Max(14, ann.Thickness * 3);
+                var fontSize = (float)ann.FontSize;
                 using var format = new CanvasTextFormat
                 {
                     FontSize = fontSize,
+                    FontFamily = ann.FontFamily,
                     FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 };
                 ds.DrawText(ann.Text, new Vector2((float)ann.Bounds.X, (float)ann.Bounds.Y), color, format);
@@ -1613,7 +1881,7 @@ public sealed partial class ScreenshotEditorWindow : Window
                     HorizontalAlignment = CanvasHorizontalAlignment.Center,
                     VerticalAlignment = CanvasVerticalAlignment.Center,
                 };
-                ds.DrawText(ann.Number.ToString(), new Rect(b.X, b.Y, b.Width, b.Height), Colors.White, format);
+                ds.DrawText(ann.Number.ToString(), new Rect(b.X, b.Y, b.Width, b.Height), ann.TextColor, format);
                 break;
             }
         }
@@ -1621,8 +1889,7 @@ public sealed partial class ScreenshotEditorWindow : Window
 
     private static void DrawArrowToSession(CanvasDrawingSession ds, Annotation ann, Color color, float thickness)
     {
-        var start = new Vector2((float)ann.Bounds.X, (float)ann.Bounds.Y);
-        var end = new Vector2((float)(ann.Bounds.X + ann.Bounds.Width), (float)(ann.Bounds.Y + ann.Bounds.Height));
+        var (start, end) = Segment(ann);
         var style = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
         ds.DrawLine(start, end, color, thickness, style);
 
