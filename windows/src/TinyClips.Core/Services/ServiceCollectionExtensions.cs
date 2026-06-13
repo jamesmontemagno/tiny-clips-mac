@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IFileSystem, FileSystem>();
         services.AddSingleton<IFileNameService, FileNameService>();
         services.AddSingleton<IClipStorageService, ClipStorageService>();
+        services.AddSingleton<IClipsLibraryService, ClipsLibraryService>();
         services.AddSingleton<IHotKeyService, HotKeyService>();
         services.AddSingleton<IMonitorService, MonitorService>();
         services.AddSingleton<IScreenCaptureService, ScreenCaptureService>();

@@ -34,6 +34,7 @@ public partial class App : Application
 
     private TaskbarIcon? _taskbarIcon;
     private SettingsWindow? _settingsWindow;
+    private ClipsManagerWindow? _clipsWindow;
     private MenuFlyoutItem? _videoItem;
     private MenuFlyoutItem? _gifItem;
     private GlobalHotKeyManager? _hotKeyManager;
@@ -99,6 +100,12 @@ public partial class App : Application
         menuFlyout.Items.Add(_gifItem);
 
         menuFlyout.Items.Add(new MenuFlyoutSeparator());
+
+        menuFlyout.Items.Add(CreateMenuItem(
+            text: "Clips Manager",
+            glyph: "\uE8FD",
+            acceleratorText: null,
+            command: new RelayCommand(OpenClipsManagerWindow)));
 
         menuFlyout.Items.Add(CreateMenuItem(
             text: "Settings",
@@ -523,6 +530,17 @@ public partial class App : Application
         _settingsWindow.Activate();
     }
 
+    private void OpenClipsManagerWindow()
+    {
+        if (_clipsWindow is null)
+        {
+            _clipsWindow = new ClipsManagerWindow();
+            _clipsWindow.Closed += (_, _) => _clipsWindow = null;
+        }
+
+        _clipsWindow.Activate();
+    }
+
     private void ExitApplication()
     {
         try
@@ -543,6 +561,7 @@ public partial class App : Application
         _taskbarIcon?.Dispose();
         _taskbarIcon = null;
         _settingsWindow?.Close();
+        _clipsWindow?.Close();
         Application.Current.Exit();
         // No persistent host window keeps the process alive, so force termination
         // to guarantee the user can always quit from the tray menu.
