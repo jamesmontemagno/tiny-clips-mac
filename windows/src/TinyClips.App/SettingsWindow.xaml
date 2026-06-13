@@ -18,7 +18,6 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!--  Custom title bar  -->
         <Grid
             x:Name="AppTitleBar"
             Grid.Row="0"
@@ -30,14 +29,68 @@
                 Text="Tiny Clips Settings" />
         </Grid>
 
-        <ScrollViewer Grid.Row="1" Padding="0,0,0,24">
-            <StackPanel
-                MaxWidth="760"
-                Margin="24,8,24,0"
-                HorizontalAlignment="Stretch"
-                Spacing="8">
+        <NavigationView
+            x:Name="SettingsNavigation"
+            Grid.Row="1"
+            AutomationProperties.AutomationId="SettingsNavigationView"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            OpenPaneLength="240"
+            PaneDisplayMode="Left"
+            SelectionChanged="OnSettingsNavigationSelectionChanged">
+            <NavigationView.MenuItems>
+                <NavigationViewItem
+                    x:Name="GeneralNavigationItem"
+                    AutomationProperties.AutomationId="GeneralNavigationItem"
+                    Content="General"
+                    Icon="Setting"
+                    Tag="General" />
+                <NavigationViewItem
+                    AutomationProperties.AutomationId="ScreenshotNavigationItem"
+                    Content="Screenshot"
+                    Icon="Camera"
+                    Tag="Screenshot" />
+                <NavigationViewItem
+                    AutomationProperties.AutomationId="VideoNavigationItem"
+                    Content="Video"
+                    Icon="Video"
+                    Tag="Video" />
+                <NavigationViewItem
+                    AutomationProperties.AutomationId="GifNavigationItem"
+                    Content="GIF"
+                    Icon="Pictures"
+                    Tag="Gif" />
+                <NavigationViewItem
+                    AutomationProperties.AutomationId="MouseClicksNavigationItem"
+                    Content="Mouse Clicks"
+                    Icon="TouchPointer"
+                    Tag="MouseClicks" />
+                <NavigationViewItem
+                    AutomationProperties.AutomationId="BrandingNavigationItem"
+                    Content="Branding"
+                    Icon="Flag"
+                    Tag="Branding" />
+                <NavigationViewItem
+                    AutomationProperties.AutomationId="HotkeysNavigationItem"
+                    Content="Hotkeys"
+                    Icon="Keyboard"
+                    Tag="Hotkeys" />
+                <NavigationViewItem
+                    AutomationProperties.AutomationId="ProNavigationItem"
+                    Content="Pro"
+                    Icon="Shop"
+                    Tag="Pro" />
+            </NavigationView.MenuItems>
 
-                <!--  GENERAL  -->
+            <ScrollViewer Padding="0,0,0,24">
+                <Grid
+                    MaxWidth="760"
+                    Margin="24,8,24,0"
+                    HorizontalAlignment="Stretch">
+                    <StackPanel
+                        x:Name="GeneralSection"
+                        Spacing="8">
+<!--  GENERAL  -->
                 <TextBlock
                     Margin="4,8,0,4"
                     Style="{StaticResource SubtitleTextBlockStyle}"
@@ -191,7 +244,34 @@
                    </Grid>
                 </Border>
 
-                <!--  SCREENSHOT  -->
+                       <Border Style="{StaticResource SettingCardStyle}">
+                           <Grid ColumnSpacing="16">
+                               <Grid.ColumnDefinitions>
+                                   <ColumnDefinition Width="*" />
+                                   <ColumnDefinition Width="Auto" />
+                               </Grid.ColumnDefinitions>
+                               <StackPanel VerticalAlignment="Center">
+                                   <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Reopen capture picker after each capture" />
+                                   <TextBlock
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Show the Region / Screen / Window picker again after a capture finishes." />
+                               </StackPanel>
+                               <ToggleSwitch
+                                   Grid.Column="1"
+                                   VerticalAlignment="Center"
+                                   AutomationProperties.AutomationId="ReopenPickerToggle"
+                                   AutomationProperties.Name="Reopen capture picker after each capture"
+                                   IsOn="{x:Bind ViewModel.ReopenPickerAfterCapture, Mode=TwoWay}" />
+                           </Grid>
+                       </Border>
+                   </StackPanel>
+
+                   <StackPanel
+                        x:Name="ScreenshotSection"
+                        Spacing="8"
+                            Visibility="Collapsed">
+<!--  SCREENSHOT  -->
                 <TextBlock
                     Margin="4,16,0,4"
                     Style="{StaticResource SubtitleTextBlockStyle}"
@@ -323,8 +403,13 @@
                             IsOn="{x:Bind ViewModel.ShowScreenshotEditor, Mode=TwoWay}" />
                     </Grid>
                 </Border>
+                    </StackPanel>
 
-                <!--  VIDEO  -->
+                    <StackPanel
+                        x:Name="VideoSection"
+                        Spacing="8"
+                            Visibility="Collapsed">
+<!--  VIDEO  -->
                 <TextBlock
                     Margin="4,16,0,4"
                     Style="{StaticResource SubtitleTextBlockStyle}"
@@ -470,8 +555,13 @@
                             IsOn="{x:Bind ViewModel.ShowTrimmer, Mode=TwoWay}" />
                     </Grid>
                 </Border>
+                    </StackPanel>
 
-                <!--  GIF  -->
+                    <StackPanel
+                        x:Name="GifSection"
+                        Spacing="8"
+                            Visibility="Collapsed">
+<!--  GIF  -->
                 <TextBlock
                     Margin="4,16,0,4"
                     Style="{StaticResource SubtitleTextBlockStyle}"
@@ -577,70 +667,13 @@
                             IsOn="{x:Bind ViewModel.ShowGifTrimmer, Mode=TwoWay}" />
                     </Grid>
                 </Border>
-
-                <!--  SHORTCUTS  -->
-                <TextBlock
-                    Margin="4,16,0,4"
-                    Style="{StaticResource SubtitleTextBlockStyle}"
-                    Text="Keyboard shortcuts" />
-
-                <Border Style="{StaticResource SettingCardStyle}">
-                    <StackPanel Spacing="8">
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                Style="{StaticResource BodyStrongTextBlockStyle}"
-                                Text="Screenshot" />
-                            <Border
-                                Grid.Column="1"
-                                Padding="10,4"
-                                Background="{ThemeResource ControlFillColorDefaultBrush}"
-                                CornerRadius="{ThemeResource ControlCornerRadius}">
-                                <TextBlock FontFamily="Consolas" Text="{x:Bind ViewModel.ScreenshotHotKeyDisplay}" />
-                            </Border>
-                        </Grid>
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                Style="{StaticResource BodyStrongTextBlockStyle}"
-                                Text="Record video" />
-                            <Border
-                                Grid.Column="1"
-                                Padding="10,4"
-                                Background="{ThemeResource ControlFillColorDefaultBrush}"
-                                CornerRadius="{ThemeResource ControlCornerRadius}">
-                                <TextBlock FontFamily="Consolas" Text="{x:Bind ViewModel.VideoHotKeyDisplay}" />
-                            </Border>
-                        </Grid>
-                        <Grid ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                Style="{StaticResource BodyStrongTextBlockStyle}"
-                                Text="Record GIF" />
-                            <Border
-                                Grid.Column="1"
-                                Padding="10,4"
-                                Background="{ThemeResource ControlFillColorDefaultBrush}"
-                                CornerRadius="{ThemeResource ControlCornerRadius}">
-                                <TextBlock FontFamily="Consolas" Text="{x:Bind ViewModel.GifHotKeyDisplay}" />
-                            </Border>
-                        </Grid>
                     </StackPanel>
-                </Border>
 
-                <!--  MOUSE CLICKS (Pro)  -->
+                    <StackPanel
+                        x:Name="MouseClicksSection"
+                        Spacing="8"
+                            Visibility="Collapsed">
+<!--  MOUSE CLICKS (Pro)  -->
                 <TextBlock
                     Margin="4,16,0,4"
                     Style="{StaticResource SubtitleTextBlockStyle}"
@@ -649,8 +682,8 @@
                 <InfoBar
                     x:Name="ProUpsellInfoBar"
                     IsClosable="False"
-                    IsOpen="{x:Bind ViewModel.IsNotPro}"
-                    Message="{x:Bind ViewModel.ProStatusText}"
+                    IsOpen="{x:Bind ViewModel.IsNotPro, Mode=OneWay}"
+                    Message="{x:Bind ViewModel.ProStatusText, Mode=OneWay}"
                     Severity="Informational" />
 
                 <Border Style="{StaticResource SettingCardStyle}">
@@ -671,7 +704,7 @@
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="ShowMouseClicksInVideoToggle"
                             AutomationProperties.Name="Show mouse clicks in video"
-                            IsEnabled="{x:Bind ViewModel.IsPro}"
+                            IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             IsOn="{x:Bind ViewModel.ShowMouseClicksInVideo, Mode=TwoWay}" />
                     </Grid>
                 </Border>
@@ -690,7 +723,7 @@
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="ShowMouseClicksInGifToggle"
                             AutomationProperties.Name="Show mouse clicks in GIF"
-                            IsEnabled="{x:Bind ViewModel.IsPro}"
+                            IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             IsOn="{x:Bind ViewModel.ShowMouseClicksInGif, Mode=TwoWay}" />
                     </Grid>
                 </Border>
@@ -713,7 +746,7 @@
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="GifUsesVideoClickSettingsToggle"
                             AutomationProperties.Name="GIF uses video click settings"
-                            IsEnabled="{x:Bind ViewModel.IsPro}"
+                            IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             IsOn="{x:Bind ViewModel.GifMouseClicksUseVideoSettings, Mode=TwoWay}" />
                     </Grid>
                 </Border>
@@ -733,7 +766,7 @@
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="VideoMouseClickSizeNumberBox"
                             AutomationProperties.Name="Mouse click highlight size"
-                            IsEnabled="{x:Bind ViewModel.IsPro}"
+                            IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             Maximum="200"
                             Minimum="20"
                             SpinButtonPlacementMode="Inline"
@@ -756,7 +789,7 @@
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="VideoMouseClickOpacityNumberBox"
                             AutomationProperties.Name="Mouse click highlight opacity"
-                            IsEnabled="{x:Bind ViewModel.IsPro}"
+                            IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             LargeChange="0.1"
                             Maximum="1.0"
                             Minimum="0.1"
@@ -765,8 +798,13 @@
                             Value="{x:Bind ViewModel.VideoMouseClickOpacity, Mode=TwoWay}" />
                     </Grid>
                 </Border>
+                    </StackPanel>
 
-                <!--  BRANDING (Pro)  -->
+                    <StackPanel
+                        x:Name="BrandingSection"
+                        Spacing="8"
+                            Visibility="Collapsed">
+<!--  BRANDING (Pro)  -->
                 <TextBlock
                     Margin="4,16,0,4"
                     Style="{StaticResource SubtitleTextBlockStyle}"
@@ -790,11 +828,106 @@
                             VerticalAlignment="Center"
                             AutomationProperties.AutomationId="ShowBrandingOverlayToggle"
                             AutomationProperties.Name="Show branding overlay"
-                            IsEnabled="{x:Bind ViewModel.IsPro}"
+                            IsEnabled="{x:Bind ViewModel.IsPro, Mode=OneWay}"
                             IsOn="{x:Bind ViewModel.ShowBrandingOverlay, Mode=TwoWay}" />
                     </Grid>
                 </Border>
-            </StackPanel>
-        </ScrollViewer>
+                    </StackPanel>
+
+                    <StackPanel
+                        x:Name="HotkeysSection"
+                        Spacing="8"
+                            Visibility="Collapsed">
+<!--  SHORTCUTS  -->
+                <TextBlock
+                    Margin="4,16,0,4"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="Keyboard shortcuts" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <StackPanel Spacing="8">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Screenshot" />
+                            <Border
+                                Grid.Column="1"
+                                Padding="10,4"
+                                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                CornerRadius="{ThemeResource ControlCornerRadius}">
+                                <TextBlock FontFamily="Consolas" Text="{x:Bind ViewModel.ScreenshotHotKeyDisplay, Mode=OneWay}" />
+                            </Border>
+                        </Grid>
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Record video" />
+                            <Border
+                                Grid.Column="1"
+                                Padding="10,4"
+                                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                CornerRadius="{ThemeResource ControlCornerRadius}">
+                                <TextBlock FontFamily="Consolas" Text="{x:Bind ViewModel.VideoHotKeyDisplay, Mode=OneWay}" />
+                            </Border>
+                        </Grid>
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="Record GIF" />
+                            <Border
+                                Grid.Column="1"
+                                Padding="10,4"
+                                Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                CornerRadius="{ThemeResource ControlCornerRadius}">
+                                <TextBlock FontFamily="Consolas" Text="{x:Bind ViewModel.GifHotKeyDisplay, Mode=OneWay}" />
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+                    </StackPanel>
+
+                    <StackPanel
+                        x:Name="ProSection"
+                        Spacing="8"
+                        Visibility="Collapsed">
+                        <TextBlock
+                            Margin="4,8,0,4"
+                            Style="{StaticResource SubtitleTextBlockStyle}"
+                            Text="Pro" />
+
+                        <InfoBar
+                            IsClosable="False"
+                            IsOpen="True"
+                            Message="{x:Bind ViewModel.ProStatusText, Mode=OneWay}"
+                            Severity="Informational" />
+
+                        <Border Style="{StaticResource SettingCardStyle}">
+                            <StackPanel Spacing="8">
+                                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Pro features" />
+                                <TextBlock
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="Mouse-click visuals and branding overlays are grouped in their own sections for quick setup." />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
+        </NavigationView>
     </Grid>
 </Window>

@@ -1,6 +1,7 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using TinyClips.Core.Services;
 using Windows.Graphics;
 using Windows.Storage;
@@ -25,7 +26,10 @@ public sealed partial class SettingsWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
 
-        AppWindow.Resize(new SizeInt32(760, 820));
+        SettingsNavigation.SelectedItem = GeneralNavigationItem;
+        ShowSettingsSection("General");
+
+        AppWindow.Resize(new SizeInt32(1040, 820));
 
         ApplyTheme();
         ViewModel.ThemeChanged += ApplyTheme;
@@ -46,6 +50,26 @@ public sealed partial class SettingsWindow : Window
             2 => ElementTheme.Dark,
             _ => ElementTheme.Default,
         };
+    }
+
+    private void OnSettingsNavigationSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        if (args.SelectedItem is NavigationViewItem { Tag: string sectionTag })
+        {
+            ShowSettingsSection(sectionTag);
+        }
+    }
+
+    private void ShowSettingsSection(string sectionTag)
+    {
+        GeneralSection.Visibility = sectionTag == "General" ? Visibility.Visible : Visibility.Collapsed;
+        ScreenshotSection.Visibility = sectionTag == "Screenshot" ? Visibility.Visible : Visibility.Collapsed;
+        VideoSection.Visibility = sectionTag == "Video" ? Visibility.Visible : Visibility.Collapsed;
+        GifSection.Visibility = sectionTag == "Gif" ? Visibility.Visible : Visibility.Collapsed;
+        MouseClicksSection.Visibility = sectionTag == "MouseClicks" ? Visibility.Visible : Visibility.Collapsed;
+        BrandingSection.Visibility = sectionTag == "Branding" ? Visibility.Visible : Visibility.Collapsed;
+        HotkeysSection.Visibility = sectionTag == "Hotkeys" ? Visibility.Visible : Visibility.Collapsed;
+        ProSection.Visibility = sectionTag == "Pro" ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void OnBrowseSaveDirectory(object sender, RoutedEventArgs e)

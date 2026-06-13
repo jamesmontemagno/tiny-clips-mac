@@ -54,6 +54,16 @@ public readonly record struct HotKeyDefinition(HotKeyModifiers Modifiers, uint V
         0x27 => "Right",
         0x28 => "Down",
         0x2C => "PrtSc",
+        0xBB => "=",
+        0xBD => "-",
+        0xBC => ",",
+        0xBE => ".",
+        0xBF => "/",
+        0xC0 => "`",
+        0xDB => "[",
+        0xDC => "\\",
+        0xDD => "]",
+        0xDE => "'",
         _ => "?",
     };
 }

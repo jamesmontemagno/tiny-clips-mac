@@ -33,10 +33,36 @@ own `CHANGELOG.md` at the repository root.
   (via the `HKCU\...\Run` registry key).
 
 ### Changed
+- **Settings** is now organized into a left **NavigationView** with one section per group
+  (General, Screenshot, Video, GIF, Mouse Clicks, Branding, Hotkeys, Pro).
+- **Pro features are unlocked** in the direct (non-Store) build, matching the macOS direct
+  distribution; the Store build will gate them via a StoreContext-backed entitlement service.
 - **Region selector** now shows a live snapshot of the screen behind a hole-punch dim, so the
   area being captured stays clear and fully visible (instead of dimming the whole screen).
-- **Screen** and **Window** pickers are now compact, centered Mica dialogs that leave the rest
+- **Screen** and **Window** pickers are now compact, centered dialogs that leave the rest
   of the desktop visible rather than graying out the entire display.
+- The capture picker, the pickers, and the countdown now use a translucent **acrylic** backdrop
+  so the desktop shows through; the **countdown** is a smaller circle.
+- The **capture picker** and the **recording indicator** can be dragged to reposition them.
+- New **app icon** (512px base + refreshed MSIX tiles) recreating the viewfinder mark crisply.
+- **Trimmers** redesigned with a cleaner preview / trim-range / footer layout and a **Speed**
+  control (GIF output speed is applied to frame delays; video speed currently affects preview).
+- A new **Reopen capture picker after each capture** setting re-shows the picker when a capture
+  finishes.
+
+### Fixed
+- **Recorded MP4 was vertically flipped** — video frames are now written with the correct
+  top-down orientation (the GIF path was already correct).
+- **Screenshot editor** now reliably opens and comes to the foreground after a screenshot.
+- The screen is **no longer dimmed** between finishing a region selection and the recording
+  starting for video/GIF.
+- A **region outline** now stays visible (click-through and excluded from capture) while
+  recording a region, and the outline is drawn just outside the captured area.
+- The **recording indicator** is excluded from capture so it no longer appears in recordings.
+- Quitting the app while a **GIF** recording is active now finalizes the GIF instead of
+  abandoning it, and the exit path no longer blocks the UI thread.
+- Launch-at-login registry value is now **quoted** so executable paths with spaces work.
+- Hotkey labels now render punctuation/symbol keys (e.g. `-`, `=`, `,`) instead of `?`.
 
 ### Removed
 - The **Clips Manager** library window (and its `ClipTile` view-model) for now; captures still

@@ -8,7 +8,12 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid x:Name="RootGrid" Background="Transparent">
+    <Grid
+        x:Name="RootGrid"
+        Background="Transparent"
+        PointerMoved="OnPointerMoved"
+        PointerPressed="OnPointerPressed"
+        PointerReleased="OnPointerReleased">
         <Border
             Padding="12,8"
             Background="{ThemeResource AcrylicBackgroundFillColorDefaultBrush}"

@@ -15,7 +15,8 @@ public sealed class LaunchAtLoginService : ILaunchAtLoginService
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, false);
-                return string.Equals((string?)key?.GetValue(RunValueName), GetExecutablePath(), StringComparison.OrdinalIgnoreCase);
+                var storedValue = ((string?)key?.GetValue(RunValueName))?.Trim('"');
+                return string.Equals(storedValue, GetExecutablePath(), StringComparison.OrdinalIgnoreCase);
             }
             catch
             {
@@ -45,7 +46,8 @@ public sealed class LaunchAtLoginService : ILaunchAtLoginService
 
             if (enabled)
             {
-                key.SetValue(RunValueName, executablePath);
+                // MSIX should use windows.startupTask + StartupTask; per-version install paths break registry launch after updates.
+                key.SetValue(RunValueName, QuoteExecutablePath(executablePath));
                 return;
             }
 
@@ -66,4 +68,6 @@ public sealed class LaunchAtLoginService : ILaunchAtLoginService
 
         return Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
     }
+
+    private static string QuoteExecutablePath(string executablePath) => $"\"{executablePath.Trim('"')}\"";
 }

@@ -24,6 +24,7 @@ public sealed partial class VideoTrimmerWindow : Window
     private TimeSpan _duration = TimeSpan.Zero;
     private double _startSeconds;
     private double _endSeconds;
+    private double _speed = 1.0;
     private bool _ready;
 
     public VideoTrimmerWindow(string filePath)
@@ -31,6 +32,9 @@ public sealed partial class VideoTrimmerWindow : Window
         _filePath = filePath;
 
         InitializeComponent();
+
+        // Default to 1x ("1x" is the third preset item).
+        SpeedCombo.SelectedIndex = 2;
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
@@ -59,6 +63,7 @@ public sealed partial class VideoTrimmerWindow : Window
             _endSeconds = _duration.TotalSeconds;
 
             var player = new MediaPlayer { Source = MediaSource.CreateFromStorageFile(file) };
+            player.PlaybackRate = _speed;
             Player.SetMediaPlayer(player);
 
             _ready = true;
@@ -131,6 +136,24 @@ public sealed partial class VideoTrimmerWindow : Window
         return $"{(int)ts.TotalMinutes}:{ts.Seconds:D2}.{ts.Milliseconds / 100}";
     }
 
+    // -- Speed ----------------------------------------------------------------
+
+    private void OnSpeedChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SpeedCombo.SelectedItem is ComboBoxItem { Tag: string tag } &&
+            double.TryParse(tag, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var rate))
+        {
+            _speed = rate;
+        }
+
+        // Preview speed: MediaPlayer.PlaybackRate fully supports speeding up / slowing down
+        // the on-screen preview in real time.
+        if (Player.MediaPlayer is { } player)
+        {
+            player.PlaybackRate = _speed;
+        }
+    }
+
     // -- Output ---------------------------------------------------------------
 
     private async void OnSaveTrimmed(object sender, RoutedEventArgs e)
@@ -156,6 +179,11 @@ public sealed partial class VideoTrimmerWindow : Window
             var composition = new MediaComposition();
             composition.Clips.Add(clip);
 
+            // NOTE: Speed is applied to the PREVIEW only (MediaPlayer.PlaybackRate). The
+            // Windows.Media.Editing MediaComposition/MediaClip API exposes no playback-rate or
+            // re-timing knob, and RenderToFileAsync ignores MediaPlayer.PlaybackRate, so the
+            // rendered MP4 keeps its original timing. Re-timing the output would require a
+            // frame-level pipeline (e.g. FFmpeg) that is outside this WinRT-only trimmer.
             var storage = App.Services.GetRequiredService<IClipStorageService>();
             outputPath = storage.GenerateFilePath(CaptureType.Video, ".mp4", " (trimmed)");
             var folder = await StorageFolder.GetFolderFromPathAsync(System.IO.Path.GetDirectoryName(outputPath)!);

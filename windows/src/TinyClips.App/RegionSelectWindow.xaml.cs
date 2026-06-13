@@ -20,10 +20,12 @@ namespace TinyClips.App;
 /// </summary>
 public sealed partial class RegionSelectWindow : Window
 {
-    private readonly TaskCompletionSource<PixelRect?> _result = new();
+    private readonly TaskCompletionSource<PixelRect?> _result =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly CapturedFrame? _backdropFrame;
     private Point _start;
     private bool _dragging;
+    private bool _completed;
 
     private RegionSelectWindow(MonitorInfo monitor, CapturedFrame? backdropFrame)
     {
@@ -37,6 +39,7 @@ public sealed partial class RegionSelectWindow : Window
 
         ShowBackdrop();
         Activated += OnActivated;
+        Closed += OnClosed;
     }
 
     /// <summary>Shows the overlay on the given monitor and resolves with the chosen region.</summary>
@@ -225,7 +228,34 @@ public sealed partial class RegionSelectWindow : Window
 
     private void Complete(PixelRect? region)
     {
-        _result.TrySetResult(region);
-        Close();
+        if (_completed)
+        {
+            return;
+        }
+
+        _completed = true;
+        _dragging = false;
+        RootGrid.ReleasePointerCaptures();
+        Closed -= OnClosed;
+        try
+        {
+            Close();
+        }
+        finally
+        {
+            _result.TrySetResult(region);
+        }
+    }
+
+    private void OnClosed(object sender, WindowEventArgs args)
+    {
+        if (_completed)
+        {
+            return;
+        }
+
+        _completed = true;
+        _dragging = false;
+        _result.TrySetResult(null);
     }
 }

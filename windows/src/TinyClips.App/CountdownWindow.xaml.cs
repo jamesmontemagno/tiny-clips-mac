@@ -71,7 +71,11 @@ public sealed partial class CountdownWindow : Window
     private void CenterOnPrimaryDisplay()
     {
         var area = DisplayArea.Primary?.WorkArea;
-        const int size = 220;
+
+        // Window is sized to the compact circle (DIPs scaled to physical pixels).
+        const int sizeDip = 120;
+        var scale = GetScale();
+        var size = (int)Math.Round(sizeDip * scale);
         AppWindow.Resize(new SizeInt32(size, size));
 
         if (area is { } work)
@@ -81,4 +85,14 @@ public sealed partial class CountdownWindow : Window
             AppWindow.Move(new PointInt32(x, y));
         }
     }
+
+    private double GetScale()
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var dpi = GetDpiForWindow(hwnd);
+        return dpi <= 0 ? 1.0 : dpi / 96.0;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(nint hwnd);
 }

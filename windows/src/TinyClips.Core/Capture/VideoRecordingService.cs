@@ -143,7 +143,26 @@ public sealed class VideoRecordingService : IVideoRecordingService
 
     private void OnFrameReady(CapturedFrame frame, TimeSpan pts)
     {
-        _channel?.Writer.TryWrite(new TimestampedFrame(frame.BgraPixels, pts));
+        _channel?.Writer.TryWrite(new TimestampedFrame(CreateBottomUpVideoBuffer(frame), pts));
+    }
+
+    private static byte[] CreateBottomUpVideoBuffer(CapturedFrame frame)
+    {
+        var rowStride = frame.Width * 4;
+        var pixels = new byte[frame.BgraPixels.Length];
+
+        // Media Foundation BGRA samples are bottom-up; WGC frames arrive top-down.
+        for (var y = 0; y < frame.Height; y++)
+        {
+            Buffer.BlockCopy(
+                frame.BgraPixels,
+                (frame.Height - 1 - y) * rowStride,
+                pixels,
+                y * rowStride,
+                rowStride);
+        }
+
+        return pixels;
     }
 
     private void CleanupFailedStart()

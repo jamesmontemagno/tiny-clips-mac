@@ -1,5 +1,8 @@
+using System.Runtime.InteropServices;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Input;
+using Windows.Foundation;
 using Windows.Graphics;
 using WinRT.Interop;
 
@@ -14,8 +17,13 @@ public sealed partial class RecordingIndicatorWindow : Window
     private const int HeightDip = 64;
     private const int TopOffsetDip = 24;
 
+    private const uint WdaExcludeFromCapture = 0x11;
+
     private bool _stopRequested;
     private bool _closed;
+
+    private bool _dragging;
+    private Point _dragStart;
 
     public RecordingIndicatorWindow(string stopHint)
     {
@@ -35,6 +43,11 @@ public sealed partial class RecordingIndicatorWindow : Window
     {
         PositionNearPrimaryWorkArea();
         AppWindow.Show(false);
+
+        // Exclude the floating panel from screen capture so it never appears in the
+        // recorded video/GIF.
+        var hwnd = WindowNative.GetWindowHandle(this);
+        SetWindowDisplayAffinity(hwnd, WdaExcludeFromCapture);
     }
 
     public void UpdateElapsed(TimeSpan elapsed)
@@ -73,6 +86,51 @@ public sealed partial class RecordingIndicatorWindow : Window
         var callback = StopRequested;
         StopRequested = null;
         callback?.Invoke();
+    }
+
+    // Drag-anywhere support: pressing the Stop button is handled by the Button itself
+    // (it marks the pointer event handled), so dragging only begins on the panel surface.
+    private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is not UIElement element)
+        {
+            return;
+        }
+
+        _dragStart = e.GetCurrentPoint(element).Position;
+        _dragging = element.CapturePointer(e.Pointer);
+    }
+
+    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_dragging || sender is not UIElement element)
+        {
+            return;
+        }
+
+        var current = e.GetCurrentPoint(element).Position;
+        var scale = GetScale();
+        var dx = (int)Math.Round((current.X - _dragStart.X) * scale);
+        var dy = (int)Math.Round((current.Y - _dragStart.Y) * scale);
+
+        if (dx == 0 && dy == 0)
+        {
+            return;
+        }
+
+        var pos = AppWindow.Position;
+        AppWindow.Move(new PointInt32(pos.X + dx, pos.Y + dy));
+    }
+
+    private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is not UIElement element)
+        {
+            return;
+        }
+
+        _dragging = false;
+        element.ReleasePointerCapture(e.Pointer);
     }
 
     private void ConfigurePresenter()
@@ -121,4 +179,8 @@ public sealed partial class RecordingIndicatorWindow : Window
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(nint hwnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowDisplayAffinity(nint hWnd, uint dwAffinity);
 }

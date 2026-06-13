@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using H.NotifyIcon;
@@ -40,12 +41,14 @@ public partial class App : Application
     private Window? _trimmerWindow;
     private string? _lastTrimmerSourcePath;
     private RecordingIndicatorWindow? _recordingIndicator;
+    private RegionIndicatorWindow? _recordingRegionIndicator;
     private DispatcherTimer? _recordingTimer;
     private DateTime _recordingStartedUtc;
     private MenuFlyoutItem? _videoItem;
     private MenuFlyoutItem? _gifItem;
     private GlobalHotKeyManager? _hotKeyManager;
     private DispatcherQueue? _dispatcher;
+    private bool _isExiting;
 
     public static IServiceProvider Services { get; private set; } = null!;
 
@@ -125,7 +128,7 @@ public partial class App : Application
             text: "Exit",
             glyph: "\uE7E8",
             acceleratorText: null,
-            command: new RelayCommand(ExitApplication)));
+            command: new RelayCommand(() => _ = ExitApplicationAsync())));
 
         _taskbarIcon = new TaskbarIcon
         {
@@ -225,17 +228,20 @@ public partial class App : Application
                     {
                         RevealInExplorer(path);
                         ShowSaveToast(path);
+                        ReopenPickerAfterCaptureIfNeeded(CaptureType.Screenshot);
                     }
                     break;
 
                 case CaptureType.Video:
                     await Services.GetRequiredService<IVideoRecordingService>().StartAsync(selection.Target, selection.Region);
+                    ShowRecordingRegionIndicator(selection);
                     UpdateRecordingState();
                     ShowRecordingIndicator(CaptureType.Video);
                     break;
 
                 case CaptureType.Gif:
                     await Services.GetRequiredService<IGifRecordingService>().StartAsync(selection.Target, selection.Region);
+                    ShowRecordingRegionIndicator(selection);
                     UpdateRecordingState();
                     ShowRecordingIndicator(CaptureType.Gif);
                     break;
@@ -245,6 +251,7 @@ public partial class App : Application
         {
             Debug.WriteLine($"Capture failed: {ex}");
             UpdateRecordingState();
+            CloseRecordingRegionIndicator();
             HideRecordingIndicatorIfNotRecording();
         }
     }
@@ -418,6 +425,12 @@ public partial class App : Application
         {
             UpdateRecordingState();
             HideRecordingIndicator();
+            CloseRecordingRegionIndicator();
+            if (_isExiting)
+            {
+                return;
+            }
+
             if (string.IsNullOrEmpty(path))
             {
                 return;
@@ -436,6 +449,7 @@ public partial class App : Application
             else
             {
                 await FinalizeClipAsync(path, type);
+                ReopenPickerAfterCaptureIfNeeded(type);
             }
         });
     }
@@ -463,8 +477,47 @@ public partial class App : Application
         finally
         {
             UpdateRecordingState();
+            CloseRecordingRegionIndicatorIfNotRecording();
             HideRecordingIndicatorIfNotRecording();
         }
+    }
+
+    private void ShowRecordingRegionIndicator(TargetSelection selection)
+    {
+        if (selection.Region is not { } region)
+        {
+            return;
+        }
+
+        CloseRecordingRegionIndicator();
+        var indicator = new RegionIndicatorWindow();
+        _recordingRegionIndicator = indicator;
+        indicator.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_recordingRegionIndicator, indicator))
+            {
+                _recordingRegionIndicator = null;
+            }
+        };
+        indicator.Show(ToVirtualDesktopRegion(selection.Target, region));
+    }
+
+    private void CloseRecordingRegionIndicatorIfNotRecording()
+    {
+        var video = Services.GetRequiredService<IVideoRecordingService>();
+        var gif = Services.GetRequiredService<IGifRecordingService>();
+
+        if (!video.IsRecording && !gif.IsRecording)
+        {
+            CloseRecordingRegionIndicator();
+        }
+    }
+
+    private void CloseRecordingRegionIndicator()
+    {
+        var window = _recordingRegionIndicator;
+        _recordingRegionIndicator = null;
+        window?.ClosePanel();
     }
 
     private void ShowRecordingIndicator(CaptureType type)
@@ -557,13 +610,18 @@ public partial class App : Application
         }
 
         _trimmerWindow.Closed += (_, _) => _trimmerWindow = null;
-        _trimmerWindow.Activate();
+        ActivateWindowToForeground(_trimmerWindow);
     }
 
     private void OnTrimmerCompleted(object? sender, string? trimmedPath)
     {
         _dispatcher?.TryEnqueue(async () =>
         {
+            if (_isExiting)
+            {
+                return;
+            }
+
             var path = trimmedPath ?? _lastTrimmerSourcePath;
             if (string.IsNullOrEmpty(path))
             {
@@ -574,6 +632,7 @@ public partial class App : Application
                 ? CaptureType.Gif
                 : CaptureType.Video;
             await FinalizeClipAsync(path, type);
+            ReopenPickerAfterCaptureIfNeeded(type);
         });
     }
 
@@ -732,7 +791,7 @@ public partial class App : Application
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         }
 
-        _settingsWindow.Activate();
+        ActivateWindowToForeground(_settingsWindow);
     }
 
     private void OpenGuideWindow()
@@ -743,15 +802,26 @@ public partial class App : Application
             _guideWindow.Closed += (_, _) => _guideWindow = null;
         }
 
-        _guideWindow.Activate();
+        ActivateWindowToForeground(_guideWindow);
     }
 
     private void OpenScreenshotEditor(string path)
     {
-        _editorWindow?.Close();
-        _editorWindow = new ScreenshotEditorWindow(path);
-        _editorWindow.Closed += (_, _) => _editorWindow = null;
-        _editorWindow.Activate();
+        var oldWindow = _editorWindow;
+        _editorWindow = null;
+        oldWindow?.Close();
+
+        var window = new ScreenshotEditorWindow(path);
+        _editorWindow = window;
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_editorWindow, window))
+            {
+                _editorWindow = null;
+                ReopenPickerAfterCaptureIfNeeded(CaptureType.Screenshot);
+            }
+        };
+        ActivateWindowToForeground(window);
     }
 
     private void ShowOnboardingIfNeeded()
@@ -764,17 +834,29 @@ public partial class App : Application
 
         _onboardingWindow = new OnboardingWindow();
         _onboardingWindow.Closed += (_, _) => _onboardingWindow = null;
-        _onboardingWindow.Activate();
+        ActivateWindowToForeground(_onboardingWindow);
     }
 
-    private void ExitApplication()
+    private async Task ExitApplicationAsync()
     {
+        if (_isExiting)
+        {
+            return;
+        }
+
+        _isExiting = true;
         try
         {
             var video = Services.GetRequiredService<IVideoRecordingService>();
+            var gif = Services.GetRequiredService<IGifRecordingService>();
             if (video.IsRecording)
             {
-                video.StopAsync().GetAwaiter().GetResult();
+                await video.StopAsync();
+            }
+
+            if (gif.IsRecording)
+            {
+                await gif.StopAsync();
             }
         }
         catch (Exception ex)
@@ -782,6 +864,8 @@ public partial class App : Application
             Debug.WriteLine($"Failed to stop recording on exit: {ex}");
         }
 
+        HideRecordingIndicator();
+        CloseRecordingRegionIndicator();
         _hotKeyManager?.Dispose();
         _hotKeyManager = null;
         _taskbarIcon?.Dispose();
@@ -791,12 +875,92 @@ public partial class App : Application
         _onboardingWindow?.Close();
         _editorWindow?.Close();
         _trimmerWindow?.Close();
-        HideRecordingIndicator();
         Application.Current.Exit();
         // No persistent host window keeps the process alive, so force termination
         // to guarantee the user can always quit from the tray menu.
         Environment.Exit(0);
     }
+
+    private void ReopenPickerAfterCaptureIfNeeded(CaptureType type)
+    {
+        var settings = Services.GetRequiredService<ICaptureSettings>();
+        if (!settings.ReopenPickerAfterCapture || _isExiting || IsAnyRecordingActive())
+        {
+            return;
+        }
+
+        _ = ReopenPickerAfterCaptureAsync(type);
+    }
+
+    private async Task ReopenPickerAfterCaptureAsync(CaptureType type)
+    {
+        await Task.Delay(150);
+        if (_isExiting || IsAnyRecordingActive())
+        {
+            return;
+        }
+
+        await BeginCaptureAsync(type);
+    }
+
+    private static bool IsAnyRecordingActive()
+    {
+        var video = Services.GetRequiredService<IVideoRecordingService>();
+         var gif = Services.GetRequiredService<IGifRecordingService>();
+        return video.IsRecording || gif.IsRecording;
+    }
+
+    private void ActivateWindowToForeground(Window window)
+    {
+        try
+        {
+            window.Activate();
+            BringWindowToForeground(window);
+            _ = ActivateWindowToForegroundDelayedAsync(window);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to activate window: {ex}");
+        }
+    }
+
+    private async Task ActivateWindowToForegroundDelayedAsync(Window window)
+    {
+        await Task.Delay(100);
+        if (_isExiting)
+        {
+            return;
+        }
+
+        try
+        {
+            window.Activate();
+            BringWindowToForeground(window);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to reactivate window: {ex}");
+        }
+    }
+
+    private static void BringWindowToForeground(Window window)
+    {
+        try
+        {
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(window);
+            if (hwnd != IntPtr.Zero)
+            {
+                SetForegroundWindow(hwnd);
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to foreground window: {ex}");
+        }
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
 
     private void ApplyTheme()
     {

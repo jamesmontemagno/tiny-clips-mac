@@ -59,6 +59,12 @@ public sealed class CaptureSettings : ICaptureSettings
         set => _settings.Set("launchAtLogin", value);
     }
 
+    public bool ReopenPickerAfterCapture
+    {
+        get => _settings.Get("reopenPickerAfterCapture", false);
+        set => _settings.Set("reopenPickerAfterCapture", value);
+    }
+
     public string FileNameTemplate
     {
         get => _settings.Get("fileNameTemplate", "TinyClips {date} at {time}");
@@ -553,6 +559,7 @@ public sealed class CaptureSettings : ICaptureSettings
         ShowInExplorer = false;
         ShowSaveNotifications = false;
         LaunchAtLogin = false;
+        ReopenPickerAfterCapture = false;
         FileNameTemplate = "TinyClips {date} at {time}";
         UploadcareEnabled = false;
         ClipsManagerShowAutoTags = true;

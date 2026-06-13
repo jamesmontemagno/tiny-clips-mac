@@ -68,6 +68,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _copyScreenshotToClipboard;
 
+    [ObservableProperty]
+    private bool _reopenPickerAfterCapture;
+
     // Screenshot
     [ObservableProperty]
     private int _screenshotFormatIndex;
@@ -167,6 +170,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             ShowSaveNotifications = _settings.ShowSaveNotifications;
             LaunchAtLogin = _settings.LaunchAtLogin;
             CopyScreenshotToClipboard = _settings.CopyScreenshotToClipboard;
+            ReopenPickerAfterCapture = _settings.ReopenPickerAfterCapture;
 
             ScreenshotFormatIndex = _settings.ImageFormat == ImageFormat.Png ? 0 : 1;
             ScreenshotScale = _settings.ScreenshotScale;
@@ -236,6 +240,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     partial void OnCopyScreenshotToClipboardChanged(bool value) => Persist(() => _settings.CopyScreenshotToClipboard = value);
+
+    partial void OnReopenPickerAfterCaptureChanged(bool value) => Persist(() => _settings.ReopenPickerAfterCapture = value);
 
     partial void OnScreenshotFormatIndexChanged(int value) =>
         Persist(() => _settings.ImageFormat = value == 0 ? ImageFormat.Png : ImageFormat.Jpeg);

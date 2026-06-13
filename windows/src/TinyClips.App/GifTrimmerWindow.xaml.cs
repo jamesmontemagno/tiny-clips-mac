@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media.Imaging;
 using TinyClips.Core.Models;
@@ -26,6 +27,7 @@ public sealed partial class GifTrimmerWindow : Window
     private readonly List<ushort> _delays = new();
     private int _start;
     private int _end;
+    private double _speed = 1.0;
     private bool _ready;
 
     public GifTrimmerWindow(string filePath)
@@ -33,6 +35,9 @@ public sealed partial class GifTrimmerWindow : Window
         _filePath = filePath;
 
         InitializeComponent();
+
+        // Default to 1x ("1x" is the third preset item).
+        SpeedCombo.SelectedIndex = 2;
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
@@ -164,6 +169,29 @@ public sealed partial class GifTrimmerWindow : Window
         CountLabel.Text = $"{_end - _start + 1} of {_frames.Count} frames";
     }
 
+    // -- Speed ----------------------------------------------------------------
+
+    private void OnSpeedChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (SpeedCombo.SelectedItem is ComboBoxItem { Tag: string tag } &&
+            double.TryParse(tag, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var rate) &&
+            rate > 0)
+        {
+            _speed = rate;
+        }
+    }
+
+    /// <summary>
+    /// Scales a per-frame delay (GIF delays are in centiseconds, i.e. 1/100s) by the inverse of
+    /// the chosen speed so a higher speed shortens each delay. Clamped to a 20ms minimum
+    /// (2 centiseconds) to stay within what real GIF players honor.
+    /// </summary>
+    private ushort ScaleDelay(ushort delayCentis)
+    {
+        var scaled = (int)Math.Round(delayCentis / _speed);
+        return (ushort)Math.Clamp(scaled, 2, ushort.MaxValue);
+    }
+
     // -- Output ---------------------------------------------------------------
 
     private async void OnSaveTrimmed(object sender, RoutedEventArgs e)
@@ -202,7 +230,7 @@ public sealed partial class GifTrimmerWindow : Window
 
                     var delayProps = new BitmapPropertySet
                     {
-                        { "/grctlext/Delay", new BitmapTypedValue(_delays[i], PropertyType.UInt16) },
+                        { "/grctlext/Delay", new BitmapTypedValue(ScaleDelay(_delays[i]), PropertyType.UInt16) },
                         { "/grctlext/Disposal", new BitmapTypedValue((byte)1, PropertyType.UInt8) },
                     };
                     await encoder.BitmapProperties.SetPropertiesAsync(delayProps);

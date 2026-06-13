@@ -35,6 +35,9 @@ public sealed partial class CapturePickerWindow : Window
     private int _countdownDuration;
     private bool _completed;
 
+    private bool _dragging;
+    private Windows.Foundation.Point _dragStart;
+
     private CapturePickerWindow(CaptureType captureType, bool countdownEnabled, int countdownDuration)
     {
         InitializeComponent();
@@ -149,6 +152,61 @@ public sealed partial class CapturePickerWindow : Window
     private void OnWindow(object sender, RoutedEventArgs e) => Complete(CapturePickerMode.Window);
 
     private void OnCancel(object sender, RoutedEventArgs e) => Complete(null);
+
+    // Drag-anywhere support: the R / S / W / timer / cancel buttons handle their own
+    // pointer events (marking them handled), so a drag only starts on the bar background.
+    private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is not UIElement element)
+        {
+            return;
+        }
+
+        _dragStart = e.GetCurrentPoint(element).Position;
+        _dragging = element.CapturePointer(e.Pointer);
+    }
+
+    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_dragging || sender is not UIElement element)
+        {
+            return;
+        }
+
+        var current = e.GetCurrentPoint(element).Position;
+        var scale = GetScale();
+        var dx = (int)Math.Round((current.X - _dragStart.X) * scale);
+        var dy = (int)Math.Round((current.Y - _dragStart.Y) * scale);
+
+        if (dx == 0 && dy == 0)
+        {
+            return;
+        }
+
+        var pos = AppWindow.Position;
+        AppWindow.Move(new PointInt32(pos.X + dx, pos.Y + dy));
+    }
+
+    private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is not UIElement element)
+        {
+            return;
+        }
+
+        _dragging = false;
+        element.ReleasePointerCapture(e.Pointer);
+    }
+
+    private double GetScale()
+    {
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var dpi = GetDpiForWindow(hwnd);
+        return dpi <= 0 ? 1.0 : dpi / 96.0;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(nint hwnd);
 
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {

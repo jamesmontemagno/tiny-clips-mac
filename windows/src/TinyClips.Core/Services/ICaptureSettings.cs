@@ -12,6 +12,7 @@ public interface ICaptureSettings
     bool ShowInExplorer { get; set; }
     bool ShowSaveNotifications { get; set; }
     bool LaunchAtLogin { get; set; }
+    bool ReopenPickerAfterCapture { get; set; }
     string FileNameTemplate { get; set; }
     bool UploadcareEnabled { get; set; }
     bool ClipsManagerShowAutoTags { get; set; }
