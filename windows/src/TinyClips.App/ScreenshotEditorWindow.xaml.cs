@@ -51,6 +51,13 @@ public sealed partial class ScreenshotEditorWindow : Window
         Redact,
     }
 
+    private enum RedactionLevel
+    {
+        Light,
+        Medium,
+        Heavy,
+    }
+
     private sealed class Annotation
     {
         public EditTool Tool { get; set; }
@@ -59,11 +66,19 @@ public sealed partial class ScreenshotEditorWindow : Window
         public double Thickness { get; set; }
         public string Text { get; set; } = string.Empty;
         public int Number { get; set; }
+        public double SizeScale { get; set; } = 1.0;
+        public RedactionLevel Redaction { get; set; } = RedactionLevel.Medium;
         public List<Vector2> Points { get; } = new();
+
+        // Cached blurred preview for redaction annotations (invalidated on move / level change).
+        public SoftwareBitmapSource? RedactPreview { get; set; }
+        public Rect RedactPreviewBounds { get; set; }
+        public RedactionLevel RedactPreviewLevel { get; set; }
     }
 
     private readonly string _filePath;
     private SoftwareBitmap? _bitmap;
+    private CanvasBitmap? _canvasSource;
 
     private readonly List<Annotation> _annotations = new();
     private Annotation? _activeAnnotation;
@@ -71,6 +86,8 @@ public sealed partial class ScreenshotEditorWindow : Window
     private EditTool _tool = EditTool.Crop;
     private Color _strokeColor = Colors.Red;
     private double _strokeThickness = 6;
+    private double _numberScale = 1.0;
+    private RedactionLevel _redactionLevel = RedactionLevel.Medium;
     private int _counterValue = 1;
 
     private bool _dragging;
@@ -78,6 +95,7 @@ public sealed partial class ScreenshotEditorWindow : Window
     private Annotation? _movingAnnotation;
     private Point _moveOffset;
     private Point _pendingTextOrigin;
+    private bool _textBoxFocused;
 
     public ScreenshotEditorWindow(string filePath)
     {
@@ -100,7 +118,9 @@ public sealed partial class ScreenshotEditorWindow : Window
 
         AnnotationColorPicker.Color = _strokeColor;
         ColorSwatch.Background = new SolidColorBrush(_strokeColor);
-        ThicknessCombo.SelectedIndex = 1;
+        ThicknessCombo.SelectedIndex = 3;
+        NumberSizeCombo.SelectedIndex = 2;
+        RedactionCombo.SelectedIndex = 1;
         SelectTool(EditTool.Crop);
 
         RootGrid.KeyDown += OnRootKeyDown;
@@ -133,6 +153,9 @@ public sealed partial class ScreenshotEditorWindow : Window
         _bitmap?.Dispose();
         _bitmap = bitmap;
 
+        _canvasSource?.Dispose();
+        _canvasSource = CanvasBitmap.CreateFromSoftwareBitmap(CanvasDevice.GetSharedDevice(), bitmap);
+
         var source = new SoftwareBitmapSource();
         await source.SetBitmapAsync(bitmap);
         PreviewImage.Source = source;
@@ -162,8 +185,16 @@ public sealed partial class ScreenshotEditorWindow : Window
         }
 
         var annotating = tool is not (EditTool.Select or EditTool.Crop);
-        ThicknessCombo.IsEnabled = annotating;
-        ColorButton.IsEnabled = annotating;
+        var showsStroke = tool is EditTool.Rectangle or EditTool.Ellipse or EditTool.Arrow
+            or EditTool.Line or EditTool.Pen or EditTool.Text;
+        var showsNumber = tool is EditTool.Counter;
+        var showsRedact = tool is EditTool.Redact;
+
+        ThicknessCombo.Visibility = showsStroke ? Visibility.Visible : Visibility.Collapsed;
+        NumberSizeCombo.Visibility = showsNumber ? Visibility.Visible : Visibility.Collapsed;
+        RedactionCombo.Visibility = showsRedact ? Visibility.Visible : Visibility.Collapsed;
+        // Redaction has no color; everything else that annotates picks a color.
+        ColorButton.Visibility = (annotating && !showsRedact) ? Visibility.Visible : Visibility.Collapsed;
 
         HintText.Text = tool switch
         {
@@ -219,6 +250,39 @@ public sealed partial class ScreenshotEditorWindow : Window
         }
     }
 
+    private void OnNumberSizeChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (NumberSizeCombo.SelectedItem is ComboBoxItem { Tag: string tag } && double.TryParse(tag, out var value))
+        {
+            _numberScale = value;
+            if (_selectedAnnotation is { Tool: EditTool.Counter } ann)
+            {
+                ann.SizeScale = value;
+                var center = new Point(ann.Bounds.X + ann.Bounds.Width / 2, ann.Bounds.Y + ann.Bounds.Height / 2);
+                var radius = CounterRadius(value);
+                ann.Bounds = new Rect(center.X - radius, center.Y - radius, radius * 2, radius * 2);
+                RedrawOverlay();
+            }
+        }
+    }
+
+    private void OnRedactionLevelChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (RedactionCombo.SelectedItem is ComboBoxItem { Tag: string tag }
+            && Enum.TryParse<RedactionLevel>(tag, out var level))
+        {
+            _redactionLevel = level;
+            if (_selectedAnnotation is { Tool: EditTool.Redact } ann)
+            {
+                ann.Redaction = level;
+                ann.RedactPreview = null;
+                RedrawOverlay();
+            }
+        }
+    }
+
+    private double CounterRadius(double scale) => Math.Max(12, 22 * scale);
+
     // -- Pointer interaction --------------------------------------------------
 
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -268,12 +332,13 @@ public sealed partial class ScreenshotEditorWindow : Window
         if (_tool == EditTool.Counter)
         {
             var center = CanvasToPixel(p);
-            var radius = 18 + _strokeThickness * 2;
+            var radius = CounterRadius(_numberScale);
             var ann = new Annotation
             {
                 Tool = EditTool.Counter,
                 Color = _strokeColor,
                 Thickness = _strokeThickness,
+                SizeScale = _numberScale,
                 Number = _counterValue++,
                 Bounds = new Rect(center.X - radius, center.Y - radius, radius * 2, radius * 2),
             };
@@ -291,6 +356,7 @@ public sealed partial class ScreenshotEditorWindow : Window
             Tool = _tool,
             Color = _strokeColor,
             Thickness = _strokeThickness,
+            Redaction = _redactionLevel,
             Bounds = new Rect(pixel.X, pixel.Y, 0, 0),
         };
         if (_tool == EditTool.Pen)
@@ -423,16 +489,55 @@ public sealed partial class ScreenshotEditorWindow : Window
     private void BeginTextEntry(Point canvasPoint)
     {
         _pendingTextOrigin = canvasPoint;
+        _textBoxFocused = false;
         TextEditBox.Text = string.Empty;
         TextEditBox.FontSize = Math.Max(14, _strokeThickness * 3);
         TextEditBox.Foreground = new SolidColorBrush(_strokeColor);
         Canvas.SetLeft(TextEditBox, canvasPoint.X);
         Canvas.SetTop(TextEditBox, canvasPoint.Y);
         TextEditBox.Visibility = Visibility.Visible;
-        TextEditBox.Focus(FocusState.Programmatic);
+
+        // Focus must be deferred: setting focus synchronously inside the pointer-pressed
+        // handler is overridden when the pointer is released, which immediately fires
+        // LostFocus and dismisses the box ("clicks and goes away").
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (TextEditBox.Visibility == Visibility.Visible)
+            {
+                TextEditBox.Focus(FocusState.Programmatic);
+            }
+        });
     }
 
-    private void OnTextEntryCommitted(object sender, RoutedEventArgs e) => CommitPendingText();
+    private void OnTextEntryGotFocus(object sender, RoutedEventArgs e) => _textBoxFocused = true;
+
+    private void OnTextEntryKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            e.Handled = true;
+            CommitPendingText();
+        }
+        else if (e.Key == Windows.System.VirtualKey.Escape)
+        {
+            e.Handled = true;
+            _textBoxFocused = false;
+            TextEditBox.Text = string.Empty;
+            TextEditBox.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void OnTextEntryCommitted(object sender, RoutedEventArgs e)
+    {
+        // Ignore the transient LostFocus that fires before the box has actually gained
+        // focus (the deferred Focus() call races with pointer release).
+        if (!_textBoxFocused)
+        {
+            return;
+        }
+
+        CommitPendingText();
+    }
 
     private void CommitPendingText()
     {
@@ -442,6 +547,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         }
 
         var text = TextEditBox.Text;
+        _textBoxFocused = false;
         TextEditBox.Visibility = Visibility.Collapsed;
 
         if (!string.IsNullOrWhiteSpace(text))
@@ -688,17 +794,43 @@ public sealed partial class ScreenshotEditorWindow : Window
             {
                 var b = NormalizedBounds(ann);
                 var tl = PixelToCanvas(new Point(b.X, b.Y));
-                var rect = new Rectangle
+                var w = b.Width * scale;
+                var h = b.Height * scale;
+
+                // Committed redactions show a real blurred crop; the in-progress drag shows a
+                // lightweight frosted rectangle (recomputing the blur every move is too costly).
+                if (ann != _activeAnnotation)
                 {
-                    Width = b.Width * scale,
-                    Height = b.Height * scale,
-                    Fill = new SolidColorBrush(Color.FromArgb(235, 30, 30, 30)),
-                    RadiusX = 4,
-                    RadiusY = 4,
-                };
-                Canvas.SetLeft(rect, tl.X);
-                Canvas.SetTop(rect, tl.Y);
-                OverlayCanvas.Children.Add(rect);
+                    EnsureRedactPreview(ann);
+                }
+
+                if (ann.RedactPreview is not null)
+                {
+                    var img = new Image
+                    {
+                        Source = ann.RedactPreview,
+                        Width = w,
+                        Height = h,
+                        Stretch = Stretch.Fill,
+                    };
+                    Canvas.SetLeft(img, tl.X);
+                    Canvas.SetTop(img, tl.Y);
+                    OverlayCanvas.Children.Add(img);
+                }
+                else
+                {
+                    var rect = new Rectangle
+                    {
+                        Width = w,
+                        Height = h,
+                        Fill = new SolidColorBrush(Color.FromArgb(200, 40, 40, 40)),
+                        RadiusX = 4,
+                        RadiusY = 4,
+                    };
+                    Canvas.SetLeft(rect, tl.X);
+                    Canvas.SetTop(rect, tl.Y);
+                    OverlayCanvas.Children.Add(rect);
+                }
                 break;
             }
             case EditTool.Text:
@@ -926,6 +1058,100 @@ public sealed partial class ScreenshotEditorWindow : Window
             BitmapAlphaMode.Premultiplied);
     }
 
+    private static float BlurAmountFor(RedactionLevel level) => level switch
+    {
+        RedactionLevel.Light => 6f,
+        RedactionLevel.Medium => 12f,
+        RedactionLevel.Heavy => 22f,
+        _ => 12f,
+    };
+
+    private void EnsureRedactPreview(Annotation ann)
+    {
+        if (_canvasSource is null)
+        {
+            return;
+        }
+
+        var b = NormalizedBounds(ann);
+        if (b.Width < 1 || b.Height < 1)
+        {
+            ann.RedactPreview = null;
+            return;
+        }
+
+        // Reuse the cached preview when nothing relevant changed.
+        if (ann.RedactPreview is not null
+            && ann.RedactPreviewLevel == ann.Redaction
+            && SameRect(ann.RedactPreviewBounds, b))
+        {
+            return;
+        }
+
+        try
+        {
+            var device = CanvasDevice.GetSharedDevice();
+            var w = (int)Math.Round(b.Width);
+            var h = (int)Math.Round(b.Height);
+            if (w < 1 || h < 1)
+            {
+                return;
+            }
+
+            var srcRect = new Rect(b.X, b.Y, w, h);
+            using var rt = new CanvasRenderTarget(device, w, h, 96);
+            using (var ds = rt.CreateDrawingSession())
+            {
+                ds.Clear(Colors.Transparent);
+                using var effect = BuildRedactEffect(_canvasSource, srcRect, ann.Redaction);
+                ds.DrawImage(effect, new Rect(0, 0, w, h), srcRect);
+            }
+
+            var sb = SoftwareBitmap.CreateCopyFromBuffer(
+                rt.GetPixelBytes().AsBuffer(),
+                BitmapPixelFormat.Bgra8,
+                w,
+                h,
+                BitmapAlphaMode.Premultiplied);
+
+            var preview = new SoftwareBitmapSource();
+            ann.RedactPreview = preview;
+            ann.RedactPreviewBounds = b;
+            ann.RedactPreviewLevel = ann.Redaction;
+            _ = preview.SetBitmapAsync(sb).AsTask().ContinueWith(
+                _ => DispatcherQueue.TryEnqueue(RedrawOverlayDefault),
+                System.Threading.Tasks.TaskScheduler.Default);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Redact preview failed: {ex}");
+        }
+    }
+
+    private void RedrawOverlayDefault() => RedrawOverlay();
+
+    private static bool SameRect(Rect a, Rect b) =>
+        Math.Abs(a.X - b.X) < 0.5 && Math.Abs(a.Y - b.Y) < 0.5
+        && Math.Abs(a.Width - b.Width) < 0.5 && Math.Abs(a.Height - b.Height) < 0.5;
+
+    private static ICanvasImage BuildRedactEffect(CanvasBitmap source, Rect region, RedactionLevel level)
+    {
+        var crop = new CropEffect { Source = source, SourceRectangle = region };
+        // Clamp the edges so the blur doesn't pull transparency in from outside the crop.
+        var border = new BorderEffect
+        {
+            Source = crop,
+            ExtendX = CanvasEdgeBehavior.Clamp,
+            ExtendY = CanvasEdgeBehavior.Clamp,
+        };
+        return new GaussianBlurEffect
+        {
+            Source = border,
+            BlurAmount = BlurAmountFor(level),
+            BorderMode = EffectBorderMode.Hard,
+        };
+    }
+
     private static void DrawRedaction(CanvasDrawingSession ds, CanvasBitmap source, Annotation ann)
     {
         var b = NormalizedBounds(ann);
@@ -935,23 +1161,8 @@ public sealed partial class ScreenshotEditorWindow : Window
         }
 
         var rect = new Rect(b.X, b.Y, b.Width, b.Height);
-        using var crop = new CropEffect { Source = source, SourceRectangle = rect };
-
-        // Pixelate: shrink to chunky blocks then scale back up with nearest-neighbor.
-        var block = (float)Math.Max(0.04, 1.0 / Math.Max(8, b.Width / 16));
-        using var down = new ScaleEffect
-        {
-            Source = crop,
-            Scale = new Vector2(block, block),
-            InterpolationMode = CanvasImageInterpolation.NearestNeighbor,
-        };
-        using var up = new ScaleEffect
-        {
-            Source = down,
-            Scale = new Vector2(1f / block, 1f / block),
-            InterpolationMode = CanvasImageInterpolation.NearestNeighbor,
-        };
-        ds.DrawImage(up, rect, rect);
+        using var effect = BuildRedactEffect(source, rect, ann.Redaction);
+        ds.DrawImage(effect, rect, rect);
     }
 
     private void DrawAnnotationToSession(CanvasDrawingSession ds, Annotation ann)

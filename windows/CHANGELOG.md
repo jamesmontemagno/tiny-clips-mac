@@ -6,6 +6,12 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Added
+- **Screenshot editor: redaction strength & number-size levels** — the Redact tool now offers
+  **Light / Medium / Heavy** blur strength and the Number badge tool offers **50%–200%** size
+  presets, both shown contextually in the toolbar (mirrors the macOS app's inspector controls).
+- **Screenshot editor: real fuzzy redaction** — redaction now applies a true Gaussian blur of
+  the underlying content (intensity driven by the chosen level) in both the live preview and the
+  saved/exported image, replacing the previous flat translucent block.
 - **Programmable keyboard shortcuts** — the Screenshot, Record video, and Record GIF global
   shortcuts can now be reassigned from Settings (click **Edit**, then press a combination that
   includes Ctrl/Alt/Shift/Win) or **Reset** to the defaults; changes re-register the global
@@ -72,6 +78,9 @@ own `CHANGELOG.md` at the repository root.
   (via the `HKCU\...\Run` registry key).
 
 ### Changed
+- **Screenshot editor toolbar** is now cleaner and contextual — the stroke-thickness, number-size,
+  and redaction-strength controls show only for the tools they apply to, and the stroke widths now
+  match the macOS app's **1 / 2 / 4 / 6 / 8 / 10 px** options.
 - **Settings** is now organized into a left **NavigationView** with one section per group
   (General, Screenshot, Video, GIF, Mouse Clicks, Branding, Hotkeys, Pro).
 - **Pro features are unlocked** in the direct (non-Store) build, matching the macOS direct
@@ -92,6 +101,9 @@ own `CHANGELOG.md` at the repository root.
   working room.
 
 ### Fixed
+- **Screenshot editor text entry** — clicking to place a text annotation no longer immediately
+  dismisses the text box. Focus is now deferred past the pointer interaction and the transient
+  focus-loss is ignored, so you can type; **Enter** commits and **Esc** cancels.
 - **Countdown lingered in recordings** — the countdown badge now hides itself before the final
   frame and is excluded from screen capture, so it no longer appears in the recorded video/GIF and
   no longer hangs at "1".

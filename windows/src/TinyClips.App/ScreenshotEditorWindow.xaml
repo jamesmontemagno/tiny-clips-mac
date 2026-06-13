@@ -171,20 +171,57 @@
                         </Button.Flyout>
                     </Button>
 
-                    <!--  Thickness  -->
+                    <!--  Stroke thickness (shapes / line / arrow / pen / text)  -->
                     <ComboBox
                         x:Name="ThicknessCombo"
-                        Width="92"
+                        Width="96"
                         Margin="4,0,0,0"
                         VerticalAlignment="Center"
                         AutomationProperties.AutomationId="EditorThicknessCombo"
                         AutomationProperties.Name="Stroke thickness"
                         SelectionChanged="OnThicknessChanged"
                         ToolTipService.ToolTip="Thickness">
-                        <ComboBoxItem Content="Thin" Tag="3" />
-                        <ComboBoxItem Content="Medium" Tag="6" />
-                        <ComboBoxItem Content="Thick" Tag="10" />
-                        <ComboBoxItem Content="X-Thick" Tag="16" />
+                        <ComboBoxItem Content="1 px" Tag="1" />
+                        <ComboBoxItem Content="2 px" Tag="2" />
+                        <ComboBoxItem Content="4 px" Tag="4" />
+                        <ComboBoxItem Content="6 px" Tag="6" />
+                        <ComboBoxItem Content="8 px" Tag="8" />
+                        <ComboBoxItem Content="10 px" Tag="10" />
+                    </ComboBox>
+
+                    <!--  Number badge size (counter tool)  -->
+                    <ComboBox
+                        x:Name="NumberSizeCombo"
+                        Width="96"
+                        Margin="4,0,0,0"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="EditorNumberSizeCombo"
+                        AutomationProperties.Name="Number size"
+                        SelectionChanged="OnNumberSizeChanged"
+                        ToolTipService.ToolTip="Badge size"
+                        Visibility="Collapsed">
+                        <ComboBoxItem Content="50%" Tag="0.5" />
+                        <ComboBoxItem Content="75%" Tag="0.75" />
+                        <ComboBoxItem Content="100%" Tag="1.0" />
+                        <ComboBoxItem Content="125%" Tag="1.25" />
+                        <ComboBoxItem Content="150%" Tag="1.5" />
+                        <ComboBoxItem Content="200%" Tag="2.0" />
+                    </ComboBox>
+
+                    <!--  Redaction strength (redact tool)  -->
+                    <ComboBox
+                        x:Name="RedactionCombo"
+                        Width="104"
+                        Margin="4,0,0,0"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="EditorRedactionCombo"
+                        AutomationProperties.Name="Redaction strength"
+                        SelectionChanged="OnRedactionLevelChanged"
+                        ToolTipService.ToolTip="Blur strength"
+                        Visibility="Collapsed">
+                        <ComboBoxItem Content="Light" Tag="Light" />
+                        <ComboBoxItem Content="Medium" Tag="Medium" />
+                        <ComboBoxItem Content="Heavy" Tag="Heavy" />
                     </ComboBox>
 
                     <AppBarSeparator Width="1" />
@@ -282,6 +319,8 @@
                     AcceptsReturn="False"
                     AutomationProperties.AutomationId="EditorTextEntry"
                     FontSize="16"
+                    GotFocus="OnTextEntryGotFocus"
+                    KeyDown="OnTextEntryKeyDown"
                     LostFocus="OnTextEntryCommitted"
                     Visibility="Collapsed" />
             </Canvas>
