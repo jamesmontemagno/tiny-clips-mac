@@ -138,12 +138,19 @@
                     AutomationProperties.Name="Output speed"
                     SelectionChanged="OnSpeedChanged"
                     ToolTipService.ToolTip="Scales the playback speed of the saved GIF by adjusting per-frame delays.">
+                    <ComboBoxItem Content="0.1x" Tag="0.1" />
                     <ComboBoxItem Content="0.25x" Tag="0.25" />
                     <ComboBoxItem Content="0.5x" Tag="0.5" />
+                    <ComboBoxItem Content="0.75x" Tag="0.75" />
                     <ComboBoxItem Content="1x" Tag="1" />
+                    <ComboBoxItem Content="1.25x" Tag="1.25" />
                     <ComboBoxItem Content="1.5x" Tag="1.5" />
+                    <ComboBoxItem Content="1.75x" Tag="1.75" />
                     <ComboBoxItem Content="2x" Tag="2" />
+                    <ComboBoxItem Content="2.5x" Tag="2.5" />
                     <ComboBoxItem Content="3x" Tag="3" />
+                    <ComboBoxItem Content="4x" Tag="4" />
+                    <ComboBoxItem Content="5x" Tag="5" />
                 </ComboBox>
             </StackPanel>
 

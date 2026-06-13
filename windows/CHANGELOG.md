@@ -6,6 +6,9 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Changed
+- **More speed presets for video & GIF trimmers** — the playback/output speed dropdown now offers
+  finer and wider steps (0.1x, 0.25x, 0.5x, 0.75x, 1x, 1.25x, 1.5x, 1.75x, 2x, 2.5x, 3x, 4x, 5x)
+  instead of the previous six, defaulting to 1x.
 - **Countdown overlay redesigned (clean rounded square)** — the pre-capture countdown is now a
   single rounded-**square** card with a big centered number and a subtle accent border. The old
   circular clip + inner ring (which read as a "box in a box") was removed; the window is clipped

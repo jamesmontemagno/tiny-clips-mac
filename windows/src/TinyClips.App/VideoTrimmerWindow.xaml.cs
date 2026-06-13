@@ -33,8 +33,8 @@ public sealed partial class VideoTrimmerWindow : Window
 
         InitializeComponent();
 
-        // Default to 1x ("1x" is the third preset item).
-        SpeedCombo.SelectedIndex = 2;
+        // Default to 1x (the "1x" preset item).
+        SpeedCombo.SelectedIndex = 4;
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
