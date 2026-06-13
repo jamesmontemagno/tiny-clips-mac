@@ -27,6 +27,10 @@ own `CHANGELOG.md` at the repository root.
   and Guide.
 - Region countdown indicator that outlines the selected capture region until recording or
   screenshot capture begins.
+- **Recording indicator** — a floating always-on-top panel shown while recording video or GIF,
+  with a live `MM:SS` elapsed timer, the stop hotkey, and a **Stop** button.
+- **Launch at login** — optional setting that starts TinyClips when you sign in to Windows
+  (via the `HKCU\...\Run` registry key).
 
 ### Changed
 - **Region selector** now shows a live snapshot of the screen behind a hole-punch dim, so the
