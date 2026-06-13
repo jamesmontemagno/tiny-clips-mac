@@ -79,6 +79,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private double _screenshotCountdownDuration;
 
+    [ObservableProperty]
+    private bool _showScreenshotEditor;
+
     // Video
     [ObservableProperty]
     private double _videoFrameRate;
@@ -158,6 +161,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             JpegQuality = _settings.JpegQuality;
             ScreenshotCountdownEnabled = _settings.ScreenshotCountdownEnabled;
             ScreenshotCountdownDuration = _settings.ScreenshotCountdownDuration;
+            ShowScreenshotEditor = _settings.ShowScreenshotEditor;
 
             VideoFrameRate = _settings.VideoFrameRate;
             RecordAudio = _settings.RecordAudio;
@@ -221,6 +225,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     partial void OnScreenshotCountdownDurationChanged(double value) =>
         Persist(() => _settings.ScreenshotCountdownDuration = (int)Math.Round(value));
+
+    partial void OnShowScreenshotEditorChanged(bool value) => Persist(() => _settings.ShowScreenshotEditor = value);
 
     partial void OnVideoFrameRateChanged(double value) => Persist(() => _settings.VideoFrameRate = (int)Math.Round(value));
 

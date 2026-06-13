@@ -217,6 +217,15 @@
                                                 <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE8C8;" />
                                             </MenuFlyoutItem.Icon>
                                         </MenuFlyoutItem>
+                                        <MenuFlyoutItem
+                                            Click="OnEditClip"
+                                            Tag="{x:Bind FilePath}"
+                                            Text="Edit"
+                                            Visibility="{x:Bind EditVisibility}">
+                                            <MenuFlyoutItem.Icon>
+                                                <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE70F;" />
+                                            </MenuFlyoutItem.Icon>
+                                        </MenuFlyoutItem>
                                         <MenuFlyoutSeparator />
                                         <MenuFlyoutItem
                                             Click="OnToggleFavorite"

@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="TinyClips.App.ScreenshotEditorWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:TinyClips.App"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Tiny Clips — Edit Screenshot"
+    mc:Ignorable="d">
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid
+            x:Name="AppTitleBar"
+            Grid.Row="0"
+            Height="48"
+            Padding="16,0">
+            <TextBlock
+                VerticalAlignment="Center"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Edit screenshot" />
+        </Grid>
+
+        <!--  Toolbar  -->
+        <CommandBar
+            Grid.Row="1"
+            DefaultLabelPosition="Right"
+            IsOpen="False">
+            <AppBarButton
+                x:Name="ApplyCropButton"
+                AutomationProperties.AutomationId="EditorApplyCropButton"
+                Click="OnApplyCrop"
+                Icon="Crop"
+                IsEnabled="False"
+                Label="Apply crop" />
+            <AppBarButton
+                x:Name="ResetButton"
+                AutomationProperties.AutomationId="EditorResetButton"
+                Click="OnReset"
+                Icon="Undo"
+                Label="Reset" />
+            <AppBarSeparator />
+            <AppBarButton
+                AutomationProperties.AutomationId="EditorCopyButton"
+                Click="OnCopy"
+                Icon="Copy"
+                Label="Copy" />
+            <AppBarButton
+                AutomationProperties.AutomationId="EditorSaveButton"
+                Click="OnSave"
+                Icon="Save"
+                Label="Save" />
+            <AppBarButton
+                AutomationProperties.AutomationId="EditorSaveCopyButton"
+                Click="OnSaveCopy"
+                Icon="SaveLocal"
+                Label="Save a copy" />
+        </CommandBar>
+
+        <!--  Canvas  -->
+        <Grid
+            x:Name="ImageHost"
+            Grid.Row="2"
+            Margin="16"
+            Background="{ThemeResource SubtleFillColorTertiaryBrush}"
+            CornerRadius="{ThemeResource OverlayCornerRadius}">
+            <Image
+                x:Name="PreviewImage"
+                Stretch="Uniform" />
+            <Canvas
+                x:Name="OverlayCanvas"
+                Background="Transparent"
+                PointerMoved="OnPointerMoved"
+                PointerPressed="OnPointerPressed"
+                PointerReleased="OnPointerReleased">
+                <Rectangle
+                    x:Name="SelectionRect"
+                    Fill="{ThemeResource AccentFillColorSelectedContentBackgroundBrush}"
+                    Opacity="0.25"
+                    Stroke="{ThemeResource AccentFillColorDefaultBrush}"
+                    StrokeDashArray="4,2"
+                    StrokeThickness="2"
+                    Visibility="Collapsed" />
+            </Canvas>
+            <TextBlock
+                x:Name="HintText"
+                Margin="0,0,0,12"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Drag to select an area, then choose Apply crop." />
+        </Grid>
+    </Grid>
+</Window>

@@ -280,6 +280,28 @@
                     </Grid>
                 </Border>
 
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Open editor after capture" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="Review, crop, and copy each screenshot before saving." />
+                        </StackPanel>
+                        <ToggleSwitch
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="ShowScreenshotEditorToggle"
+                            AutomationProperties.Name="Open editor after capture"
+                            IsOn="{x:Bind ViewModel.ShowScreenshotEditor, Mode=TwoWay}" />
+                    </Grid>
+                </Border>
+
                 <!--  VIDEO  -->
                 <TextBlock
                     Margin="4,16,0,4"

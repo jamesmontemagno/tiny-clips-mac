@@ -44,4 +44,6 @@ public sealed class ClipTile
     public Visibility PlaceholderVisibility => Item.IsImagePreview ? Visibility.Collapsed : Visibility.Visible;
 
     public Visibility FavoriteVisibility => Item.IsFavorite ? Visibility.Visible : Visibility.Collapsed;
+
+    public Visibility EditVisibility => Item.Type == CaptureType.Screenshot ? Visibility.Visible : Visibility.Collapsed;
 }

@@ -37,6 +37,7 @@ public partial class App : Application
     private ClipsManagerWindow? _clipsWindow;
     private GuideWindow? _guideWindow;
     private OnboardingWindow? _onboardingWindow;
+    private ScreenshotEditorWindow? _editorWindow;
     private MenuFlyoutItem? _videoItem;
     private MenuFlyoutItem? _gifItem;
     private GlobalHotKeyManager? _hotKeyManager;
@@ -204,8 +205,15 @@ public partial class App : Application
                     var screenshots = Services.GetRequiredService<IScreenshotService>();
                     var path = await screenshots.CaptureTargetAsync(selection.Target, selection.Region);
                     await CopyToClipboardAsync(path, CaptureType.Screenshot);
-                    RevealInExplorer(path);
-                    ShowSaveToast(path);
+                    if (settings.ShowScreenshotEditor)
+                    {
+                        OpenScreenshotEditor(path);
+                    }
+                    else
+                    {
+                        RevealInExplorer(path);
+                        ShowSaveToast(path);
+                    }
                     break;
 
                 case CaptureType.Video:
@@ -561,6 +569,14 @@ public partial class App : Application
         _guideWindow.Activate();
     }
 
+    private void OpenScreenshotEditor(string path)
+    {
+        _editorWindow?.Close();
+        _editorWindow = new ScreenshotEditorWindow(path);
+        _editorWindow.Closed += (_, _) => _editorWindow = null;
+        _editorWindow.Activate();
+    }
+
     private void ShowOnboardingIfNeeded()
     {
         var settings = Services.GetRequiredService<ICaptureSettings>();
@@ -597,6 +613,7 @@ public partial class App : Application
         _clipsWindow?.Close();
         _guideWindow?.Close();
         _onboardingWindow?.Close();
+        _editorWindow?.Close();
         Application.Current.Exit();
         // No persistent host window keeps the process alive, so force termination
         // to guarantee the user can always quit from the tray menu.

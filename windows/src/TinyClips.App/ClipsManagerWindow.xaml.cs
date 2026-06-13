@@ -186,6 +186,16 @@ public sealed partial class ClipsManagerWindow : Window
         }
     }
 
+    private void OnEditClip(object sender, RoutedEventArgs e)
+    {
+        if (TagPath(sender) is { } path)
+        {
+            var editor = new ScreenshotEditorWindow(path);
+            editor.Closed += (_, _) => Reload();
+            editor.Activate();
+        }
+    }
+
     private async void OnUploadClip(object sender, RoutedEventArgs e)
     {
         if (TagPath(sender) is null)
