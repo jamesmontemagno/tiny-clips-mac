@@ -6,6 +6,12 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Added
+- **Audio recording for video** — microphone and/or system ("desktop"/loopback) audio is now
+  captured via WASAPI (NAudio), mixed and resampled to 48 kHz / 16-bit stereo, and muxed into the
+  recorded MP4 as an AAC track. Honors the existing **Record system audio** / **Record microphone**
+  toggles and the microphone device picker; each source is best-effort (a denied mic still records
+  system audio, and vice-versa). GIFs remain silent. Adds the `microphone` device capability to the
+  package manifest. *(A/V sync needs an on-hardware listen test — cannot be validated in CI.)*
 - **Copy video / GIF to clipboard** settings — recorded MP4s and GIFs can now be copied to the
   clipboard (as a file) automatically after capture, alongside the existing screenshot copy
   (which also places the bitmap for direct paste). Toggles added to the Video and GIF sections.

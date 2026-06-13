@@ -34,6 +34,11 @@ public sealed class VideoRecordingService : IVideoRecordingService
     private int _clickOriginX;
     private int _clickOriginY;
 
+    private AudioCaptureService? _audio;
+    private AudioStreamDescriptor? _audioDescriptor;
+    private long _audioFramesRead;
+    private volatile bool _audioEnding;
+
     public VideoRecordingService(
         IMonitorService monitors,
         IClipStorageService storage,
@@ -108,7 +113,22 @@ public sealed class VideoRecordingService : IVideoRecordingService
                 videoProps.FrameRate.Denominator = 1;
 
                 var videoDescriptor = new VideoStreamDescriptor(videoProps);
-                var mediaStreamSource = new MediaStreamSource(videoDescriptor) { BufferTime = TimeSpan.Zero };
+
+                _audioEnding = false;
+                _audioFramesRead = 0;
+                StartAudioCapture();
+
+                MediaStreamSource mediaStreamSource;
+                if (_audioDescriptor is not null)
+                {
+                    profile.Audio = AudioEncodingProperties.CreateAac(AudioCaptureService.SampleRate, AudioCaptureService.Channels, 192_000);
+                    mediaStreamSource = new MediaStreamSource(videoDescriptor, _audioDescriptor) { BufferTime = TimeSpan.Zero };
+                }
+                else
+                {
+                    mediaStreamSource = new MediaStreamSource(videoDescriptor) { BufferTime = TimeSpan.Zero };
+                }
+
                 mediaStreamSource.Starting += (_, args) => args.Request.SetActualStartPosition(TimeSpan.Zero);
                 mediaStreamSource.SampleRequested += OnSampleRequested;
 
@@ -223,6 +243,7 @@ public sealed class VideoRecordingService : IVideoRecordingService
         _clickMonitor = null;
         _capture?.Dispose();
         _capture = null;
+        DisposeAudio();
         _channel?.Writer.TryComplete();
         _channel = null;
         _transcodeTask = null;
@@ -247,6 +268,12 @@ public sealed class VideoRecordingService : IVideoRecordingService
 
     private async void OnSampleRequested(MediaStreamSource sender, MediaStreamSourceSampleRequestedEventArgs args)
     {
+        if (_audioDescriptor is not null && ReferenceEquals(args.Request.StreamDescriptor, _audioDescriptor))
+        {
+            HandleAudioRequest(args);
+            return;
+        }
+
         var channel = _channel;
         if (channel is null)
         {
@@ -280,6 +307,74 @@ public sealed class VideoRecordingService : IVideoRecordingService
         }
     }
 
+    private void HandleAudioRequest(MediaStreamSourceSampleRequestedEventArgs args)
+    {
+        var audio = _audio;
+        if (audio is null || _audioEnding)
+        {
+            // End the audio stream so the transcode can terminate.
+            args.Request.Sample = null;
+            return;
+        }
+
+        // ~20 ms of audio per chunk.
+        const int frameCount = AudioCaptureService.SampleRate / 50;
+        var data = audio.ReadChunk(frameCount);
+        if (data is null || data.Length == 0)
+        {
+            args.Request.Sample = null;
+            return;
+        }
+
+        var producedFrames = data.Length / (AudioCaptureService.Channels * (AudioCaptureService.BitsPerSample / 8));
+        var pts = TimeSpan.FromTicks((long)(_audioFramesRead * TimeSpan.TicksPerSecond / AudioCaptureService.SampleRate));
+        var duration = TimeSpan.FromTicks((long)(producedFrames * TimeSpan.TicksPerSecond / AudioCaptureService.SampleRate));
+        _audioFramesRead += producedFrames;
+
+        var sample = MediaStreamSample.CreateFromBuffer(data.AsBuffer(), pts);
+        sample.Duration = duration;
+        args.Request.Sample = sample;
+    }
+
+    private void StartAudioCapture()
+    {
+        var wantSystem = _settings.RecordAudio;
+        var wantMic = _settings.RecordMicrophone;
+        if (!wantSystem && !wantMic)
+        {
+            return;
+        }
+
+        try
+        {
+            var audio = new AudioCaptureService(wantSystem, wantMic, _settings.SelectedMicrophoneId);
+            if (audio.TryStart())
+            {
+                _audio = audio;
+                _audioDescriptor = new AudioStreamDescriptor(
+                    AudioEncodingProperties.CreatePcm(AudioCaptureService.SampleRate, AudioCaptureService.Channels, AudioCaptureService.BitsPerSample));
+            }
+            else
+            {
+                audio.Dispose();
+            }
+        }
+        catch
+        {
+            _audio = null;
+            _audioDescriptor = null;
+        }
+    }
+
+    private void DisposeAudio()
+    {
+        _audioEnding = true;
+        _audio?.Dispose();
+        _audio = null;
+        _audioDescriptor = null;
+    }
+
+
     public async Task<string?> StopAsync()
     {
         if (Interlocked.Exchange(ref _stopping, 1) == 1)
@@ -301,6 +396,11 @@ public sealed class VideoRecordingService : IVideoRecordingService
             _clickMonitor?.Dispose();
             _clickMonitor = null;
 
+            // Signal audio end-of-stream and stop the device before draining the encoder,
+            // otherwise the continuous silence source would prevent EOS.
+            _audioEnding = true;
+            _audio?.Stop();
+
             // Stop new frames, then let the encoder drain what's buffered.
             _capture?.Stop();
             _channel?.Writer.TryComplete();
@@ -319,6 +419,7 @@ public sealed class VideoRecordingService : IVideoRecordingService
 
             _capture?.Dispose();
             _capture = null;
+            DisposeAudio();
             _fileStream?.Dispose();
             _fileStream = null;
             _channel = null;
