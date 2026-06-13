@@ -96,6 +96,51 @@
                 Value="1000"
                 ValueChanged="OnEndChanged" />
 
+            <!--  Frame stepper: nudge the preview a frame at a time and export the current frame.  -->
+            <Grid Margin="0,4,0,0" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button
+                    Grid.Column="0"
+                    AutomationProperties.AutomationId="VideoPrevFrameButton"
+                    AutomationProperties.Name="Step back one frame"
+                    Click="OnPrevFrame"
+                    ToolTipService.ToolTip="Step back one frame">
+                    <FontIcon FontSize="14" Glyph="&#xE76B;" />
+                </Button>
+                <Button
+                    Grid.Column="1"
+                    AutomationProperties.AutomationId="VideoNextFrameButton"
+                    AutomationProperties.Name="Step forward one frame"
+                    Click="OnNextFrame"
+                    ToolTipService.ToolTip="Step forward one frame">
+                    <FontIcon FontSize="14" Glyph="&#xE76C;" />
+                </Button>
+                <TextBlock
+                    x:Name="PositionLabel"
+                    Grid.Column="2"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Position: 0:00.0" />
+                <Button
+                    x:Name="ExportFrameButton"
+                    Grid.Column="3"
+                    AutomationProperties.AutomationId="VideoExportFrameButton"
+                    AutomationProperties.Name="Export current frame as PNG"
+                    Click="OnExportFrame"
+                    ToolTipService.ToolTip="Export the current frame as a PNG image">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon FontSize="14" Glyph="&#xE722;" />
+                        <TextBlock Text="Export frame" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
             <ProgressBar
                 x:Name="BusyBar"
                 Margin="0,4,0,0"

@@ -91,6 +91,64 @@
                 StepFrequency="1"
                 ValueChanged="OnEndChanged" />
 
+            <!--  Current frame scrubber: step through frames and export the one shown.  -->
+            <Grid Margin="0,4,0,0" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button
+                    x:Name="PrevFrameButton"
+                    Grid.Column="0"
+                    AutomationProperties.AutomationId="GifPrevFrameButton"
+                    AutomationProperties.Name="Previous frame"
+                    Click="OnPrevFrame"
+                    ToolTipService.ToolTip="Previous frame">
+                    <FontIcon FontSize="14" Glyph="&#xE76B;" />
+                </Button>
+                <Button
+                    x:Name="NextFrameButton"
+                    Grid.Column="1"
+                    AutomationProperties.AutomationId="GifNextFrameButton"
+                    AutomationProperties.Name="Next frame"
+                    Click="OnNextFrame"
+                    ToolTipService.ToolTip="Next frame">
+                    <FontIcon FontSize="14" Glyph="&#xE76C;" />
+                </Button>
+                <Slider
+                    x:Name="CurrentSlider"
+                    Grid.Column="2"
+                    VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="GifCurrentFrameSlider"
+                    AutomationProperties.Name="Current frame"
+                    Minimum="0"
+                    StepFrequency="1"
+                    ValueChanged="OnCurrentChanged" />
+                <TextBlock
+                    x:Name="CurrentLabel"
+                    Grid.Column="3"
+                    VerticalAlignment="Center"
+                    MinWidth="92"
+                    TextAlignment="Center"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Frame 1 / 1" />
+                <Button
+                    x:Name="ExportFrameButton"
+                    Grid.Column="4"
+                    AutomationProperties.AutomationId="GifExportFrameButton"
+                    AutomationProperties.Name="Export current frame as PNG"
+                    Click="OnExportFrame"
+                    ToolTipService.ToolTip="Export the current frame as a PNG image">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon FontSize="14" Glyph="&#xE722;" />
+                        <TextBlock Text="Export frame" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
             <ProgressBar
                 x:Name="BusyBar"
                 Margin="0,4,0,0"

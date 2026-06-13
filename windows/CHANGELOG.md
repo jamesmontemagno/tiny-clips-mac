@@ -46,6 +46,13 @@ own `CHANGELOG.md` at the repository root.
   "Open with Tiny Clips". The initialization guard now defaults on.
 
 ### Added
+- **Trimmers: export the current frame as a PNG** — both the video and GIF trimmers now have an
+  **Export frame** button that saves the frame currently shown as a still PNG into the Tiny Clips
+  folder (with a save notification). For video, the frame is extracted at the exact paused
+  position; for GIF, the exact frame on screen.
+- **Trimmers: frame stepper** — left/right step buttons move the preview one frame at a time. The
+  GIF trimmer adds a current-frame scrubber + "Frame X / N" readout; the video trimmer nudges the
+  paused position by a frame and shows the current position.
 - **Screenshot editor: image dimensions** — the editor's top bar now shows the current image
   size (`W × H px`) on the right, updating after a crop is applied.
 - **Screenshot editor: shape fill color** — rectangles and ellipses can now be filled with a

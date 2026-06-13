@@ -27,6 +27,7 @@ public sealed partial class GifTrimmerWindow : Window
     private readonly List<ushort> _delays = new();
     private int _start;
     private int _end;
+    private int _current;
     private double _speed = 1.0;
     private bool _ready;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _playTimer;
@@ -82,14 +83,16 @@ public sealed partial class GifTrimmerWindow : Window
 
             _start = 0;
             _end = _frames.Count - 1;
+            _current = 0;
 
             StartSlider.Maximum = _frames.Count - 1;
             EndSlider.Maximum = _frames.Count - 1;
             EndSlider.Value = _frames.Count - 1;
+            CurrentSlider.Maximum = _frames.Count - 1;
 
             _ready = true;
             UpdateLabels();
-            await ShowFrameAsync(_start);
+            SetCurrent(0);
         }
         catch (Exception ex)
         {
@@ -132,8 +135,8 @@ public sealed partial class GifTrimmerWindow : Window
         }
 
         StopPlayback();
+        SetCurrent(_start);
         UpdateLabels();
-        _ = ShowFrameAsync(_start);
     }
 
     private void OnEndChanged(object sender, RangeBaseValueChangedEventArgs e)
@@ -151,8 +154,55 @@ public sealed partial class GifTrimmerWindow : Window
         }
 
         StopPlayback();
+        SetCurrent(_end);
         UpdateLabels();
-        _ = ShowFrameAsync(_end);
+    }
+
+    // -- Current frame stepper ------------------------------------------------
+
+    private void OnCurrentChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (!_ready)
+        {
+            return;
+        }
+
+        SetCurrent((int)Math.Round(e.NewValue), syncSlider: false);
+    }
+
+    private void OnPrevFrame(object sender, RoutedEventArgs e)
+    {
+        StopPlayback();
+        SetCurrent(_current - 1);
+    }
+
+    private void OnNextFrame(object sender, RoutedEventArgs e)
+    {
+        StopPlayback();
+        SetCurrent(_current + 1);
+    }
+
+    private void SetCurrent(int index, bool syncSlider = true)
+    {
+        if (!_ready || _frames.Count == 0)
+        {
+            return;
+        }
+
+        _current = Math.Clamp(index, 0, _frames.Count - 1);
+        if (syncSlider && Math.Abs(CurrentSlider.Value - _current) > 0.001)
+        {
+            CurrentSlider.Value = _current;
+        }
+
+        CurrentLabel.Text = $"Frame {_current + 1} / {_frames.Count}";
+        if (PrevFrameButton is not null)
+        {
+            PrevFrameButton.IsEnabled = _current > 0;
+            NextFrameButton.IsEnabled = _current < _frames.Count - 1;
+        }
+
+        _ = ShowFrameAsync(_current);
     }
 
     private async Task ShowFrameAsync(int index)
@@ -262,10 +312,47 @@ public sealed partial class GifTrimmerWindow : Window
     {
         _playTimer?.Stop();
         PlayToggle.IsChecked = false;
-        _ = ShowFrameAsync(_start);
+        _ = ShowFrameAsync(_current);
     }
 
     // -- Output ---------------------------------------------------------------
+
+    private async void OnExportFrame(object sender, RoutedEventArgs e)
+    {
+        if (!_ready || _current < 0 || _current >= _frames.Count)
+        {
+            return;
+        }
+
+        StopPlayback();
+        ExportFrameButton.IsEnabled = false;
+
+        try
+        {
+            var storage = App.Services.GetRequiredService<IClipStorageService>();
+            var path = storage.GenerateFilePath(CaptureType.Screenshot, ".png", "(frame)");
+            var folder = await StorageFolder.GetFolderFromPathAsync(System.IO.Path.GetDirectoryName(path)!);
+            var file = await folder.CreateFileAsync(
+                System.IO.Path.GetFileName(path), CreationCollisionOption.GenerateUniqueName);
+
+            using (var stream = await file.OpenAsync(FileAccessMode.ReadWrite))
+            {
+                var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);
+                encoder.SetSoftwareBitmap(_frames[_current]);
+                await encoder.FlushAsync();
+            }
+
+            App.ShowSaveNotification(file.Path);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"GIF frame export failed: {ex}");
+        }
+        finally
+        {
+            ExportFrameButton.IsEnabled = true;
+        }
+    }
 
     private async void OnSaveTrimmed(object sender, RoutedEventArgs e)
     {

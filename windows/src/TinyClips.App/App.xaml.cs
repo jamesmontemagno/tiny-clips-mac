@@ -823,6 +823,15 @@ public partial class App : Application
 
     private void ShowSaveToast(string path)
     {
+        ShowSaveNotification(path);
+    }
+
+    /// <summary>
+    /// Shows a "Saved to Tiny Clips" toast for a freshly written file (honoring the user's
+    /// notification preference). Safe to call from any window (e.g. the trimmers' frame export).
+    /// </summary>
+    internal static void ShowSaveNotification(string path)
+    {
         try
         {
             var settings = Services.GetRequiredService<ICaptureSettings>();

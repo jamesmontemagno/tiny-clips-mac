@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using TinyClips.Core.Models;
 using TinyClips.Core.Services;
+using Windows.Graphics.Imaging;
 using Windows.Media.Core;
 using Windows.Media.Editing;
 using Windows.Media.Playback;
@@ -26,6 +27,9 @@ public sealed partial class VideoTrimmerWindow : Window
     private double _endSeconds;
     private double _speed = 1.0;
     private bool _ready;
+
+    // Step a 1/30s "frame" since the recorded fps isn't exposed by the WinRT clip API.
+    private static readonly TimeSpan FrameStep = TimeSpan.FromSeconds(1.0 / 30.0);
 
     public VideoTrimmerWindow(string filePath)
     {
@@ -65,10 +69,12 @@ public sealed partial class VideoTrimmerWindow : Window
 
             var player = new MediaPlayer { Source = MediaSource.CreateFromStorageFile(file) };
             player.PlaybackRate = _speed;
+            player.PlaybackSession.PositionChanged += OnPositionChanged;
             Player.SetMediaPlayer(player);
 
             _ready = true;
             UpdateLabels();
+            UpdatePositionLabel(TimeSpan.Zero);
         }
         catch (Exception ex)
         {
@@ -123,6 +129,51 @@ public sealed partial class VideoTrimmerWindow : Window
         }
     }
 
+    // -- Frame stepper --------------------------------------------------------
+
+    private void OnPrevFrame(object sender, RoutedEventArgs e) => StepFrame(-1);
+
+    private void OnNextFrame(object sender, RoutedEventArgs e) => StepFrame(1);
+
+    private void StepFrame(int direction)
+    {
+        if (!_ready || _duration <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        var player = Player.MediaPlayer;
+        if (player?.PlaybackSession is not { } session)
+        {
+            return;
+        }
+
+        player.Pause();
+        var target = session.Position + TimeSpan.FromTicks(FrameStep.Ticks * direction);
+        if (target < TimeSpan.Zero)
+        {
+            target = TimeSpan.Zero;
+        }
+        else if (target > _duration)
+        {
+            target = _duration;
+        }
+
+        session.Position = target;
+        UpdatePositionLabel(target);
+    }
+
+    private void OnPositionChanged(MediaPlaybackSession sender, object args)
+    {
+        var position = sender.Position;
+        DispatcherQueue.TryEnqueue(() => UpdatePositionLabel(position));
+    }
+
+    private void UpdatePositionLabel(TimeSpan position)
+    {
+        PositionLabel.Text = $"Position: {Format(position.TotalSeconds)}";
+    }
+
     private void UpdateLabels()
     {
         StartLabel.Text = Format(_startSeconds);
@@ -156,6 +207,64 @@ public sealed partial class VideoTrimmerWindow : Window
     }
 
     // -- Output ---------------------------------------------------------------
+
+    private async void OnExportFrame(object sender, RoutedEventArgs e)
+    {
+        if (!_ready)
+        {
+            return;
+        }
+
+        var session = Player.MediaPlayer?.PlaybackSession;
+        if (session is null)
+        {
+            return;
+        }
+
+        var position = session.Position;
+        Player.MediaPlayer?.Pause();
+
+        BusyBar.Visibility = Visibility.Visible;
+        ExportFrameButton.IsEnabled = false;
+
+        try
+        {
+            var file = await StorageFile.GetFileFromPathAsync(_filePath);
+            var clip = await MediaClip.CreateFromFileAsync(file);
+            var composition = new MediaComposition();
+            composition.Clips.Add(clip);
+
+            // 0,0 => original frame resolution. NearestFrame keeps the still aligned to the
+            // frame the user is paused on.
+            var thumb = await composition.GetThumbnailAsync(position, 0, 0, VideoFramePrecision.NearestFrame);
+            var decoder = await BitmapDecoder.CreateAsync(thumb);
+            var bitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+
+            var storage = App.Services.GetRequiredService<IClipStorageService>();
+            var path = storage.GenerateFilePath(CaptureType.Screenshot, ".png", "(frame)");
+            var folder = await StorageFolder.GetFolderFromPathAsync(System.IO.Path.GetDirectoryName(path)!);
+            var outFile = await folder.CreateFileAsync(
+                System.IO.Path.GetFileName(path), CreationCollisionOption.GenerateUniqueName);
+
+            using (var outStream = await outFile.OpenAsync(FileAccessMode.ReadWrite))
+            {
+                var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, outStream);
+                encoder.SetSoftwareBitmap(bitmap);
+                await encoder.FlushAsync();
+            }
+
+            App.ShowSaveNotification(outFile.Path);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Video frame export failed: {ex}");
+        }
+        finally
+        {
+            BusyBar.Visibility = Visibility.Collapsed;
+            ExportFrameButton.IsEnabled = true;
+        }
+    }
 
     private async void OnSaveTrimmed(object sender, RoutedEventArgs e)
     {
@@ -218,6 +327,11 @@ public sealed partial class VideoTrimmerWindow : Window
     private void OnWindowClosed(object sender, WindowEventArgs e)
     {
         var player = Player.MediaPlayer;
+        if (player?.PlaybackSession is { } session)
+        {
+            session.PositionChanged -= OnPositionChanged;
+        }
+
         Player.SetMediaPlayer(null);
         player?.Dispose();
     }
