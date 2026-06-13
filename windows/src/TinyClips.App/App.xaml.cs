@@ -15,6 +15,9 @@ using Microsoft.Windows.AppNotifications.Builder;
 using TinyClips.Core.Capture;
 using TinyClips.Core.Models;
 using TinyClips.Core.Services;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+using Windows.Storage.Streams;
 
 namespace TinyClips.App;
 
@@ -162,6 +165,7 @@ public partial class App : Application
             var screenshots = Services.GetRequiredService<IScreenshotService>();
             var path = await screenshots.CaptureFullScreenAsync();
 
+            await CopyToClipboardAsync(path, CaptureType.Screenshot);
             RevealInExplorer(path);
             ShowSaveToast(path);
         }
@@ -194,6 +198,7 @@ public partial class App : Application
             var screenshots = Services.GetRequiredService<IScreenshotService>();
             var path = await screenshots.CaptureRegionAsync(selected);
 
+            await CopyToClipboardAsync(path, CaptureType.Screenshot);
             RevealInExplorer(path);
             ShowSaveToast(path);
         }
@@ -286,11 +291,15 @@ public partial class App : Application
 
     private void OnRecordingCompleted(object? sender, string? path)
     {
-        _dispatcher?.TryEnqueue(() =>
+        _dispatcher?.TryEnqueue(async () =>
         {
             UpdateRecordingState();
             if (!string.IsNullOrEmpty(path))
             {
+                var type = Path.GetExtension(path).Equals(".gif", StringComparison.OrdinalIgnoreCase)
+                    ? CaptureType.Gif
+                    : CaptureType.Video;
+                await CopyToClipboardAsync(path, type);
                 RevealInExplorer(path);
                 ShowSaveToast(path);
             }
@@ -336,6 +345,34 @@ public partial class App : Application
         catch (Exception ex)
         {
             Debug.WriteLine($"Notification registration failed: {ex}");
+        }
+    }
+
+    private async Task CopyToClipboardAsync(string path, CaptureType type)
+    {
+        try
+        {
+            var settings = Services.GetRequiredService<ICaptureSettings>();
+            if (!settings.ShouldCopyToClipboard(type))
+            {
+                return;
+            }
+
+            var file = await StorageFile.GetFileFromPathAsync(path);
+            var package = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
+            package.SetStorageItems(new[] { file });
+
+            // For still images, also place the bitmap so it can be pasted directly into editors.
+            if (type == CaptureType.Screenshot)
+            {
+                package.SetBitmap(RandomAccessStreamReference.CreateFromFile(file));
+            }
+
+            Clipboard.SetContent(package);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Clipboard copy failed: {ex}");
         }
     }
 
