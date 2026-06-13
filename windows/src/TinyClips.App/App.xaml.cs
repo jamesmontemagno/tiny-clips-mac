@@ -31,7 +31,6 @@ public partial class App : Application
     private const string GlyphVideo = "\uE714";
     private const string GlyphGif = "\uE786";
     private const string GlyphStop = "\uE71A";
-    private const string GlyphRegion = "\uE7A8";
 
     private TaskbarIcon? _taskbarIcon;
     private SettingsWindow? _settingsWindow;
@@ -89,12 +88,6 @@ public partial class App : Application
             glyph: GlyphScreenshot,
             acceleratorText: hotKeys.GetBinding(CaptureType.Screenshot).DisplayString,
             command: new AsyncRelayCommand(CaptureScreenshotAsync)));
-
-        menuFlyout.Items.Add(CreateMenuItem(
-            text: "Capture Region",
-            glyph: GlyphRegion,
-            acceleratorText: null,
-            command: new AsyncRelayCommand(CaptureRegionAsync)));
 
         _videoItem = CreateMenuItem(
             text: "Record Video",
@@ -328,39 +321,6 @@ public partial class App : Application
     }
 
     private readonly record struct TargetSelection(CaptureTarget Target, PixelRect? Region);
-
-    private async Task CaptureRegionAsync()
-    {
-        try
-        {
-            // Let the tray menu dismiss before the overlay appears.
-            await Task.Delay(150);
-
-            var monitors = Services.GetRequiredService<IMonitorService>();
-            var monitor = monitors.GetPrimaryMonitor();
-            if (monitor is null)
-            {
-                return;
-            }
-
-            var region = await RegionSelectWindow.RunAsync(monitor);
-            if (region is not { } selected)
-            {
-                return;
-            }
-
-            var screenshots = Services.GetRequiredService<IScreenshotService>();
-            var path = await screenshots.CaptureRegionAsync(selected);
-
-            await CopyToClipboardAsync(path, CaptureType.Screenshot);
-            RevealInExplorer(path);
-            ShowSaveToast(path);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"Region capture failed: {ex}");
-        }
-    }
 
     private async Task ToggleVideoAsync()
     {

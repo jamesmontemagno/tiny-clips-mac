@@ -65,6 +65,8 @@ own `CHANGELOG.md` at the repository root.
 - Hotkey labels now render punctuation/symbol keys (e.g. `-`, `=`, `,`) instead of `?`.
 
 ### Removed
+- The redundant **Capture Region** item from the tray menu; region capture is still available
+  via the **Capture Screenshot** flow's picker (`R`).
 - The **Clips Manager** library window (and its `ClipTile` view-model) for now; captures still
   save to the configured output folders and surface via Explorer + save toasts.
 
