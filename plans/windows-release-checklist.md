@@ -36,9 +36,9 @@
 - ☐ **App assets audit** — confirm every tile/logo scale referenced in `Package.appxmanifest`
   exists and renders (Square44/150, Wide310x150, SmallTile, LargeTile, SplashScreen, StoreLogo).
   Verify the new macOS-matched icon is exported at all scales.
-- ☐ **Privacy policy URL** — required by the Store, recommended for winget. Publish a page (repo
-  `docs/` or GitHub Pages) covering: screen capture, microphone, system-audio, local file save,
-  no telemetry (state plainly). Capture the URL for both submissions.
+- ☑ **Privacy policy URL** — required by the Store, recommended for winget. Published at
+  `https://tinyclips.app/privacy.html`; use this URL for both Store listing metadata and the winget
+  locale manifest (`PrivacyUrl`).
 - ☐ **Release notes source** — reuse `windows/CHANGELOG.md` `## [Unreleased]` → cut a versioned
   `## [vX.Y.Z]` section per release; feed it to GitHub Release body, Store "what's new", and the
   winget locale `ReleaseNotes`.
@@ -145,7 +145,7 @@ The 3-file manifest lives in `windows/packaging/winget/`. Per release:
   existing `docs/app-store-connect-metadata.md` is **macOS**; a Windows listing pack is needed),
   store logos, category (Photo & video / Productivity), search terms, **copyright © <year>
   Refractored LLC**.
-- ☐ **Privacy policy URL** (required).
+- ☑ **Privacy policy URL** (required): `https://tinyclips.app/privacy.html`.
 - ☐ **Age rating** (IARC questionnaire).
 - ☐ **Capability justifications**: `runFullTrust` requires a "why full trust" justification in Partner
   Center (needed for WGC screen capture + WASAPI audio + arbitrary file save); `microphone` needs a

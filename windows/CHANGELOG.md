@@ -51,6 +51,9 @@ own `CHANGELOG.md` at the repository root.
   selection marquee and hit-testing cover the entire annotation.
 
 ### Changed
+- **Windows privacy policy URL is now set for distribution metadata** — the winget locale manifest
+  now publishes `PrivacyUrl: https://tinyclips.app/privacy.html`, and Windows packaging docs now
+  reference the same URL for Store listing metadata.
 - **Repository renamed to `jamesmontemagno/tiny-clips`** — the GitHub repository link on the
   Settings → About page, the winget manifests, and all documentation now point at the new
   `tiny-clips` repository (the old `tiny-clips-mac` URLs continue to redirect). The winget package

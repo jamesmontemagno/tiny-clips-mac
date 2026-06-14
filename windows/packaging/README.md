@@ -49,6 +49,9 @@ release exists:
 4. Submit a PR to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) (or use
    `wingetcreate submit`). This can be automated in CI on each tagged release.
 
+The locale manifest already includes:
+- `PrivacyUrl: https://tinyclips.app/privacy.html`
+
 > ⚠️ Requires the maintainer's GitHub account; the signed MSIX + hashes can only be produced
 > from a release build with the real signing certificate.
 
@@ -61,6 +64,7 @@ release exists:
    or `winapp` Store submission.
 4. Configure Store add-ons for **Pro** (StoreKit-equivalent) — Store build only.
 5. Complete the listing metadata, privacy, and screen-recording capability declarations.
+   - Privacy policy URL: `https://tinyclips.app/privacy.html`
 
 > ⚠️ Requires a Partner Center account; cannot be completed from the repo alone.
 
