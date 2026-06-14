@@ -57,6 +57,10 @@ own `CHANGELOG.md` at the repository root.
   "Open with Tiny Clips". The initialization guard now defaults on.
 
 ### Added
+- **Screenshot editor: redaction styles (blur, pixelate, solid)** — the redact tool now has a **Style**
+  picker in addition to the strength levels. Choose **Blur** (gaussian, the previous behavior),
+  **Pixelate** (mosaic blocks whose size scales with strength), or **Solid** (a hard black bar). The
+  style applies per-redaction and can be changed after selecting one.
 - **Screenshot editor: rich text dialog** — the text tool now opens a dedicated dialog with **bold,
   italic, underline and strikethrough** toggles, font and size pickers, a text color picker and a live
   preview, confirmed with **OK**. Double-click an existing text label to reopen the dialog and edit

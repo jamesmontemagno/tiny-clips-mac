@@ -59,6 +59,13 @@ public sealed partial class ScreenshotEditorWindow : Window
         Heavy,
     }
 
+    private enum RedactionStyle
+    {
+        Blur,
+        Pixelate,
+        Solid,
+    }
+
     private enum ArrowStyle
     {
         Straight,
@@ -77,6 +84,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         public int Number { get; set; }
         public double SizeScale { get; set; } = 1.0;
         public RedactionLevel Redaction { get; set; } = RedactionLevel.Medium;
+        public RedactionStyle RedactStyle { get; set; } = RedactionStyle.Blur;
         public ArrowStyle ArrowStyle { get; set; } = ArrowStyle.Straight;
         public List<Vector2> Points { get; } = new();
 
@@ -93,6 +101,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         public SoftwareBitmapSource? RedactPreview { get; set; }
         public Rect RedactPreviewBounds { get; set; }
         public RedactionLevel RedactPreviewLevel { get; set; }
+        public RedactionStyle RedactPreviewStyle { get; set; }
     }
 
     private readonly string _filePath;
@@ -116,6 +125,7 @@ public sealed partial class ScreenshotEditorWindow : Window
     private bool _textUnderline;
     private bool _textStrikethrough;
     private RedactionLevel _redactionLevel = RedactionLevel.Medium;
+    private RedactionStyle _redactionStyle = RedactionStyle.Blur;
     private ArrowStyle _arrowStyle = ArrowStyle.Straight;
     private int _counterValue = 1;
 
@@ -200,6 +210,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         NumberColorPicker.Color = _numberTextColor;
         NumberColorSwatch.Background = new SolidColorBrush(_numberTextColor);
         RedactionCombo.SelectedIndex = 1;
+        RedactStyleCombo.SelectedIndex = 0;
 
         InitializeInspectorControls();
         InitializeBackgroundControls();
@@ -396,6 +407,12 @@ public sealed partial class ScreenshotEditorWindow : Window
             ArrowStyleCombo.SelectedIndex = (int)_arrowStyle;
         }
 
+        if (showsRedact)
+        {
+            RedactStyleCombo.SelectedIndex = (int)_redactionStyle;
+            RedactionCombo.SelectedIndex = (int)_redactionLevel;
+        }
+
         InspectorTitle.Text = tool switch
         {
             EditTool.Select => "Select & move",
@@ -489,6 +506,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         if (isRedact)
         {
             RedactionCombo.SelectedIndex = (int)ann.Redaction;
+            RedactStyleCombo.SelectedIndex = (int)ann.RedactStyle;
         }
 
         UpdateInspectorHeaders();
@@ -674,6 +692,21 @@ public sealed partial class ScreenshotEditorWindow : Window
             if (_selectedAnnotation is { Tool: EditTool.Redact } ann)
             {
                 ann.Redaction = level;
+                ann.RedactPreview = null;
+                RedrawOverlay();
+            }
+        }
+    }
+
+    private void OnRedactionStyleChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (RedactStyleCombo.SelectedItem is ComboBoxItem { Tag: string tag }
+            && Enum.TryParse<RedactionStyle>(tag, out var style))
+        {
+            _redactionStyle = style;
+            if (_selectedAnnotation is { Tool: EditTool.Redact } ann)
+            {
+                ann.RedactStyle = style;
                 ann.RedactPreview = null;
                 RedrawOverlay();
             }
@@ -875,6 +908,7 @@ public sealed partial class ScreenshotEditorWindow : Window
                 : Colors.Transparent,
             Thickness = _strokeThickness,
             Redaction = _redactionLevel,
+            RedactStyle = _redactionStyle,
             ArrowStyle = _arrowStyle,
             Bounds = new Rect(pixel.X, pixel.Y, 0, 0),
         };
@@ -1917,6 +1951,14 @@ public sealed partial class ScreenshotEditorWindow : Window
         _ => 12f,
     };
 
+    private static int PixelSizeFor(RedactionLevel level) => level switch
+    {
+        RedactionLevel.Light => 8,
+        RedactionLevel.Medium => 16,
+        RedactionLevel.Heavy => 28,
+        _ => 16,
+    };
+
     private void EnsureRedactPreview(Annotation ann)
     {
         if (_canvasSource is null)
@@ -1934,6 +1976,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         // Reuse the cached preview when nothing relevant changed.
         if (ann.RedactPreview is not null
             && ann.RedactPreviewLevel == ann.Redaction
+            && ann.RedactPreviewStyle == ann.RedactStyle
             && SameRect(ann.RedactPreviewBounds, b))
         {
             return;
@@ -1954,7 +1997,7 @@ public sealed partial class ScreenshotEditorWindow : Window
             using (var ds = rt.CreateDrawingSession())
             {
                 ds.Clear(Colors.Transparent);
-                using var effect = BuildRedactEffect(_canvasSource, srcRect, ann.Redaction);
+                using var effect = BuildRedactEffect(_canvasSource, srcRect, ann.Redaction, ann.RedactStyle);
                 ds.DrawImage(effect, new Rect(0, 0, w, h), srcRect);
             }
 
@@ -1969,6 +2012,7 @@ public sealed partial class ScreenshotEditorWindow : Window
             ann.RedactPreview = preview;
             ann.RedactPreviewBounds = b;
             ann.RedactPreviewLevel = ann.Redaction;
+            ann.RedactPreviewStyle = ann.RedactStyle;
             _ = preview.SetBitmapAsync(sb).AsTask().ContinueWith(
                 _ => DispatcherQueue.TryEnqueue(RedrawOverlayDefault),
                 System.Threading.Tasks.TaskScheduler.Default);
@@ -1985,16 +2029,47 @@ public sealed partial class ScreenshotEditorWindow : Window
         Math.Abs(a.X - b.X) < 0.5 && Math.Abs(a.Y - b.Y) < 0.5
         && Math.Abs(a.Width - b.Width) < 0.5 && Math.Abs(a.Height - b.Height) < 0.5;
 
-    private static ICanvasImage BuildRedactEffect(CanvasBitmap source, Rect region, RedactionLevel level)
+    private static ICanvasImage BuildRedactEffect(CanvasBitmap source, Rect region, RedactionLevel level, RedactionStyle style)
     {
+        if (style == RedactionStyle.Solid)
+        {
+            return new ColorSourceEffect { Color = Colors.Black };
+        }
+
         var crop = new CropEffect { Source = source, SourceRectangle = region };
-        // Clamp the edges so the blur doesn't pull transparency in from outside the crop.
+        // Clamp the edges so the effect doesn't pull transparency in from outside the crop.
         var border = new BorderEffect
         {
             Source = crop,
             ExtendX = CanvasEdgeBehavior.Clamp,
             ExtendY = CanvasEdgeBehavior.Clamp,
         };
+
+        if (style == RedactionStyle.Pixelate)
+        {
+            // Win2D has no pixelate effect: downscale (linear) then upscale (nearest-neighbor)
+            // about the region center so the geometry is unchanged but the detail is quantized
+            // into blocks.
+            float size = PixelSizeFor(level);
+            var center = new Vector2(
+                (float)(region.X + region.Width / 2),
+                (float)(region.Y + region.Height / 2));
+            var down = new ScaleEffect
+            {
+                Source = border,
+                Scale = new Vector2(1f / size, 1f / size),
+                CenterPoint = center,
+                InterpolationMode = CanvasImageInterpolation.Linear,
+            };
+            return new ScaleEffect
+            {
+                Source = down,
+                Scale = new Vector2(size, size),
+                CenterPoint = center,
+                InterpolationMode = CanvasImageInterpolation.NearestNeighbor,
+            };
+        }
+
         return new GaussianBlurEffect
         {
             Source = border,
@@ -2012,7 +2087,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         }
 
         var rect = new Rect(b.X, b.Y, b.Width, b.Height);
-        using var effect = BuildRedactEffect(source, rect, ann.Redaction);
+        using var effect = BuildRedactEffect(source, rect, ann.Redaction, ann.RedactStyle);
         ds.DrawImage(effect, rect, rect);
     }
 

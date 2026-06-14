@@ -429,14 +429,25 @@
                             </StackPanel>
                         </StackPanel>
 
-                        <!--  Redaction strength  -->
-                        <StackPanel x:Name="RedactSection" Spacing="2">
+                        <!--  Redaction style + strength  -->
+                        <StackPanel x:Name="RedactSection" Spacing="8">
+                            <ComboBox
+                                x:Name="RedactStyleCombo"
+                                HorizontalAlignment="Stretch"
+                                AutomationProperties.AutomationId="EditorRedactStyleCombo"
+                                AutomationProperties.Name="Redaction style"
+                                Header="Style"
+                                SelectionChanged="OnRedactionStyleChanged">
+                                <ComboBoxItem Content="Blur" Tag="Blur" />
+                                <ComboBoxItem Content="Pixelate" Tag="Pixelate" />
+                                <ComboBoxItem Content="Solid" Tag="Solid" />
+                            </ComboBox>
                             <ComboBox
                                 x:Name="RedactionCombo"
                                 HorizontalAlignment="Stretch"
                                 AutomationProperties.AutomationId="EditorRedactionCombo"
                                 AutomationProperties.Name="Redaction strength"
-                                Header="Blur strength"
+                                Header="Strength"
                                 SelectionChanged="OnRedactionLevelChanged">
                                 <ComboBoxItem Content="Light" Tag="Light" />
                                 <ComboBoxItem Content="Medium" Tag="Medium" />
