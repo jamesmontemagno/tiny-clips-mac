@@ -2,19 +2,24 @@
   <Configurations>
     <Platform Name="Any CPU" />
     <Platform Name="x64" />
+    <Platform Name="ARM64" />
   </Configurations>
   <Folder Name="/src/">
     <Project Path="src/TinyClips.App/TinyClips.App.csproj">
       <Platform Solution="*|x64" Project="x64" />
+      <Platform Solution="*|ARM64" Project="ARM64" />
       <Deploy Solution="*|x64" />
+      <Deploy Solution="*|ARM64" />
     </Project>
     <Project Path="src/TinyClips.Core/TinyClips.Core.csproj">
       <Platform Solution="*|x64" Project="x64" />
+      <Platform Solution="*|ARM64" Project="ARM64" />
     </Project>
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TinyClips.Core.Tests/TinyClips.Core.Tests.csproj">
       <Platform Solution="*|x64" Project="x64" />
+      <Platform Solution="*|ARM64" Project="ARM64" />
     </Project>
   </Folder>
 </Solution>

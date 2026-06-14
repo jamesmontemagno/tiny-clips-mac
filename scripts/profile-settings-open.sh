@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Records a Time Profiler trace, triggers Settings with Cmd+, and exports TOC/signpost XML.
 
-ROOT_DIR="/Users/jamesmontemagno/Projects/tiny-clips"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUTPUT_DIR="${1:-$HOME/Desktop}"
 SCHEME="TinyClips"
 TIME_LIMIT_SECONDS="${TIME_LIMIT_SECONDS:-30}"

@@ -68,5 +68,5 @@ release exists:
 
 The current feature set (Graphics.Capture, toast notifications, file save to
 Pictures/Videos) runs under `runFullTrust` with package identity — no extra manifest
-capabilities are required. When microphone/system-audio recording lands (a later phase),
-add `<DeviceCapability Name="microphone"/>` to `Package.appxmanifest`.
+capabilities are required. The `microphone` device capability is already declared in
+`Package.appxmanifest` to support audio recording.

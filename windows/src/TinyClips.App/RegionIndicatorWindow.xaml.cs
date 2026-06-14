@@ -14,7 +14,9 @@ namespace TinyClips.App;
 /// </summary>
 public sealed partial class RegionIndicatorWindow : Window
 {
-    // Keep in sync with the Border BorderThickness in RegionIndicatorWindow.xaml (DIPs).
+    // Width (in DIPs) of the hollow outline frame. The window is expanded outward by this
+    // amount and its interior is punched out (see PunchHole), so this constant alone controls
+    // the visible border thickness; the XAML only supplies the fill color.
     private const int BorderThicknessDip = 4;
 
     private const int GwlExStyle = -20;
