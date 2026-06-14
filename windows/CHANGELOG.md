@@ -47,6 +47,10 @@ own `CHANGELOG.md` at the repository root.
   selection marquee and hit-testing cover the entire annotation.
 
 ### Changed
+- **Repository renamed to `jamesmontemagno/tiny-clips`** — the GitHub repository link on the
+  Settings → About page, the winget manifests, and all documentation now point at the new
+  `tiny-clips` repository (the old `tiny-clips-mac` URLs continue to redirect). The winget package
+  identifier is unchanged (`Refractored.TinyClips`).
 - **Default save location is now `Pictures\TinyClips`** — new clips default to a `TinyClips` folder
   inside your Pictures library (matching the macOS app) instead of the Desktop, when you haven't
   chosen a custom save folder in Settings.

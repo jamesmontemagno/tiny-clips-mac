@@ -108,7 +108,7 @@ Add these secrets to your GitHub repository (**Settings → Secrets and variable
 3. Click **Save**
 4. Wait for deployment (may take a few minutes)
 5. Verify appcast is accessible at:
-   `https://jamesmontemagno.github.io/tiny-clips-mac/appcast.xml`
+   `https://jamesmontemagno.github.io/tiny-clips/appcast.xml`
 
 ## Step 5: Create a Release
 

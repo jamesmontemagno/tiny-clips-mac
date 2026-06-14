@@ -25,7 +25,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>TinyClips needs microphone access to record your voice alongside screen recordings.</string>
 	<key>SUFeedURL</key>
-	<string>https://jamesmontemagno.github.io/tiny-clips-mac/appcast.xml</string>
+	<string>https://jamesmontemagno.github.io/tiny-clips/appcast.xml</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUPublicEDKey</key>

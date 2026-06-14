@@ -28,8 +28,8 @@ Thank you for your interest in contributing to TinyClips! This guide covers ever
 ### 1. Fork and clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/tiny-clips-mac.git
-cd tiny-clips-mac
+git clone https://github.com/<your-username>/tiny-clips.git
+cd tiny-clips
 ```
 
 ### 2. Open the project in Xcode

@@ -246,7 +246,7 @@ struct SettingsView: View {
     }
 
     private var reportIssueURL: URL {
-        var components = URLComponents(string: "https://github.com/jamesmontemagno/tiny-clips-mac/issues/new")!
+        var components = URLComponents(string: "https://github.com/jamesmontemagno/tiny-clips/issues/new")!
         components.queryItems = [
             URLQueryItem(name: "template", value: "bug_report.yml"),
             URLQueryItem(name: "labels", value: "bug"),

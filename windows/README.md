@@ -94,7 +94,8 @@ For coordinate/DPI behaviour across mixed-DPI monitors, see
 
 ## Distribution (planned)
 
-- **Direct:** signed MSIX + `.appinstaller` auto-update, plus a winget manifest. Fully free.
+- **Direct:** signed MSIX distributed via **winget**; updates ship through `winget upgrade`
+  (no separate in-app updater). Fully free.
 - **Microsoft Store:** Store auto-update + Pro add-ons (Pro is Store-only).
 
 See the plan for the full phased roadmap, packaging, and signing details.

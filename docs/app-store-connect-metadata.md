@@ -49,8 +49,8 @@ screenshot,screen recorder,gif,menu bar,capture,developer tools,productivity,scr
 
 ## URLs
 
-- **Support URL:** `https://github.com/jamesmontemagno/tiny-clips-mac/issues`
-- **Marketing URL:** `https://github.com/jamesmontemagno/tiny-clips-mac`
+- **Support URL:** `https://github.com/jamesmontemagno/tiny-clips/issues`
+- **Marketing URL:** `https://github.com/jamesmontemagno/tiny-clips`
 - **Privacy Policy URL:**
   - Required for App Store submission.
   - Add a hosted privacy policy page and paste the final URL here.
@@ -179,6 +179,6 @@ TinyClips is designed for developers, creators, and anyone who needs fast visual
 
 **Keywords:** screenshot,screen recorder,gif,menu bar,capture,developer tools,productivity,screen capture,mac
 
-**Support URL:** https://github.com/jamesmontemagno/tiny-clips-mac/issues
+**Support URL:** https://github.com/jamesmontemagno/tiny-clips/issues
 
-**Marketing URL:** https://github.com/jamesmontemagno/tiny-clips-mac
+**Marketing URL:** https://github.com/jamesmontemagno/tiny-clips

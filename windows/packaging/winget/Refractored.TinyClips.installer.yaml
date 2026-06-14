@@ -13,11 +13,11 @@ InstallModes:
 PackageFamilyName: Refractored.TinyClips_<publisher-id-hash>
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.0.0/TinyClips-1.0.0-x64.msix
+    InstallerUrl: https://github.com/jamesmontemagno/tiny-clips/releases/download/v1.0.0/TinyClips-1.0.0-x64.msix
     InstallerSha256: <FILL-IN-SHA256>
     SignatureSha256: <FILL-IN-SIGNATURE-SHA256>
   - Architecture: arm64
-    InstallerUrl: https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.0.0/TinyClips-1.0.0-arm64.msix
+    InstallerUrl: https://github.com/jamesmontemagno/tiny-clips/releases/download/v1.0.0/TinyClips-1.0.0-arm64.msix
     InstallerSha256: <FILL-IN-SHA256>
     SignatureSha256: <FILL-IN-SIGNATURE-SHA256>
 ManifestType: installer

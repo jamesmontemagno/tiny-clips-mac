@@ -29,7 +29,7 @@ struct AboutSettingsSection: View {
         }
 
         Section {
-            Link("GitHub Repository", destination: URL(string: "https://github.com/jamesmontemagno/tiny-clips-mac")!)
+            Link("GitHub Repository", destination: URL(string: "https://github.com/jamesmontemagno/tiny-clips")!)
                 .accessibilityHint("Opens the TinyClips GitHub repository in your browser.")
             Link("Report an Issue", destination: reportIssueURL)
                 .accessibilityHint("Opens the issue reporter in your browser.")

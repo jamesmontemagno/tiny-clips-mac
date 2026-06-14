@@ -202,7 +202,7 @@ jobs:
 
           $RUNNER_TEMP/Sparkle/bin/generate_appcast \
             --ed-key-file $RUNNER_TEMP/sparkle_private_key \
-            --download-url-prefix "https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/${{ env.RELEASE_TAG }}/" \
+            --download-url-prefix "https://github.com/jamesmontemagno/tiny-clips/releases/download/${{ env.RELEASE_TAG }}/" \
             $RUNNER_TEMP/release-files
 
           mv $RUNNER_TEMP/release-files/appcast.xml $RUNNER_TEMP/appcast.xml

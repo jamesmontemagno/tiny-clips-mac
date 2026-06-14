@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Records a Time Profiler trace, triggers Settings with Cmd+, and exports TOC/signpost XML.
 
-ROOT_DIR="/Users/jamesmontemagno/Projects/tiny-clips-mac"
+ROOT_DIR="/Users/jamesmontemagno/Projects/tiny-clips"
 OUTPUT_DIR="${1:-$HOME/Desktop}"
 SCHEME="TinyClips"
 TIME_LIMIT_SECONDS="${TIME_LIMIT_SECONDS:-30}"

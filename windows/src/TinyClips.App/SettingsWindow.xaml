@@ -1236,7 +1236,7 @@
                             AutomationProperties.AutomationId="AboutRepoLink"
                             AutomationProperties.Name="Open the Tiny Clips GitHub repository"
                             Content="GitHub repository"
-                            NavigateUri="https://github.com/jamesmontemagno/tiny-clips-mac" />
+                            NavigateUri="https://github.com/jamesmontemagno/tiny-clips" />
                     </Grid>
                 </Border>
 
