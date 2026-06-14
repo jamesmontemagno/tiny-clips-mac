@@ -23,19 +23,27 @@ public sealed partial class TrimBar : UserControl
         None,
         Start,
         End,
+        Range,
         Seek,
     }
 
     private const double HandleWidth = 14.0;
     private const double TrackHeight = 36.0;
+    private const double HandleGrab = 12.0;
 
     private static readonly InputSystemCursor SizeCursor = InputSystemCursor.Create(InputSystemCursorShape.SizeWestEast);
+    private static readonly InputSystemCursor MoveCursor = InputSystemCursor.Create(InputSystemCursorShape.SizeAll);
     private static readonly InputSystemCursor ArrowCursor = InputSystemCursor.Create(InputSystemCursorShape.Arrow);
 
     private DragMode _drag = DragMode.None;
     private double _start;
     private double _end = 1.0;
     private double _play;
+
+    // Anchors captured at the start of a range drag so the selection moves rigidly with the cursor.
+    private double _rangeGrabFraction;
+    private double _rangeStartAtGrab;
+    private double _rangeEndAtGrab;
 
     public TrimBar()
     {
@@ -57,6 +65,12 @@ public sealed partial class TrimBar : UserControl
 
     /// <summary>Raised while the user scrubs the track body. Carries the requested playhead fraction.</summary>
     public event EventHandler<double>? SeekRequested;
+
+    /// <summary>
+    /// Raised while the user drags the selected region as a whole. Carries the new start and end
+    /// fractions (the selection width is preserved).
+    /// </summary>
+    public event EventHandler<(double Start, double End)>? RangeChanged;
 
     public double StartFraction
     {
@@ -146,22 +160,33 @@ public sealed partial class TrimBar : UserControl
         var ex = half + _end * usable;
         var dStart = Math.Abs(x - sx);
         var dEnd = Math.Abs(x - ex);
+        var fraction = FractionFromX(x);
 
-        if (dStart <= HandleWidth && dStart <= dEnd)
+        if (dStart <= HandleGrab && dStart <= dEnd)
         {
             _drag = DragMode.Start;
+            ApplyDrag(fraction);
         }
-        else if (dEnd <= HandleWidth)
+        else if (dEnd <= HandleGrab)
         {
             _drag = DragMode.End;
+            ApplyDrag(fraction);
+        }
+        else if (x > sx && x < ex)
+        {
+            // Press inside the selected region: drag the whole selection, preserving its width.
+            _drag = DragMode.Range;
+            _rangeGrabFraction = fraction;
+            _rangeStartAtGrab = _start;
+            _rangeEndAtGrab = _end;
         }
         else
         {
             _drag = DragMode.Seek;
+            ApplyDrag(fraction);
         }
 
         CapturePointer(e.Pointer);
-        ApplyDrag(FractionFromX(x));
         e.Handled = true;
     }
 
@@ -187,6 +212,13 @@ public sealed partial class TrimBar : UserControl
                 break;
             case DragMode.End:
                 EndFractionChanged?.Invoke(this, fraction);
+                break;
+            case DragMode.Range:
+                var width = _rangeEndAtGrab - _rangeStartAtGrab;
+                var delta = fraction - _rangeGrabFraction;
+                var newStart = Math.Clamp(_rangeStartAtGrab + delta, 0.0, 1.0 - width);
+                var newEnd = newStart + width;
+                RangeChanged?.Invoke(this, (newStart, newEnd));
                 break;
             case DragMode.Seek:
                 SeekRequested?.Invoke(this, fraction);
@@ -216,7 +248,19 @@ public sealed partial class TrimBar : UserControl
         var usable = Usable;
         var sx = half + _start * usable;
         var ex = half + _end * usable;
-        var nearHandle = Math.Min(Math.Abs(x - sx), Math.Abs(x - ex)) <= HandleWidth;
-        ProtectedCursor = nearHandle ? SizeCursor : ArrowCursor;
+        var nearHandle = Math.Min(Math.Abs(x - sx), Math.Abs(x - ex)) <= HandleGrab;
+
+        if (nearHandle)
+        {
+            ProtectedCursor = SizeCursor;
+        }
+        else if (x > sx && x < ex)
+        {
+            ProtectedCursor = MoveCursor;
+        }
+        else
+        {
+            ProtectedCursor = ArrowCursor;
+        }
     }
 }

@@ -6,12 +6,21 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Added
+- **Drag the selected trim region** — on the video/GIF trim bar you can now grab the highlighted
+  selection between the two handles and slide the whole range left or right (its length is
+  preserved), in addition to dragging each handle individually. The cursor shows a move icon over
+  the selection and a resize icon over the handles.
 - **Processing indicator after you stop a recording** — when you stop a video or GIF capture, a
   small always-on-top panel with a spinner and "Processing…" / "Finalizing your clip" appears while
   the clip is encoded, so it's clear the app is working before the trimmer or save completes. The
   panel is excluded from screen capture and dismisses automatically when finalizing finishes.
 
 ### Fixed
+- **Trim bar handles & scrubbing now respond to the mouse** — the single-line trim control was
+  completely inert: its hit-test surface was disabled (the inner canvas had hit-testing turned off
+  and the control's transparent background isn't painted by the default `UserControl` template), so
+  no pointer events ever reached it. The track now has a real transparent hit surface, so the start
+  and end handles drag, and clicking the dimmed groove scrubs the playhead.
 - **Countdown now reliably shows before video & GIF recording** — the pre-capture countdown card
   stopped appearing because the window was clipped to a rounded square (`SetWindowRgn`) before it was
   ever shown, leaving the surface blank. The rounded clip and positioning are now applied after the

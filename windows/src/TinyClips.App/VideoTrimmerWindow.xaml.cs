@@ -118,6 +118,23 @@ public sealed partial class VideoTrimmerWindow : Window
         UpdateLabels();
     }
 
+    private void OnTrimRangeChanged(object sender, (double Start, double End) range)
+    {
+        if (!_ready || _duration <= TimeSpan.Zero)
+        {
+            return;
+        }
+
+        var dur = _duration.TotalSeconds;
+        _startSeconds = Math.Clamp(range.Start * dur, 0, dur);
+        _endSeconds = Math.Clamp(range.End * dur, _startSeconds + 0.1, dur);
+        TrimBar.StartFraction = _startSeconds / dur;
+        TrimBar.EndFraction = _endSeconds / dur;
+        TrimBar.PlayheadFraction = _startSeconds / dur;
+        SeekTo(_startSeconds);
+        UpdateLabels();
+    }
+
     private void OnTrimSeek(object sender, double fraction)
     {
         if (!_ready || _duration <= TimeSpan.Zero)

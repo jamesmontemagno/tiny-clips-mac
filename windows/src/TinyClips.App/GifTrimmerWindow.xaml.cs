@@ -150,6 +150,25 @@ public sealed partial class GifTrimmerWindow : Window
         UpdateLabels();
     }
 
+    private void OnTrimRangeChanged(object sender, (double Start, double End) range)
+    {
+        if (!_ready)
+        {
+            return;
+        }
+
+        var newStart = FrameFromFraction(range.Start);
+        var width = _end - _start;
+        newStart = Math.Clamp(newStart, 0, Math.Max(0, LastFrame - width));
+        _start = newStart;
+        _end = newStart + width;
+        TrimBar.StartFraction = FractionFromFrame(_start);
+        TrimBar.EndFraction = FractionFromFrame(_end);
+        StopPlayback();
+        SetCurrent(_start);
+        UpdateLabels();
+    }
+
     private void OnTrimSeek(object sender, double fraction)
     {
         if (!_ready)

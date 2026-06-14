@@ -82,6 +82,7 @@
                 AutomationProperties.AutomationId="VideoTrimBar"
                 AutomationProperties.Name="Trim range and playback position"
                 EndFractionChanged="OnTrimEndChanged"
+                RangeChanged="OnTrimRangeChanged"
                 SeekRequested="OnTrimSeek"
                 StartFractionChanged="OnTrimStartChanged" />
 

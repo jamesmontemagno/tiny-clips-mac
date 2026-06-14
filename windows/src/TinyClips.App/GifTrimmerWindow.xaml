@@ -80,6 +80,7 @@
                 AutomationProperties.AutomationId="GifTrimBar"
                 AutomationProperties.Name="Trim frame range and current frame"
                 EndFractionChanged="OnTrimEndChanged"
+                RangeChanged="OnTrimRangeChanged"
                 SeekRequested="OnTrimSeek"
                 StartFractionChanged="OnTrimStartChanged" />
 
