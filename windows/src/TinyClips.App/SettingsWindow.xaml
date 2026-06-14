@@ -1281,15 +1281,24 @@
                             <TextBlock
                                 Style="{StaticResource CaptionTextBlockStyle}"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Text="View the project, report issues, and contribute on GitHub." />
+                                Text="View the project, open an issue or feature request, and contribute on GitHub." />
                         </StackPanel>
-                        <HyperlinkButton
+                        <StackPanel
                             Grid.Column="1"
                             VerticalAlignment="Center"
-                            AutomationProperties.AutomationId="AboutRepoLink"
-                            AutomationProperties.Name="Open the Tiny Clips GitHub repository"
-                            Content="GitHub repository"
-                            NavigateUri="https://github.com/jamesmontemagno/tiny-clips" />
+                            HorizontalAlignment="Right"
+                            Spacing="4">
+                            <HyperlinkButton
+                                AutomationProperties.AutomationId="AboutRepoLink"
+                                AutomationProperties.Name="Open the Tiny Clips GitHub repository"
+                                Content="GitHub repository"
+                                NavigateUri="https://github.com/jamesmontemagno/tiny-clips" />
+                            <HyperlinkButton
+                                x:Name="AboutIssueLink"
+                                AutomationProperties.AutomationId="AboutIssueLink"
+                                AutomationProperties.Name="Open an issue or feature request on GitHub"
+                                Content="Open an issue or feature request" />
+                        </StackPanel>
                     </Grid>
                 </Border>
 

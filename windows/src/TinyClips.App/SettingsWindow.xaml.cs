@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
@@ -279,7 +280,25 @@ public sealed partial class SettingsWindow : Window
         }
 
         AboutVersionText.Text = $"Version {version}";
+        AboutIssueLink.NavigateUri = BuildIssueRequestUri(version);
         AboutCopyrightText.Text = $"© {DateTime.Now.Year} Refractored LLC";
+    }
+
+    private static Uri BuildIssueRequestUri(string version)
+    {
+        const string repositoryIssuesNewUrl = "https://github.com/jamesmontemagno/tiny-clips/issues/new";
+        var runtime = RuntimeInformation.OSDescription;
+        var body =
+            "### Details" + "\n" +
+            $"- App: Tiny Clips for Windows" + "\n" +
+            $"- Version: {version}" + "\n" +
+            $"- OS: {runtime}" + "\n\n" +
+            "### Describe your issue or feature request" + "\n" +
+            "<!-- Tell us what happened or what you'd like to see -->";
+
+        var title = "[Issue/Feature]: ";
+        var query = $"title={Uri.EscapeDataString(title)}&body={Uri.EscapeDataString(body)}";
+        return new Uri($"{repositoryIssuesNewUrl}?{query}");
     }
 
     private void ShowSettingsSection(string sectionTag)

@@ -51,6 +51,9 @@ own `CHANGELOG.md` at the repository root.
   selection marquee and hit-testing cover the entire annotation.
 
 ### Changed
+- **About page now links directly to issue/feature requests with prefilled details** — Settings →
+  About now includes an **Open an issue or feature request** link that deep-links to the GitHub
+  repo issue form and pre-fills app version + Windows runtime details (similar to the macOS flow).
 - **Store-vs-Direct behavior now uses a build flag** — Windows keeps one feature set (no Pro tier),
   and store-specific distribution behavior is now controlled by
   `-p:TinyClipsStoreBuild=true` / `TINYCLIPS_STORE_BUILD` (for example, hiding direct/winget update
