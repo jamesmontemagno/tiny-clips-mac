@@ -14,6 +14,10 @@
 > entirely through **winget** (see [§4 Phase 4](#phase-4--distribution--monetization)); the Store
 > build uses Store auto-update. Sections below that describe the Clips Manager, upload, or SQLite
 > catalog are retained for history but are **not being built**.
+>
+> **2026 scope update:** Windows no longer has a Pro/IAP tier. Direct and Store builds ship the
+> same features; the Store flavor only changes distribution behavior (for example, no direct/winget
+> self-update surfaces), via `-p:TinyClipsStoreBuild=true`.
 
 ---
 
@@ -30,7 +34,7 @@
 | MVVM | CommunityToolkit.Mvvm + `Microsoft.Extensions.DependencyInjection` | Mirrors mac `ObservableObject`/`@Published` |
 | Tooling | **Windows App Development CLI (`winapp`)** for SDK restore, identity, manifest, certs, signing, MSIX pack | Single toolchain across CI/local |
 | Updater | **No Velopack.** Store build = Store updates; **Direct build = winget** (`winget upgrade`, publishing each release's signed MSIX to winget-pkgs) | MSIX already has identity/update semantics; winget is the single Direct channel |
-| Pro / IAP | **Store build = `StoreContext` add-ons. Direct build is fully FREE** (all features unlocked, no purchase) | Store IAP only works in Store; avoids a separate license system entirely |
+| Pro / IAP | **No Pro/IAP on Windows** (Direct and Store features match) | Keeps Windows simple; monetization remains macOS-only |
 | Signing | **Azure Trusted Signing** for direct MSIX (account **not yet set up — Phase 4 prerequisite**); stable publisher identity forever | Avoids cert-trust install friction; self-signed cert only for internal test until then |
 | Accounts | Microsoft **Partner Center: available**. Azure Trusted Signing: **to be provisioned** before Direct GA | Partner Center owns Store identity + name reservation |
 | ~~Upload provider~~ | **Removed from scope** — no in-app upload/sharing | Browse captures in File Explorer instead |
@@ -52,7 +56,7 @@
 | System audio loopback | **WASAPI loopback** (separate pipeline — WGC is video-only) | Audio clock can be master |
 | Carbon `RegisterEventHotKey` | Win32 `RegisterHotKey` with conflict detection | Registration service w/ failure UI |
 | Sparkle | Store auto-update (Store) / **winget** (Direct) | No Velopack |
-| StoreKit 2 IAP | Microsoft Store add-ons via `StoreContext` (Store build only) | Direct build is fully free — no IAP/license |
+| StoreKit 2 IAP | Not used on Windows | No Windows Store add-ons / license system |
 | `@AppStorage` (UserDefaults) | `ApplicationData.LocalSettings` (prefs) | No SQLite catalog (Clips Manager removed) |
 | `UserNotifications` | `AppNotificationManager` toasts | Requires identity (have it) |
 | Launch at login | Packaged **`StartupTask`** (no registry for Store) | User-visible state + OS-denied fallback |
@@ -136,12 +140,11 @@ Design rules baked in from the review:
 - **CaptureCoordinator is thin** — orchestration only; no god object (logic lives in the stages above).
 
 ### 4.2 Build configurations
-Two MSBuild configs gate channel behavior via `DIRECT` / `STORE` constants (parallel to the mac `APPSTORE`):
-- **Direct:** **winget** update path (`winget upgrade`); **all Pro features unlocked for free** (`FreeEntitlementService`); no Store APIs, no purchase/license UI.
-- **Store:** Store auto-update, `StoreEntitlementService` add-ons, **no reachable self-update / appinstaller / winget / external-purchase UI** (Store-cert requirement).
-- **Development:** `DevelopmentEntitlementService` (all features on, for local/dev).
+Two MSBuild flavors gate distribution behavior via `TinyClipsStoreBuild` / `TINYCLIPS_STORE_BUILD`:
+- **Direct (default):** **winget** update path (`winget upgrade`); no in-app self-updater.
+- **Store (`-p:TinyClipsStoreBuild=true`):** Store auto-update and **no reachable direct/winget/appinstaller/external-purchase UI** (Store-cert requirement).
 
-All three implement a single channel-neutral **`IEntitlementService`** (identical feature flags, cache semantics, failure states) so feature-gating never leaks channel-specific APIs into ViewModels. The Direct build's `FreeEntitlementService` simply reports every feature as entitled.
+Feature set is the same in both flavors (no Windows Pro/IAP gating).
 
 ---
 

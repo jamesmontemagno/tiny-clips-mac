@@ -59,7 +59,9 @@ release exists:
    `Package.appxmanifest` `Identity`).
 3. Build the Store-configuration MSIX (Store handles signing) and upload via Partner Center
    or `winapp` Store submission.
-4. Configure Store add-ons for **Pro** (StoreKit-equivalent) — Store build only.
+4. Build with the Store flavor flag so Store-only distribution behavior is enabled:
+   `dotnet publish src/TinyClips.App/TinyClips.App.csproj -c Release -p:Platform=x64 -p:TinyClipsStoreBuild=true`
+   (repeat for ARM64 as needed).
 5. Complete the listing metadata, privacy, and screen-recording capability declarations.
 
 > ⚠️ Requires a Partner Center account; cannot be completed from the repo alone.

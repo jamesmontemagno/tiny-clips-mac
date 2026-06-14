@@ -6,6 +6,10 @@
 > how-to lives in `windows/packaging/README.md`.
 >
 > Legend: ☐ = to do · ⚠️ = needs an account/secret only the maintainer can provide · 🤖 = automatable in CI.
+>
+> **2026 scope update:** Windows no longer has a Pro/IAP tier. Direct and Store builds ship the
+> same feature set; the Store build only differs in distribution behavior (for example, no
+> direct/winget self-update surfaces), toggled via `-p:TinyClipsStoreBuild=true`.
 
 ---
 
@@ -20,7 +24,7 @@
 | winget manifest | **Templates exist** in `windows/packaging/winget/` (installer/locale/version) with `<FILL-IN>` placeholders. |
 | CI | `windows-build.yml` builds x64+ARM64 Release + runs Core tests on PR. **No release/packaging/signing CI.** `release.yml` is **macOS-only**. |
 | Signing | **Not set up.** Azure Trusted Signing to be provisioned (Phase 4 prereq). |
-| Store/Direct split | **Not implemented yet** — no `IEntitlementService` Free vs Store builds, no Store config, no add-ons. |
+| Store/Direct split | Feature set is unified (no Pro/IAP on Windows). Store vs Direct now only controls distribution UI/behavior via a build flag. |
 | WACK | Not run. |
 
 ---
@@ -48,11 +52,9 @@
 - ☐ **Clean-machine smoke test** — install the **signed** MSIX on a machine without the dev cert and
   without VS; verify tray launch, screenshot/video/GIF capture, save to `Pictures\TinyClips`, toast,
   microphone/system-audio recording, and "launch at login" (StartupTask) all work under identity.
-- ☐ **Decide Direct vs Store feature split now** (blocks the Store build): introduce
-  `IEntitlementService` with `FreeEntitlementService` (Direct = all features free) and
-  `StoreEntitlementService` (Store add-ons). The **Store build must ship no reachable self-update /
-  `.appinstaller` / winget / external-purchase UI** (Store-cert requirement). Direct build has no
-  Store APIs. Gate via build configuration / compilation symbol.
+- ☐ **Keep Store-vs-Direct behavior split at distribution level only**: no feature gating/IAP on
+  Windows, but the **Store build must ship no reachable self-update / `.appinstaller` / winget /
+  external-purchase UI** (Store-cert requirement). Gate via build configuration / compilation symbol.
 
 ---
 
@@ -129,16 +131,12 @@ The 3-file manifest lives in `windows/packaging/winget/`. Per release:
   the Store values (Visual Studio "Associate App with the Store", or `winapp` pull, or a separate
   Store manifest/config). Do **not** ship the Direct `CN=Refractored` identity to the Store.
 - ☐ Build the Store upload package: **`.msixupload`** bundling **x64 + ARM64** (Store re-signs).
-- ☐ Ensure the **Store build flavor** uses `StoreEntitlementService` and hides all self-update /
-  winget / `.appinstaller` / external-purchase UI (Store-cert requirement, §1).
+- ☐ Ensure the **Store build flavor** hides all self-update / winget / `.appinstaller` /
+  external-purchase UI (Store-cert requirement, §1).
 
-### 3.3 Pro / in-app purchases (Store-only)
-- ☐ Create **durable add-ons** (Pro: monthly / yearly / lifetime — mirror the macOS `ProPlan`) with
-  **stable product IDs** in Partner Center.
-- ☐ Wire `StoreContext` purchase + license check behind `IEntitlementService`; add an **offline
-  entitlement cache** so Pro survives offline launches.
-- ☐ Sandbox test **purchase + restore** for each product; verify no-op Pro gates when not purchased.
-- ☐ Confirm **Direct build has no IAP/license code paths** (fully free).
+### 3.3 Pricing / entitlement model
+- ☐ Confirm there are **no Store add-ons / IAP entitlements** for Windows builds.
+- ☐ Confirm both Direct and Store builds expose the same feature set (no Pro gates).
 
 ### 3.4 Listing + compliance
 - ☐ Store listing metadata: description, **screenshots** (capture from the running Windows app — the

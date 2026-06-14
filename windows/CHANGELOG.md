@@ -51,6 +51,10 @@ own `CHANGELOG.md` at the repository root.
   selection marquee and hit-testing cover the entire annotation.
 
 ### Changed
+- **Store-vs-Direct behavior now uses a build flag** — Windows keeps one feature set (no Pro tier),
+  and store-specific distribution behavior is now controlled by
+  `-p:TinyClipsStoreBuild=true` / `TINYCLIPS_STORE_BUILD` (for example, hiding direct/winget update
+  surfaces in Store builds).
 - **Repository renamed to `jamesmontemagno/tiny-clips`** — the GitHub repository link on the
   Settings → About page, the winget manifests, and all documentation now point at the new
   `tiny-clips` repository (the old `tiny-clips-mac` URLs continue to redirect). The winget package

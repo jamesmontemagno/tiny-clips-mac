@@ -78,6 +78,12 @@ dotnet run --project windows/src/TinyClips.App/TinyClips.App.csproj -c Debug -p:
 dotnet test windows/tests/TinyClips.Core.Tests/TinyClips.Core.Tests.csproj -c Debug
 ```
 
+To build the **Microsoft Store** flavor (same feature set, Store distribution behavior), set:
+
+```powershell
+dotnet build windows/src/TinyClips.App/TinyClips.App.csproj -c Debug -p:Platform=x64 -p:TinyClipsStoreBuild=true
+```
+
 The app launches **tray-only** (no window). Left- or right-click the tray icon for the Fluent
 menu: **Screenshot**, **Capture Region**, **Record Video**, **Record GIF**, **Settings**,
 **Guide**, **Exit**. Capture items first show the **Region / Screen / Window** picker.
@@ -96,6 +102,6 @@ For coordinate/DPI behaviour across mixed-DPI monitors, see
 
 - **Direct:** signed MSIX distributed via **winget**; updates ship through `winget upgrade`
   (no separate in-app updater). Fully free.
-- **Microsoft Store:** Store auto-update + Pro add-ons (Pro is Store-only).
+- **Microsoft Store:** Store auto-update. Feature set matches Direct; no Windows Pro tier.
 
 See the plan for the full phased roadmap, packaging, and signing details.
