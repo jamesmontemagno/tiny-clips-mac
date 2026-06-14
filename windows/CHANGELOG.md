@@ -6,6 +6,9 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Changed
+- **Default save location now matches the macOS app (Desktop)** — newly captured clips default to
+  the user's **Desktop** for every capture type, mirroring the Mac app, instead of
+  `Pictures\TinyClips` / `Videos\TinyClips`. Picking a custom Save location still overrides this.
 - **Settings shows the effective save location** — the Save location card previously rendered a
   blank line until you picked a folder, because the default Pictures\TinyClips path is resolved at
   save time rather than stored. It now displays the resolved folder, labelled `(default)` when no
