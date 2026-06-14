@@ -5,7 +5,17 @@ own `CHANGELOG.md` at the repository root.
 
 ## [Unreleased]
 
+### Added
+- **Processing indicator after you stop a recording** — when you stop a video or GIF capture, a
+  small always-on-top panel with a spinner and "Processing…" / "Finalizing your clip" appears while
+  the clip is encoded, so it's clear the app is working before the trimmer or save completes. The
+  panel is excluded from screen capture and dismisses automatically when finalizing finishes.
+
 ### Fixed
+- **Countdown now reliably shows before video & GIF recording** — the pre-capture countdown card
+  stopped appearing because the window was clipped to a rounded square (`SetWindowRgn`) before it was
+  ever shown, leaving the surface blank. The rounded clip and positioning are now applied after the
+  window is activated, so the countdown displays again for all capture types.
 - **Editor selection box now covers text & freehand annotations fully** — selecting a text or
   draw (freehand) annotation previously showed a tiny selection box anchored at the start point,
   and the clickable hit area was just as small. Text is now measured to its rendered size and

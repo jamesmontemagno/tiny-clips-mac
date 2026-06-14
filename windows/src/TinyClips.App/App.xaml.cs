@@ -40,6 +40,7 @@ public partial class App : Application
     private Window? _trimmerWindow;
     private string? _lastTrimmerSourcePath;
     private RecordingIndicatorWindow? _recordingIndicator;
+    private ProcessingIndicatorWindow? _processingIndicator;
     private RegionIndicatorWindow? _recordingRegionIndicator;
     private DispatcherTimer? _recordingTimer;
     private DateTime _recordingStartedUtc;
@@ -541,6 +542,7 @@ public partial class App : Application
         {
             UpdateRecordingState();
             HideRecordingIndicator();
+            HideProcessingIndicator();
             CloseRecordingRegionIndicator();
             if (_isExiting)
             {
@@ -579,10 +581,14 @@ public partial class App : Application
 
             if (video.IsRecording)
             {
+                HideRecordingIndicator();
+                ShowProcessingIndicator(CaptureType.Video);
                 await video.StopAsync();
             }
             else if (gif.IsRecording)
             {
+                HideRecordingIndicator();
+                ShowProcessingIndicator(CaptureType.Gif);
                 await gif.StopAsync();
             }
         }
@@ -592,6 +598,7 @@ public partial class App : Application
         }
         finally
         {
+            HideProcessingIndicator();
             UpdateRecordingState();
             CloseRecordingRegionIndicatorIfNotRecording();
             HideRecordingIndicatorIfNotRecording();
@@ -685,6 +692,30 @@ public partial class App : Application
 
         var window = _recordingIndicator;
         _recordingIndicator = null;
+        window?.ClosePanel();
+    }
+
+    private void ShowProcessingIndicator(CaptureType type)
+    {
+        HideProcessingIndicator();
+
+        var window = new ProcessingIndicatorWindow(type);
+        window.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_processingIndicator, window))
+            {
+                _processingIndicator = null;
+            }
+        };
+
+        _processingIndicator = window;
+        window.ShowNear();
+    }
+
+    private void HideProcessingIndicator()
+    {
+        var window = _processingIndicator;
+        _processingIndicator = null;
         window?.ClosePanel();
     }
 

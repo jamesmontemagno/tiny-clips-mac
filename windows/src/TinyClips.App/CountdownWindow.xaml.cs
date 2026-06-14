@@ -32,7 +32,6 @@ public sealed partial class CountdownWindow : Window
         CountText.Text = _remaining.ToString();
 
         ConfigurePresenter();
-        CenterOnPrimaryDisplay();
 
         _timer = DispatcherQueue.CreateTimer();
         _timer.Interval = TimeSpan.FromSeconds(1);
@@ -44,6 +43,11 @@ public sealed partial class CountdownWindow : Window
     {
         var window = new CountdownWindow(seconds);
         window.Activate();
+
+        // Resize/position and clip the window to a rounded square only AFTER it has been
+        // shown. Applying SetWindowRgn before the first present leaves the surface blank,
+        // which is why the countdown stopped appearing.
+        window.CenterOnPrimaryDisplay();
         window._timer.Start();
         return window._completed.Task;
     }
