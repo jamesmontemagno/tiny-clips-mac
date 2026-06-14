@@ -28,13 +28,6 @@
                 VerticalAlignment="Center"
                 Style="{StaticResource CaptionTextBlockStyle}"
                 Text="Edit screenshot" />
-            <TextBlock
-                x:Name="ImageSizeText"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Center"
-                AutomationProperties.AutomationId="EditorImageSizeText"
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Style="{StaticResource CaptionTextBlockStyle}" />
         </Grid>
 
         <!--  Output actions  -->
@@ -50,6 +43,15 @@
                 Background="Transparent"
                 DefaultLabelPosition="Right"
                 IsOpen="False">
+                <CommandBar.Content>
+                    <TextBlock
+                        x:Name="ImageSizeText"
+                        Margin="12,0,0,0"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="EditorImageSizeText"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}" />
+                </CommandBar.Content>
                 <AppBarButton
                     x:Name="ApplyCropButton"
                     AutomationProperties.AutomationId="EditorApplyCropButton"
