@@ -6,6 +6,9 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Changed
+- **GIF now uses the Settings "Pictures" icon in the tray & picker** — the GIF capture tile in the
+  system-tray popup and the GIF mode badge in the capture picker now use the same Pictures glyph
+  as the GIF page in Settings, for a consistent icon across the app.
 - **Settings has an About page** — a new **About** section in Settings shows the app name and
   version, a link to the project's **GitHub repository**, and a `© <year> Refractored LLC`
   copyright line.

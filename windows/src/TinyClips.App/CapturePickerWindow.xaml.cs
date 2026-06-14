@@ -52,7 +52,7 @@ public sealed partial class CapturePickerWindow : Window
         ModeIcon.Glyph = captureType switch
         {
             CaptureType.Video => "\uE714",
-            CaptureType.Gif => "\uE786",
+            CaptureType.Gif => "\uE8B9",
             _ => "\uE722",
         };
         ModeLabel.Text = captureType switch
