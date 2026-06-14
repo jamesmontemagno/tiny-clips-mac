@@ -1,7 +1,8 @@
 # Xcode
 build/
 DerivedData/
-*.xcuserdata
+*.xcuserstate
+xcuserdata/
 *.xcworkspace
 !*.xcworkspace/
 !*.xcworkspace/contents.xcworkspacedata
@@ -15,8 +16,21 @@ Packages/
 
 # macOS
 .DS_Store
-TinyClips.xcodeproj/project.xcworkspace/xcuserdata/jamesmontemagno.xcuserdatad/UserInterfaceState.xcuserstate
-TinyClips.xcodeproj/xcuserdata/jamesmontemagno.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist
 
 # Visual Studio workspace/local state
 .vs/
+
+# Python (tooling/scripts)
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor / OS cruft
+*.swp
+*~
+Thumbs.db
+ehthumbs.db
+Desktop.ini
