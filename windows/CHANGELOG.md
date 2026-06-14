@@ -32,6 +32,9 @@ own `CHANGELOG.md` at the repository root.
   abstraction were deleted to keep the app simple.
 
 ### Fixed
+- **Screenshot editor: arrowhead tip poke-through** — the arrow shaft was drawn all the way to the
+  tip with a round end cap, so the cap poked past the filled arrowhead. The shaft now stops short of
+  the tip and the arrowhead is aligned to the true tangent at the tip, so the point looks clean.
 - **Screenshot editor: tool rail clipping** — the tool rail icons could be cut off at fractional
   display scales (e.g. 125%): the buttons kept their default internal padding and the auto
   scrollbar overlapped the right edge. The rail now uses zero-padding 44×44 buttons with centered
@@ -50,6 +53,9 @@ own `CHANGELOG.md` at the repository root.
   "Open with Tiny Clips". The initialization guard now defaults on.
 
 ### Added
+- **Screenshot editor: straight & curved arrows** — the arrow tool gains an **Arrow** style picker
+  (Straight, Curved, Curved alt) in the inspector. Curved arrows bow to either side via a quadratic
+  bezier shaft, and the style can be changed per-arrow after selecting it.
 - **Trimmers: export the current frame as a PNG** — both the video and GIF trimmers now have an
   **Export frame** button that saves the frame currently shown as a still PNG into the Tiny Clips
   folder (with a save notification). For video, the frame is extracted at the exact paused

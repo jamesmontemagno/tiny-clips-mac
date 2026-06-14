@@ -303,6 +303,21 @@
                                 ValueChanged="OnStrokeChanged" />
                         </StackPanel>
 
+                        <!--  Arrow style  -->
+                        <StackPanel x:Name="ArrowStyleSection" Spacing="2">
+                            <ComboBox
+                                x:Name="ArrowStyleCombo"
+                                HorizontalAlignment="Stretch"
+                                AutomationProperties.AutomationId="EditorArrowStyleCombo"
+                                AutomationProperties.Name="Arrow style"
+                                Header="Arrow"
+                                SelectionChanged="OnArrowStyleChanged">
+                                <ComboBoxItem Content="Straight" />
+                                <ComboBoxItem Content="Curved" />
+                                <ComboBoxItem Content="Curved (alt)" />
+                            </ComboBox>
+                        </StackPanel>
+
                         <!--  Fill (rectangle / ellipse)  -->
                         <StackPanel x:Name="FillSection" Spacing="6">
                             <CheckBox

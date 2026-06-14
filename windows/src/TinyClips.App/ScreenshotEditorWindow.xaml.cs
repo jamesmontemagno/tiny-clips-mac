@@ -59,6 +59,13 @@ public sealed partial class ScreenshotEditorWindow : Window
         Heavy,
     }
 
+    private enum ArrowStyle
+    {
+        Straight,
+        Curved1,
+        Curved2,
+    }
+
     private sealed class Annotation
     {
         public EditTool Tool { get; set; }
@@ -70,6 +77,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         public int Number { get; set; }
         public double SizeScale { get; set; } = 1.0;
         public RedactionLevel Redaction { get; set; } = RedactionLevel.Medium;
+        public ArrowStyle ArrowStyle { get; set; } = ArrowStyle.Straight;
         public List<Vector2> Points { get; } = new();
 
         // Text annotations: independent font + size; numbered badges: text color.
@@ -100,6 +108,7 @@ public sealed partial class ScreenshotEditorWindow : Window
     private double _textFontSize = 28;
     private string _textFontFamily = "Segoe UI";
     private RedactionLevel _redactionLevel = RedactionLevel.Medium;
+    private ArrowStyle _arrowStyle = ArrowStyle.Straight;
     private int _counterValue = 1;
 
     private bool _dragging;
@@ -367,13 +376,20 @@ public sealed partial class ScreenshotEditorWindow : Window
         var showsText = tool is EditTool.Text;
         var showsNumber = tool is EditTool.Counter;
         var showsRedact = tool is EditTool.Redact;
+        var showsArrowStyle = tool is EditTool.Arrow;
 
         ColorSection.Visibility = showsColor ? Visibility.Visible : Visibility.Collapsed;
         StrokeSection.Visibility = showsStroke ? Visibility.Visible : Visibility.Collapsed;
+        ArrowStyleSection.Visibility = showsArrowStyle ? Visibility.Visible : Visibility.Collapsed;
         FillSection.Visibility = showsFill ? Visibility.Visible : Visibility.Collapsed;
         TextSection.Visibility = showsText ? Visibility.Visible : Visibility.Collapsed;
         CounterSection.Visibility = showsNumber ? Visibility.Visible : Visibility.Collapsed;
         RedactSection.Visibility = showsRedact ? Visibility.Visible : Visibility.Collapsed;
+
+        if (showsArrowStyle)
+        {
+            ArrowStyleCombo.SelectedIndex = (int)_arrowStyle;
+        }
 
         InspectorTitle.Text = tool switch
         {
@@ -420,15 +436,22 @@ public sealed partial class ScreenshotEditorWindow : Window
         var isText = ann.Tool is EditTool.Text;
         var isCounter = ann.Tool is EditTool.Counter;
         var isRedact = ann.Tool is EditTool.Redact;
+        var isArrow = ann.Tool is EditTool.Arrow;
         var hasColor = isShape || isText || isCounter;
 
         ColorSection.Visibility = hasColor ? Visibility.Visible : Visibility.Collapsed;
         StrokeSection.Visibility = isShape ? Visibility.Visible : Visibility.Collapsed;
+        ArrowStyleSection.Visibility = isArrow ? Visibility.Visible : Visibility.Collapsed;
         FillSection.Visibility = isFillable ? Visibility.Visible : Visibility.Collapsed;
         TextSection.Visibility = isText ? Visibility.Visible : Visibility.Collapsed;
         CounterSection.Visibility = isCounter ? Visibility.Visible : Visibility.Collapsed;
         RedactSection.Visibility = isRedact ? Visibility.Visible : Visibility.Collapsed;
         InspectorTitle.Text = $"{ann.Tool} (selected)";
+
+        if (isArrow)
+        {
+            ArrowStyleCombo.SelectedIndex = (int)ann.ArrowStyle;
+        }
 
         if (hasColor)
         {
@@ -528,6 +551,25 @@ public sealed partial class ScreenshotEditorWindow : Window
         {
             ann.Thickness = _strokeThickness;
             RedrawOverlay();
+        }
+    }
+
+    private void OnArrowStyleChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        var style = (ArrowStyle)Math.Clamp(ArrowStyleCombo.SelectedIndex, 0, 2);
+        if (_selectedAnnotation is { Tool: EditTool.Arrow } ann)
+        {
+            ann.ArrowStyle = style;
+            RedrawOverlay();
+        }
+        else
+        {
+            _arrowStyle = style;
         }
     }
 
@@ -838,6 +880,7 @@ public sealed partial class ScreenshotEditorWindow : Window
                 : Colors.Transparent,
             Thickness = _strokeThickness,
             Redaction = _redactionLevel,
+            ArrowStyle = _arrowStyle,
             Bounds = new Rect(pixel.X, pixel.Y, 0, 0),
         };
         if (_tool == EditTool.Pen)
@@ -1382,7 +1425,7 @@ public sealed partial class ScreenshotEditorWindow : Window
                 var (s, en) = Segment(ann);
                 var start = PixelToCanvas(new Point(s.X, s.Y));
                 var end = PixelToCanvas(new Point(en.X, en.Y));
-                AddArrowShapes(start, end, brush, thickness);
+                AddArrowShapes(start, end, brush, thickness, ann.ArrowStyle);
                 break;
             }
             case EditTool.Pen:
@@ -1510,29 +1553,119 @@ public sealed partial class ScreenshotEditorWindow : Window
         }
     }
 
-    private void AddArrowShapes(Point start, Point end, Brush brush, double thickness)
-    {
-        OverlayCanvas.Children.Add(new Line
-        {
-            X1 = start.X,
-            Y1 = start.Y,
-            X2 = end.X,
-            Y2 = end.Y,
-            Stroke = brush,
-            StrokeThickness = thickness,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-        });
+    private readonly record struct ArrowShape(
+        bool Curved,
+        Vector2 ShaftStart,
+        Vector2 ShaftControl,
+        Vector2 ShaftEnd,
+        Vector2 Tip,
+        Vector2 Head1,
+        Vector2 Head2);
 
-        var angle = Math.Atan2(end.Y - start.Y, end.X - start.X);
-        var headLen = Math.Max(12, thickness * 3.5);
+    private static ArrowShape BuildArrow(Vector2 start, Vector2 end, double thickness, ArrowStyle style)
+    {
+        var dir = end - start;
+        var len = dir.Length();
+        var headLen = (float)Math.Max(12, thickness * 3.5);
         const double spread = Math.PI / 7;
-        var p1 = new Point(end.X - headLen * Math.Cos(angle - spread), end.Y - headLen * Math.Sin(angle - spread));
-        var p2 = new Point(end.X - headLen * Math.Cos(angle + spread), end.Y - headLen * Math.Sin(angle + spread));
+
+        if (len < 0.001f)
+        {
+            return new ArrowShape(false, start, start, start, end, end, end);
+        }
+
+        if (style == ArrowStyle.Straight)
+        {
+            var u = dir / len;
+            var trim = Math.Min(headLen * 0.9f, len * 0.98f);
+            var shaftEnd = end - u * trim;
+            var angle = Math.Atan2(dir.Y, dir.X);
+            var h1 = new Vector2(
+                (float)(end.X - headLen * Math.Cos(angle - spread)),
+                (float)(end.Y - headLen * Math.Sin(angle - spread)));
+            var h2 = new Vector2(
+                (float)(end.X - headLen * Math.Cos(angle + spread)),
+                (float)(end.Y - headLen * Math.Sin(angle + spread)));
+            return new ArrowShape(false, start, shaftEnd, shaftEnd, end, h1, h2);
+        }
+
+        // Curved: quadratic bezier bowed perpendicular to the start→end line.
+        var mid = (start + end) * 0.5f;
+        var perp = new Vector2(-dir.Y, dir.X) / len;
+        var bow = (float)(len * 0.22);
+        if (style == ArrowStyle.Curved2)
+        {
+            bow = -bow;
+        }
+        var control = mid + perp * bow;
+
+        // Tangent at the tip of a quadratic bezier is proportional to (end - control).
+        var tipTangent = end - control;
+        var tlen = tipTangent.Length();
+        tipTangent = tlen < 0.001f ? dir / len : tipTangent / tlen;
+        var tipAngle = Math.Atan2(tipTangent.Y, tipTangent.X);
+        var ch1 = new Vector2(
+            (float)(end.X - headLen * Math.Cos(tipAngle - spread)),
+            (float)(end.Y - headLen * Math.Sin(tipAngle - spread)));
+        var ch2 = new Vector2(
+            (float)(end.X - headLen * Math.Cos(tipAngle + spread)),
+            (float)(end.Y - headLen * Math.Sin(tipAngle + spread)));
+
+        // de Casteljau split so the shaft stops short of the tip and the cap never pokes through.
+        var trimC = Math.Min(headLen * 0.9f, len * 0.6f);
+        var t = (float)Math.Clamp(1.0 - trimC / len, 0.02, 0.98);
+        var a = Vector2.Lerp(start, control, t);
+        var b = Vector2.Lerp(control, end, t);
+        var bt = Vector2.Lerp(a, b, t);
+        return new ArrowShape(true, start, a, bt, end, ch1, ch2);
+    }
+
+    private void AddArrowShapes(Point start, Point end, Brush brush, double thickness, ArrowStyle arrowStyle)
+    {
+        var shape = BuildArrow(
+            new Vector2((float)start.X, (float)start.Y),
+            new Vector2((float)end.X, (float)end.Y),
+            thickness,
+            arrowStyle);
+
+        if (shape.Curved)
+        {
+            var figure = new PathFigure { StartPoint = new Point(shape.ShaftStart.X, shape.ShaftStart.Y) };
+            figure.Segments.Add(new QuadraticBezierSegment
+            {
+                Point1 = new Point(shape.ShaftControl.X, shape.ShaftControl.Y),
+                Point2 = new Point(shape.ShaftEnd.X, shape.ShaftEnd.Y),
+            });
+            var geo = new PathGeometry();
+            geo.Figures.Add(figure);
+            OverlayCanvas.Children.Add(new Microsoft.UI.Xaml.Shapes.Path
+            {
+                Data = geo,
+                Stroke = brush,
+                StrokeThickness = thickness,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+            });
+        }
+        else
+        {
+            OverlayCanvas.Children.Add(new Line
+            {
+                X1 = shape.ShaftStart.X,
+                Y1 = shape.ShaftStart.Y,
+                X2 = shape.ShaftEnd.X,
+                Y2 = shape.ShaftEnd.Y,
+                Stroke = brush,
+                StrokeThickness = thickness,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+            });
+        }
+
         var head = new Polygon { Fill = brush };
-        head.Points.Add(end);
-        head.Points.Add(p1);
-        head.Points.Add(p2);
+        head.Points.Add(new Point(shape.Tip.X, shape.Tip.Y));
+        head.Points.Add(new Point(shape.Head1.X, shape.Head1.Y));
+        head.Points.Add(new Point(shape.Head2.X, shape.Head2.Y));
         OverlayCanvas.Children.Add(head);
     }
 
@@ -1962,19 +2095,24 @@ public sealed partial class ScreenshotEditorWindow : Window
     private static void DrawArrowToSession(CanvasDrawingSession ds, Annotation ann, Color color, float thickness)
     {
         var (start, end) = Segment(ann);
-        var style = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
-        ds.DrawLine(start, end, color, thickness, style);
+        var shape = BuildArrow(start, end, thickness, ann.ArrowStyle);
+        var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
 
-        var angle = Math.Atan2(end.Y - start.Y, end.X - start.X);
-        var headLen = Math.Max(12, thickness * 3.5);
-        const double spread = Math.PI / 7;
-        var p1 = new Vector2(
-            (float)(end.X - headLen * Math.Cos(angle - spread)),
-            (float)(end.Y - headLen * Math.Sin(angle - spread)));
-        var p2 = new Vector2(
-            (float)(end.X - headLen * Math.Cos(angle + spread)),
-            (float)(end.Y - headLen * Math.Sin(angle + spread)));
-        using var head = CanvasGeometry.CreatePolygon(ds.Device, new[] { end, p1, p2 });
+        if (shape.Curved)
+        {
+            using var pb = new CanvasPathBuilder(ds.Device);
+            pb.BeginFigure(shape.ShaftStart);
+            pb.AddQuadraticBezier(shape.ShaftControl, shape.ShaftEnd);
+            pb.EndFigure(CanvasFigureLoop.Open);
+            using var geo = CanvasGeometry.CreatePath(pb);
+            ds.DrawGeometry(geo, color, thickness, strokeStyle);
+        }
+        else
+        {
+            ds.DrawLine(shape.ShaftStart, shape.ShaftEnd, color, thickness, strokeStyle);
+        }
+
+        using var head = CanvasGeometry.CreatePolygon(ds.Device, new[] { shape.Tip, shape.Head1, shape.Head2 });
         ds.FillGeometry(head, color);
     }
 
