@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media.Imaging;
 using TinyClips.Core.Models;
 using TinyClips.Core.Services;
@@ -85,12 +84,9 @@ public sealed partial class GifTrimmerWindow : Window
             _end = _frames.Count - 1;
             _current = 0;
 
-            StartSlider.Maximum = _frames.Count - 1;
-            EndSlider.Maximum = _frames.Count - 1;
-            EndSlider.Value = _frames.Count - 1;
-            CurrentSlider.Maximum = _frames.Count - 1;
-
             _ready = true;
+            TrimBar.StartFraction = 0;
+            TrimBar.EndFraction = 1;
             UpdateLabels();
             SetCurrent(0);
         }
@@ -120,55 +116,52 @@ public sealed partial class GifTrimmerWindow : Window
 
     // -- Range handling -------------------------------------------------------
 
-    private void OnStartChanged(object sender, RangeBaseValueChangedEventArgs e)
+    private int LastFrame => Math.Max(0, _frames.Count - 1);
+
+    private double FractionFromFrame(int index) => LastFrame <= 0 ? 0 : (double)index / LastFrame;
+
+    private int FrameFromFraction(double fraction) => (int)Math.Round(fraction * LastFrame);
+
+    private void OnTrimStartChanged(object sender, double fraction)
     {
         if (!_ready)
         {
             return;
         }
 
-        _start = (int)Math.Round(e.NewValue);
-        if (_start > _end)
-        {
-            _start = _end;
-            StartSlider.Value = _start;
-        }
-
+        _start = Math.Min(FrameFromFraction(fraction), _end);
+        TrimBar.StartFraction = FractionFromFrame(_start);
         StopPlayback();
         SetCurrent(_start);
         UpdateLabels();
     }
 
-    private void OnEndChanged(object sender, RangeBaseValueChangedEventArgs e)
+    private void OnTrimEndChanged(object sender, double fraction)
     {
         if (!_ready)
         {
             return;
         }
 
-        _end = (int)Math.Round(e.NewValue);
-        if (_end < _start)
-        {
-            _end = _start;
-            EndSlider.Value = _end;
-        }
-
+        _end = Math.Max(FrameFromFraction(fraction), _start);
+        TrimBar.EndFraction = FractionFromFrame(_end);
         StopPlayback();
         SetCurrent(_end);
         UpdateLabels();
     }
 
-    // -- Current frame stepper ------------------------------------------------
-
-    private void OnCurrentChanged(object sender, RangeBaseValueChangedEventArgs e)
+    private void OnTrimSeek(object sender, double fraction)
     {
         if (!_ready)
         {
             return;
         }
 
-        SetCurrent((int)Math.Round(e.NewValue), syncSlider: false);
+        StopPlayback();
+        SetCurrent(FrameFromFraction(fraction));
     }
+
+    // -- Current frame stepper ------------------------------------------------
 
     private void OnPrevFrame(object sender, RoutedEventArgs e)
     {
@@ -182,7 +175,7 @@ public sealed partial class GifTrimmerWindow : Window
         SetCurrent(_current + 1);
     }
 
-    private void SetCurrent(int index, bool syncSlider = true)
+    private void SetCurrent(int index)
     {
         if (!_ready || _frames.Count == 0)
         {
@@ -190,10 +183,7 @@ public sealed partial class GifTrimmerWindow : Window
         }
 
         _current = Math.Clamp(index, 0, _frames.Count - 1);
-        if (syncSlider && Math.Abs(CurrentSlider.Value - _current) > 0.001)
-        {
-            CurrentSlider.Value = _current;
-        }
+        TrimBar.PlayheadFraction = FractionFromFrame(_current);
 
         CurrentLabel.Text = $"Frame {_current + 1} / {_frames.Count}";
         if (PrevFrameButton is not null)
@@ -299,6 +289,7 @@ public sealed partial class GifTrimmerWindow : Window
         }
 
         await ShowFrameAsync(_playIndex);
+        TrimBar.PlayheadFraction = FractionFromFrame(_playIndex);
         _playIndex++;
         if (_playIndex > _end)
         {

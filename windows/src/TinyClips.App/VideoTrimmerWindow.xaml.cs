@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
 using TinyClips.Core.Models;
 using TinyClips.Core.Services;
 using Windows.Graphics.Imaging;
@@ -73,6 +72,9 @@ public sealed partial class VideoTrimmerWindow : Window
             Player.SetMediaPlayer(player);
 
             _ready = true;
+            TrimBar.StartFraction = 0;
+            TrimBar.EndFraction = 1;
+            TrimBar.PlayheadFraction = 0;
             UpdateLabels();
             UpdatePositionLabel(TimeSpan.Zero);
         }
@@ -84,40 +86,49 @@ public sealed partial class VideoTrimmerWindow : Window
 
     // -- Range handling -------------------------------------------------------
 
-    private void OnStartChanged(object sender, RangeBaseValueChangedEventArgs e)
+    private void OnTrimStartChanged(object sender, double fraction)
     {
-        if (!_ready)
+        if (!_ready || _duration <= TimeSpan.Zero)
         {
             return;
         }
 
-        _startSeconds = (e.NewValue / 1000.0) * _duration.TotalSeconds;
-        if (_startSeconds > _endSeconds - 0.1)
-        {
-            _startSeconds = Math.Max(0, _endSeconds - 0.1);
-            StartSlider.Value = _startSeconds / _duration.TotalSeconds * 1000.0;
-        }
-
-        SeekTo(_startSeconds);
+        var dur = _duration.TotalSeconds;
+        var start = Math.Clamp(fraction * dur, 0, _endSeconds - 0.1);
+        _startSeconds = start;
+        TrimBar.StartFraction = start / dur;
+        TrimBar.PlayheadFraction = start / dur;
+        SeekTo(start);
         UpdateLabels();
     }
 
-    private void OnEndChanged(object sender, RangeBaseValueChangedEventArgs e)
+    private void OnTrimEndChanged(object sender, double fraction)
     {
-        if (!_ready)
+        if (!_ready || _duration <= TimeSpan.Zero)
         {
             return;
         }
 
-        _endSeconds = (e.NewValue / 1000.0) * _duration.TotalSeconds;
-        if (_endSeconds < _startSeconds + 0.1)
+        var dur = _duration.TotalSeconds;
+        var end = Math.Clamp(fraction * dur, _startSeconds + 0.1, dur);
+        _endSeconds = end;
+        TrimBar.EndFraction = end / dur;
+        TrimBar.PlayheadFraction = end / dur;
+        SeekTo(end);
+        UpdateLabels();
+    }
+
+    private void OnTrimSeek(object sender, double fraction)
+    {
+        if (!_ready || _duration <= TimeSpan.Zero)
         {
-            _endSeconds = Math.Min(_duration.TotalSeconds, _startSeconds + 0.1);
-            EndSlider.Value = _endSeconds / _duration.TotalSeconds * 1000.0;
+            return;
         }
 
-        SeekTo(_endSeconds);
-        UpdateLabels();
+        var seconds = fraction * _duration.TotalSeconds;
+        TrimBar.PlayheadFraction = fraction;
+        SeekTo(seconds);
+        UpdatePositionLabel(TimeSpan.FromSeconds(seconds));
     }
 
     private void SeekTo(double seconds)
@@ -172,6 +183,10 @@ public sealed partial class VideoTrimmerWindow : Window
     private void UpdatePositionLabel(TimeSpan position)
     {
         PositionLabel.Text = $"Position: {Format(position.TotalSeconds)}";
+        if (_ready && _duration > TimeSpan.Zero)
+        {
+            TrimBar.PlayheadFraction = position.TotalSeconds / _duration.TotalSeconds;
+        }
     }
 
     private void UpdateLabels()

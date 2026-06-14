@@ -6,6 +6,11 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Changed
+- **Video & GIF trimmers now use a single-line trim bar (macOS-style)** — both trimmers replace the
+  previous stacked start/end (and current-frame) sliders with one custom `TrimBar`: a dimmed track
+  with an accent-colored selection between two draggable handles and a movable playhead. Drag a
+  handle to set the start/end, or click/drag the track to scrub. The playhead follows playback and
+  frame stepping, matching the Mac app's trim slider.
 - **App & tray icon restyled to match the macOS app** — the Windows icon set now uses the same
   glyph as the Mac app (four corner focus-brackets around a solid center dot) in place of the older
   nested-squares-with-crosshair mark, while keeping the blue gradient background. Every asset

@@ -74,30 +74,21 @@
                 </TextBlock>
             </Grid>
 
-            <Slider
-                x:Name="StartSlider"
-                AutomationProperties.AutomationId="GifTrimStartSlider"
-                AutomationProperties.Name="Trim start frame"
-                Header="Trim start"
-                Minimum="0"
-                StepFrequency="1"
-                ValueChanged="OnStartChanged" />
-            <Slider
-                x:Name="EndSlider"
-                AutomationProperties.AutomationId="GifTrimEndSlider"
-                AutomationProperties.Name="Trim end frame"
-                Header="Trim end"
-                Minimum="0"
-                StepFrequency="1"
-                ValueChanged="OnEndChanged" />
+            <local:TrimBar
+                x:Name="TrimBar"
+                Margin="0,6,0,2"
+                AutomationProperties.AutomationId="GifTrimBar"
+                AutomationProperties.Name="Trim frame range and current frame"
+                EndFractionChanged="OnTrimEndChanged"
+                SeekRequested="OnTrimSeek"
+                StartFractionChanged="OnTrimStartChanged" />
 
-            <!--  Current frame scrubber: step through frames and export the one shown.  -->
+            <!--  Current frame stepper: step through frames and export the one shown.  -->
             <Grid Margin="0,4,0,0" ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <Button
@@ -118,26 +109,16 @@
                     ToolTipService.ToolTip="Next frame">
                     <FontIcon FontSize="14" Glyph="&#xE76C;" />
                 </Button>
-                <Slider
-                    x:Name="CurrentSlider"
-                    Grid.Column="2"
-                    VerticalAlignment="Center"
-                    AutomationProperties.AutomationId="GifCurrentFrameSlider"
-                    AutomationProperties.Name="Current frame"
-                    Minimum="0"
-                    StepFrequency="1"
-                    ValueChanged="OnCurrentChanged" />
                 <TextBlock
                     x:Name="CurrentLabel"
-                    Grid.Column="3"
+                    Grid.Column="2"
+                    HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    MinWidth="92"
-                    TextAlignment="Center"
                     Style="{StaticResource CaptionTextBlockStyle}"
                     Text="Frame 1 / 1" />
                 <Button
                     x:Name="ExportFrameButton"
-                    Grid.Column="4"
+                    Grid.Column="3"
                     AutomationProperties.AutomationId="GifExportFrameButton"
                     AutomationProperties.Name="Export current frame as PNG"
                     Click="OnExportFrame"

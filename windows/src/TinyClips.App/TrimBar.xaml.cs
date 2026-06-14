@@ -1,0 +1,222 @@
+using System;
+using Microsoft.UI.Input;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+
+namespace TinyClips.App;
+
+/// <summary>
+/// A single-line trim control modeled on the macOS app: a dimmed track with an accent-colored
+/// selected region between two draggable handles plus a movable playhead. All values are
+/// normalized fractions in the range [0, 1]; the hosting window maps them to seconds or frames.
+/// </summary>
+/// <remarks>
+/// The control raises <see cref="StartFractionChanged"/>, <see cref="EndFractionChanged"/> and
+/// <see cref="SeekRequested"/> only in response to user pointer input. Assigning the matching
+/// properties (e.g. from the host while clamping) re-lays out without re-raising events, so there
+/// is no feedback loop.
+/// </remarks>
+public sealed partial class TrimBar : UserControl
+{
+    private enum DragMode
+    {
+        None,
+        Start,
+        End,
+        Seek,
+    }
+
+    private const double HandleWidth = 14.0;
+    private const double TrackHeight = 36.0;
+
+    private static readonly InputSystemCursor SizeCursor = InputSystemCursor.Create(InputSystemCursorShape.SizeWestEast);
+    private static readonly InputSystemCursor ArrowCursor = InputSystemCursor.Create(InputSystemCursorShape.Arrow);
+
+    private DragMode _drag = DragMode.None;
+    private double _start;
+    private double _end = 1.0;
+    private double _play;
+
+    public TrimBar()
+    {
+        InitializeComponent();
+
+        PointerPressed += OnPointerPressed;
+        PointerMoved += OnPointerMoved;
+        PointerReleased += OnPointerReleased;
+        PointerCaptureLost += OnPointerCaptureLost;
+        PointerExited += OnPointerExited;
+        SizeChanged += (_, _) => LayoutParts();
+    }
+
+    /// <summary>Raised while the user drags the start handle. Carries the new start fraction.</summary>
+    public event EventHandler<double>? StartFractionChanged;
+
+    /// <summary>Raised while the user drags the end handle. Carries the new end fraction.</summary>
+    public event EventHandler<double>? EndFractionChanged;
+
+    /// <summary>Raised while the user scrubs the track body. Carries the requested playhead fraction.</summary>
+    public event EventHandler<double>? SeekRequested;
+
+    public double StartFraction
+    {
+        get => _start;
+        set
+        {
+            _start = Clamp01(value);
+            LayoutParts();
+        }
+    }
+
+    public double EndFraction
+    {
+        get => _end;
+        set
+        {
+            _end = Clamp01(value);
+            LayoutParts();
+        }
+    }
+
+    public double PlayheadFraction
+    {
+        get => _play;
+        set
+        {
+            _play = Clamp01(value);
+            LayoutParts();
+        }
+    }
+
+    private double Usable => Math.Max(1.0, ActualWidth - HandleWidth);
+
+    private static double Clamp01(double value) => Math.Clamp(value, 0.0, 1.0);
+
+    private void LayoutParts()
+    {
+        var w = ActualWidth;
+        var h = ActualHeight;
+        if (w <= 0 || h <= 0)
+        {
+            return;
+        }
+
+        var half = HandleWidth / 2.0;
+        var top = (h - TrackHeight) / 2.0;
+        var usable = Math.Max(1.0, w - HandleWidth);
+        double X(double f) => half + f * usable;
+
+        var sx = X(_start);
+        var ex = X(_end);
+        var px = X(_play);
+
+        TrackBg.Width = w;
+        TrackBg.Height = TrackHeight;
+        Canvas.SetLeft(TrackBg, 0);
+        Canvas.SetTop(TrackBg, top);
+
+        ActiveRegion.Width = Math.Max(0, ex - sx);
+        ActiveRegion.Height = TrackHeight;
+        Canvas.SetLeft(ActiveRegion, sx);
+        Canvas.SetTop(ActiveRegion, top);
+
+        Playhead.Height = TrackHeight + 8;
+        Canvas.SetLeft(Playhead, px - 1);
+        Canvas.SetTop(Playhead, top - 4);
+
+        StartHandle.Width = HandleWidth;
+        StartHandle.Height = TrackHeight;
+        Canvas.SetLeft(StartHandle, sx - half);
+        Canvas.SetTop(StartHandle, top);
+
+        EndHandle.Width = HandleWidth;
+        EndHandle.Height = TrackHeight;
+        Canvas.SetLeft(EndHandle, ex - half);
+        Canvas.SetTop(EndHandle, top);
+    }
+
+    private double FractionFromX(double x) => Clamp01((x - HandleWidth / 2.0) / Usable);
+
+    private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        var x = e.GetCurrentPoint(this).Position.X;
+        var half = HandleWidth / 2.0;
+        var usable = Usable;
+        var sx = half + _start * usable;
+        var ex = half + _end * usable;
+        var dStart = Math.Abs(x - sx);
+        var dEnd = Math.Abs(x - ex);
+
+        if (dStart <= HandleWidth && dStart <= dEnd)
+        {
+            _drag = DragMode.Start;
+        }
+        else if (dEnd <= HandleWidth)
+        {
+            _drag = DragMode.End;
+        }
+        else
+        {
+            _drag = DragMode.Seek;
+        }
+
+        CapturePointer(e.Pointer);
+        ApplyDrag(FractionFromX(x));
+        e.Handled = true;
+    }
+
+    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        var x = e.GetCurrentPoint(this).Position.X;
+        if (_drag == DragMode.None)
+        {
+            UpdateHoverCursor(x);
+            return;
+        }
+
+        ApplyDrag(FractionFromX(x));
+        e.Handled = true;
+    }
+
+    private void ApplyDrag(double fraction)
+    {
+        switch (_drag)
+        {
+            case DragMode.Start:
+                StartFractionChanged?.Invoke(this, fraction);
+                break;
+            case DragMode.End:
+                EndFractionChanged?.Invoke(this, fraction);
+                break;
+            case DragMode.Seek:
+                SeekRequested?.Invoke(this, fraction);
+                break;
+        }
+    }
+
+    private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        _drag = DragMode.None;
+        ReleasePointerCapture(e.Pointer);
+    }
+
+    private void OnPointerCaptureLost(object sender, PointerRoutedEventArgs e) => _drag = DragMode.None;
+
+    private void OnPointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (_drag == DragMode.None)
+        {
+            ProtectedCursor = ArrowCursor;
+        }
+    }
+
+    private void UpdateHoverCursor(double x)
+    {
+        var half = HandleWidth / 2.0;
+        var usable = Usable;
+        var sx = half + _start * usable;
+        var ex = half + _end * usable;
+        var nearHandle = Math.Min(Math.Abs(x - sx), Math.Abs(x - ex)) <= HandleWidth;
+        ProtectedCursor = nearHandle ? SizeCursor : ArrowCursor;
+    }
+}

@@ -76,25 +76,14 @@
                 </TextBlock>
             </Grid>
 
-            <Slider
-                x:Name="StartSlider"
-                AutomationProperties.AutomationId="VideoTrimStartSlider"
-                AutomationProperties.Name="Trim start"
-                Header="Trim start"
-                Maximum="1000"
-                Minimum="0"
-                StepFrequency="1"
-                ValueChanged="OnStartChanged" />
-            <Slider
-                x:Name="EndSlider"
-                AutomationProperties.AutomationId="VideoTrimEndSlider"
-                AutomationProperties.Name="Trim end"
-                Header="Trim end"
-                Maximum="1000"
-                Minimum="0"
-                StepFrequency="1"
-                Value="1000"
-                ValueChanged="OnEndChanged" />
+            <local:TrimBar
+                x:Name="TrimBar"
+                Margin="0,6,0,2"
+                AutomationProperties.AutomationId="VideoTrimBar"
+                AutomationProperties.Name="Trim range and playback position"
+                EndFractionChanged="OnTrimEndChanged"
+                SeekRequested="OnTrimSeek"
+                StartFractionChanged="OnTrimStartChanged" />
 
             <!--  Frame stepper: nudge the preview a frame at a time and export the current frame.  -->
             <Grid Margin="0,4,0,0" ColumnSpacing="8">
