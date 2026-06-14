@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
 using TinyClips.Core.Models;
@@ -282,6 +283,7 @@ public sealed partial class GifTrimmerWindow : Window
         _playTimer ??= DispatcherQueue.CreateTimer();
         _playTimer.Tick -= OnPlayTick;
         _playTimer.Tick += OnPlayTick;
+        UpdatePlayToggleVisual(true);
         ScheduleNextPlayFrame();
     }
 
@@ -322,7 +324,16 @@ public sealed partial class GifTrimmerWindow : Window
     {
         _playTimer?.Stop();
         PlayToggle.IsChecked = false;
+        UpdatePlayToggleVisual(false);
         _ = ShowFrameAsync(_current);
+    }
+
+    private void UpdatePlayToggleVisual(bool playing)
+    {
+        PlayIcon.Glyph = playing ? "\uE769" : "\uE768"; // Pause : Play
+        var name = playing ? "Pause preview" : "Play preview";
+        PlayToggle.SetValue(AutomationProperties.NameProperty, name);
+        ToolTipService.SetToolTip(PlayToggle, name);
     }
 
     // -- Output ---------------------------------------------------------------

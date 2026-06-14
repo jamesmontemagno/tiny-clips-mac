@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using TinyClips.Core.Models;
 using TinyClips.Core.Services;
@@ -26,6 +27,7 @@ public sealed partial class VideoTrimmerWindow : Window
     private double _endSeconds;
     private double _speed = 1.0;
     private bool _ready;
+    private bool _suppressToggle;
 
     // Step a 1/30s "frame" since the recorded fps isn't exposed by the WinRT clip API.
     private static readonly TimeSpan FrameStep = TimeSpan.FromSeconds(1.0 / 30.0);
@@ -69,6 +71,7 @@ public sealed partial class VideoTrimmerWindow : Window
             var player = new MediaPlayer { Source = MediaSource.CreateFromStorageFile(file) };
             player.PlaybackRate = _speed;
             player.PlaybackSession.PositionChanged += OnPositionChanged;
+            player.PlaybackSession.PlaybackStateChanged += OnPlaybackStateChanged;
             Player.SetMediaPlayer(player);
 
             _ready = true;
@@ -194,7 +197,70 @@ public sealed partial class VideoTrimmerWindow : Window
     private void OnPositionChanged(MediaPlaybackSession sender, object args)
     {
         var position = sender.Position;
+
+        // Stop playback at the trim end so previewing stays within the selected range.
+        if (sender.PlaybackState == MediaPlaybackState.Playing &&
+            _ready && _endSeconds > 0 && position.TotalSeconds >= _endSeconds)
+        {
+            sender.Position = TimeSpan.FromSeconds(_endSeconds);
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                Player.MediaPlayer?.Pause();
+                UpdatePositionLabel(TimeSpan.FromSeconds(_endSeconds));
+            });
+            return;
+        }
+
         DispatcherQueue.TryEnqueue(() => UpdatePositionLabel(position));
+    }
+
+    // -- Play / pause ---------------------------------------------------------
+
+    private void OnPlayToggled(object sender, RoutedEventArgs e)
+    {
+        if (_suppressToggle || !_ready)
+        {
+            return;
+        }
+
+        var player = Player.MediaPlayer;
+        if (player is null)
+        {
+            return;
+        }
+
+        if (PlayToggle.IsChecked == true)
+        {
+            // Restart from the trim start if the playhead is at (or past) the trim end.
+            if (player.PlaybackSession is { } session &&
+                session.Position.TotalSeconds >= _endSeconds - 0.05)
+            {
+                session.Position = TimeSpan.FromSeconds(_startSeconds);
+            }
+
+            player.Play();
+        }
+        else
+        {
+            player.Pause();
+        }
+    }
+
+    private void OnPlaybackStateChanged(MediaPlaybackSession sender, object args)
+    {
+        var playing = sender.PlaybackState == MediaPlaybackState.Playing;
+        DispatcherQueue.TryEnqueue(() => SyncPlayToggle(playing));
+    }
+
+    private void SyncPlayToggle(bool playing)
+    {
+        _suppressToggle = true;
+        PlayToggle.IsChecked = playing;
+        PlayIcon.Glyph = playing ? "\uE769" : "\uE768"; // Pause : Play
+        var name = playing ? "Pause preview" : "Play preview";
+        PlayToggle.SetValue(AutomationProperties.NameProperty, name);
+        ToolTipService.SetToolTip(PlayToggle, name);
+        _suppressToggle = false;
     }
 
     private void UpdatePositionLabel(TimeSpan position)

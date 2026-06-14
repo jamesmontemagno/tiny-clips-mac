@@ -165,7 +165,7 @@
                     Checked="OnPlayToggled"
                     Unchecked="OnPlayToggled"
                     ToolTipService.ToolTip="Preview playback of the selected frame range">
-                    <FontIcon FontSize="14" Glyph="&#xE768;" />
+                    <FontIcon x:Name="PlayIcon" FontSize="14" Glyph="&#xE768;" />
                 </ToggleButton>
                 <TextBlock
                     VerticalAlignment="Center"

@@ -39,7 +39,7 @@
             CornerRadius="{ThemeResource OverlayCornerRadius}">
             <MediaPlayerElement
                 x:Name="Player"
-                AreTransportControlsEnabled="True"
+                AreTransportControlsEnabled="False"
                 AutomationProperties.AutomationId="VideoTrimmerPlayer"
                 AutomationProperties.Name="Video preview"
                 Stretch="Uniform" />
@@ -86,16 +86,27 @@
                 SeekRequested="OnTrimSeek"
                 StartFractionChanged="OnTrimStartChanged" />
 
-            <!--  Frame stepper: nudge the preview a frame at a time and export the current frame.  -->
+            <!--  Playback + frame stepper: play/pause, nudge a frame at a time, export the current frame.  -->
             <Grid Margin="0,4,0,0" ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Button
+                <ToggleButton
+                    x:Name="PlayToggle"
                     Grid.Column="0"
+                    AutomationProperties.AutomationId="VideoPlayToggle"
+                    AutomationProperties.Name="Play preview"
+                    Checked="OnPlayToggled"
+                    Unchecked="OnPlayToggled"
+                    ToolTipService.ToolTip="Play or pause the preview">
+                    <FontIcon x:Name="PlayIcon" FontSize="14" Glyph="&#xE768;" />
+                </ToggleButton>
+                <Button
+                    Grid.Column="1"
                     AutomationProperties.AutomationId="VideoPrevFrameButton"
                     AutomationProperties.Name="Step back one frame"
                     Click="OnPrevFrame"
@@ -103,7 +114,7 @@
                     <FontIcon FontSize="14" Glyph="&#xE76B;" />
                 </Button>
                 <Button
-                    Grid.Column="1"
+                    Grid.Column="2"
                     AutomationProperties.AutomationId="VideoNextFrameButton"
                     AutomationProperties.Name="Step forward one frame"
                     Click="OnNextFrame"
@@ -112,14 +123,14 @@
                 </Button>
                 <TextBlock
                     x:Name="PositionLabel"
-                    Grid.Column="2"
+                    Grid.Column="3"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Style="{StaticResource CaptionTextBlockStyle}"
                     Text="Position: 0:00.0" />
                 <Button
                     x:Name="ExportFrameButton"
-                    Grid.Column="3"
+                    Grid.Column="4"
                     AutomationProperties.AutomationId="VideoExportFrameButton"
                     AutomationProperties.Name="Export current frame as PNG"
                     Click="OnExportFrame"

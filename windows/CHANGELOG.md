@@ -32,6 +32,13 @@ own `CHANGELOG.md` at the repository root.
   selection marquee and hit-testing cover the entire annotation.
 
 ### Changed
+- **Video trimmer now uses a single play/pause button instead of the full media transport bar** —
+  the built-in media transport controls are hidden (you scrub with the trim bar), replaced by one
+  play/pause toggle next to the frame stepper. The icon swaps between play and pause, and preview
+  playback stops automatically at the trim end (pressing play again restarts from the trim start).
+- **GIF preview button now shows a true play/pause state** — the GIF trimmer's preview toggle now
+  swaps its icon between play and pause (and updates its label/tooltip) instead of showing a static
+  play glyph.
 - **GIF now uses the Settings "Pictures" icon in the tray & picker** — the GIF capture tile in the
   system-tray popup and the GIF mode badge in the capture picker now use the same Pictures glyph
   as the GIF page in Settings, for a consistent icon across the app.
