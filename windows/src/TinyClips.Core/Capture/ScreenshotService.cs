@@ -108,9 +108,9 @@ public sealed class ScreenshotService : IScreenshotService
         await encoder.FlushAsync();
 
         stream.Seek(0);
-        var size = (uint)stream.Size;
+        var size = checked((int)stream.Size);
         using var reader = new DataReader(stream.GetInputStreamAt(0));
-        await reader.LoadAsync(size);
+        await reader.LoadAsync((uint)size);
         var bytes = new byte[size];
         reader.ReadBytes(bytes);
         return bytes;

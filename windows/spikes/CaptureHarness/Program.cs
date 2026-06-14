@@ -29,9 +29,9 @@ try
         (uint)frame.Width, (uint)frame.Height, 96, 96, frame.BgraPixels);
     await encoder.FlushAsync();
     stream.Seek(0);
-    var size = (uint)stream.Size;
+    var size = checked((int)stream.Size);
     using var reader = new Windows.Storage.Streams.DataReader(stream.GetInputStreamAt(0));
-    await reader.LoadAsync(size);
+    await reader.LoadAsync((uint)size);
     var bytes = new byte[size];
     reader.ReadBytes(bytes);
     await File.WriteAllBytesAsync(outPath, bytes);

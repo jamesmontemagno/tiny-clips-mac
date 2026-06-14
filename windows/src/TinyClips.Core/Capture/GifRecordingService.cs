@@ -251,9 +251,9 @@ public sealed class GifRecordingService : IGifRecordingService
         await encoder.FlushAsync();
 
         stream.Seek(0);
-        var size = (uint)stream.Size;
+        var size = checked((int)stream.Size);
         using var reader = new DataReader(stream.GetInputStreamAt(0));
-        await reader.LoadAsync(size);
+        await reader.LoadAsync((uint)size);
         var result = new byte[size];
         reader.ReadBytes(result);
         return result;
