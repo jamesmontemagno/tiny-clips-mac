@@ -128,7 +128,7 @@
                             <TextBlock
                                 Style="{StaticResource CaptionTextBlockStyle}"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Text="{x:Bind ViewModel.SaveDirectory, Mode=OneWay}"
+                                Text="{x:Bind ViewModel.SaveLocationDisplay, Mode=OneWay}"
                                 TextTrimming="CharacterEllipsis" />
                         </StackPanel>
                         <Button

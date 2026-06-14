@@ -30,7 +30,8 @@ public sealed partial class SettingsWindow : Window
             App.Services.GetRequiredService<ICaptureSettings>(),
             App.Services.GetRequiredService<IHotKeyService>(),
             App.Services.GetRequiredService<ILaunchAtLoginService>(),
-            App.Services.GetRequiredService<IAudioDeviceService>());
+            App.Services.GetRequiredService<IAudioDeviceService>(),
+            App.Services.GetRequiredService<IClipStorageService>());
 
         InitializeComponent();
 

@@ -23,19 +23,30 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IHotKeyService _hotKeys;
     private readonly ILaunchAtLoginService _launchAtLoginService;
     private readonly IAudioDeviceService _audioDevices;
+    private readonly IClipStorageService _storage;
     private bool _loading;
 
     /// <summary>Raised when the selected theme changes so the window can re-apply it live.</summary>
     public event Action? ThemeChanged;
 
-    public SettingsViewModel(ICaptureSettings settings, IHotKeyService hotKeys, ILaunchAtLoginService launchAtLogin, IAudioDeviceService audioDevices)
+    public SettingsViewModel(ICaptureSettings settings, IHotKeyService hotKeys, ILaunchAtLoginService launchAtLogin, IAudioDeviceService audioDevices, IClipStorageService storage)
     {
         _settings = settings;
         _hotKeys = hotKeys;
         _launchAtLoginService = launchAtLogin;
         _audioDevices = audioDevices;
+        _storage = storage;
         Load();
     }
+
+    /// <summary>
+    /// The folder clips are actually written to. When the user has not picked a
+    /// custom location this resolves to the default Pictures\TinyClips folder so
+    /// the Settings UI always shows a real path instead of a blank line.
+    /// </summary>
+    public string SaveLocationDisplay => string.IsNullOrWhiteSpace(SaveDirectory)
+        ? $"{_storage.OutputDirectory(CaptureType.Screenshot)} (default)"
+        : SaveDirectory;
 
     // General
     [ObservableProperty]
@@ -288,7 +299,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         ThemeChanged?.Invoke();
     }
 
-    partial void OnSaveDirectoryChanged(string value) => Persist(() => _settings.SaveDirectory = value);
+    partial void OnSaveDirectoryChanged(string value)
+    {
+        Persist(() => _settings.SaveDirectory = value);
+        OnPropertyChanged(nameof(SaveLocationDisplay));
+    }
 
     partial void OnFileNameTemplateChanged(string value) => Persist(() => _settings.FileNameTemplate = value);
 
