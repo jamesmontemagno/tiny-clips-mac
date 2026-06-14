@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using TinyClips.Core.Capture;
 using Windows.Graphics;
 using WinRT.Interop;
 
@@ -39,7 +40,7 @@ public sealed partial class CountdownWindow : Window
     }
 
     /// <summary>Shows a countdown overlay and returns when it finishes.</summary>
-    public static Task RunAsync(int seconds)
+    public static Task RunAsync(int seconds, MonitorInfo? monitor = null)
     {
         var window = new CountdownWindow(seconds);
         window.Activate();
@@ -47,7 +48,7 @@ public sealed partial class CountdownWindow : Window
         // Resize/position and clip the window to a rounded square only AFTER it has been
         // shown. Applying SetWindowRgn before the first present leaves the surface blank,
         // which is why the countdown stopped appearing.
-        window.CenterOnPrimaryDisplay();
+        window.CenterOnMonitor(monitor);
         window._timer.Start();
         return window._completed.Task;
     }
@@ -86,9 +87,11 @@ public sealed partial class CountdownWindow : Window
         AppWindow.IsShownInSwitchers = false;
     }
 
-    private void CenterOnPrimaryDisplay()
+    private void CenterOnMonitor(MonitorInfo? monitor)
     {
-        var area = DisplayArea.Primary?.WorkArea;
+        var area = monitor is { WorkAreaWidth: > 0, WorkAreaHeight: > 0 }
+            ? new RectInt32(monitor.WorkAreaX, monitor.WorkAreaY, monitor.WorkAreaWidth, monitor.WorkAreaHeight)
+            : DisplayArea.Primary?.WorkArea;
 
         var hwnd = WindowNative.GetWindowHandle(this);
         var scale = GetScale(hwnd);

@@ -79,6 +79,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _reopenPickerAfterCapture;
 
+    [ObservableProperty]
+    private int _multiMonitorCaptureModeIndex;
+
     // Screenshot
     [ObservableProperty]
     private int _screenshotFormatIndex;
@@ -234,6 +237,12 @@ public sealed partial class SettingsViewModel : ObservableObject
             CopyVideoToClipboard = _settings.CopyVideoToClipboard;
             CopyGifToClipboard = _settings.CopyGifToClipboard;
             ReopenPickerAfterCapture = _settings.ReopenPickerAfterCapture;
+            MultiMonitorCaptureModeIndex = _settings.MultiMonitorCaptureMode switch
+            {
+                MultiMonitorCaptureMode.UnderCursor => 1,
+                MultiMonitorCaptureMode.MainDisplay => 2,
+                _ => 0,
+            };
 
             ScreenshotFormatIndex = _settings.ImageFormat == ImageFormat.Png ? 0 : 1;
             ScreenshotScale = _settings.ScreenshotScale;
@@ -327,6 +336,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnCopyGifToClipboardChanged(bool value) => Persist(() => _settings.CopyGifToClipboard = value);
 
     partial void OnReopenPickerAfterCaptureChanged(bool value) => Persist(() => _settings.ReopenPickerAfterCapture = value);
+
+    partial void OnMultiMonitorCaptureModeIndexChanged(int value) => Persist(() => _settings.MultiMonitorCaptureMode = value switch
+    {
+        1 => MultiMonitorCaptureMode.UnderCursor,
+        2 => MultiMonitorCaptureMode.MainDisplay,
+        _ => MultiMonitorCaptureMode.Picker,
+    });
 
     partial void OnScreenshotFormatIndexChanged(int value) =>
         Persist(() => _settings.ImageFormat = value == 0 ? ImageFormat.Png : ImageFormat.Jpeg);

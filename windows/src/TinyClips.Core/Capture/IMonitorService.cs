@@ -7,4 +7,7 @@ public interface IMonitorService
 
     /// <summary>Returns the primary monitor, or the first monitor if none is flagged primary.</summary>
     MonitorInfo? GetPrimaryMonitor();
+
+    /// <summary>Returns the monitor containing the current mouse cursor.</summary>
+    MonitorInfo? GetMonitorUnderCursor();
 }

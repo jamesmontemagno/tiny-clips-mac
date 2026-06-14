@@ -31,6 +31,7 @@ public partial class App : Application
     private const string GlyphVideo = "\uE714";
     private const string GlyphGif = "\uE8B9";
     private const string GlyphStop = "\uE71A";
+    private const uint MonitorDefaultToNearest = 2;
 
     private TaskbarIcon? _taskbarIcon;
     private SettingsWindow? _settingsWindow;
@@ -44,6 +45,7 @@ public partial class App : Application
     private RegionIndicatorWindow? _recordingRegionIndicator;
     private DispatcherTimer? _recordingTimer;
     private DateTime _recordingStartedUtc;
+    private TargetSelection? _activeRecordingSelection;
     private CaptureTile? _videoTile;
     private CaptureTile? _gifTile;
     private TrayPopupWindow? _trayPopup;
@@ -356,7 +358,7 @@ public partial class App : Application
                         regionIndicator.Show(ToVirtualDesktopRegion(selection.Target, region));
                     }
 
-                    await CountdownWindow.RunAsync(pick.CountdownDuration);
+                    await CountdownWindow.RunAsync(pick.CountdownDuration, selection.Monitor);
                 }
                 finally
                 {
@@ -384,16 +386,18 @@ public partial class App : Application
 
                 case CaptureType.Video:
                     await Services.GetRequiredService<IVideoRecordingService>().StartAsync(selection.Target, selection.Region, pick.VideoTimeLimitMinutes);
+                    _activeRecordingSelection = selection;
                     ShowRecordingRegionIndicator(selection);
                     UpdateRecordingState();
-                    ShowRecordingIndicator(CaptureType.Video);
+                    ShowRecordingIndicator(CaptureType.Video, selection);
                     break;
 
                 case CaptureType.Gif:
                     await Services.GetRequiredService<IGifRecordingService>().StartAsync(selection.Target, selection.Region);
+                    _activeRecordingSelection = selection;
                     ShowRecordingRegionIndicator(selection);
                     UpdateRecordingState();
-                    ShowRecordingIndicator(CaptureType.Gif);
+                    ShowRecordingIndicator(CaptureType.Gif, selection);
                     break;
             }
         }
@@ -402,6 +406,7 @@ public partial class App : Application
             Debug.WriteLine($"Capture failed: {ex}");
             UpdateRecordingState();
             CloseRecordingRegionIndicator();
+            _activeRecordingSelection = null;
             HideRecordingIndicatorIfNotRecording();
         }
     }
@@ -409,31 +414,56 @@ public partial class App : Application
     private async Task<TargetSelection?> ResolveTargetAsync(CapturePickerMode mode)
     {
         var monitors = Services.GetRequiredService<IMonitorService>();
+        var settings = Services.GetRequiredService<ICaptureSettings>();
 
         switch (mode)
         {
             case CapturePickerMode.Region:
             {
-                var monitor = monitors.GetPrimaryMonitor();
-                if (monitor is null)
+                var all = monitors.GetMonitors();
+                if (all.Count == 0)
                 {
                     return null;
                 }
 
-                var region = await RegionSelectWindow.RunAsync(monitor);
-                return region is { } r
-                    ? new TargetSelection(CaptureTarget.Monitor(monitor.HMonitor), r)
-                    : null;
+                var preferredMonitor = ResolvePreferredMonitor(monitors, settings.MultiMonitorCaptureMode);
+                if (preferredMonitor is { } single)
+                {
+                    var region = await RegionSelectWindow.RunAsync(single);
+                    return region is { } singleRegion
+                        ? new TargetSelection(CaptureTarget.Monitor(single.HMonitor), singleRegion, single)
+                        : null;
+                }
+
+                var result = await RegionSelectController.RunAsync(all);
+                if (result is not { } selection)
+                {
+                    return null;
+                }
+
+                var selectedMonitor = all.FirstOrDefault(m => m.HMonitor == selection.HMonitor)
+                    ?? monitors.GetPrimaryMonitor();
+                return new TargetSelection(CaptureTarget.Monitor(selection.HMonitor), selection.Region, selectedMonitor);
             }
 
             case CapturePickerMode.Screen:
             {
                 var all = monitors.GetMonitors();
-                var chosen = all.Count <= 1
-                    ? all.FirstOrDefault() ?? monitors.GetPrimaryMonitor()
-                    : await ScreenPickerWindow.RunAsync(all);
+                if (all.Count == 0)
+                {
+                    return null;
+                }
+
+                var chosen = ResolvePreferredMonitor(monitors, settings.MultiMonitorCaptureMode);
+                if (chosen is null)
+                {
+                    chosen = all.Count <= 1
+                        ? all.FirstOrDefault() ?? monitors.GetPrimaryMonitor()
+                        : await ScreenPickerWindow.RunAsync(all);
+                }
+
                 return chosen is { } monitor
-                    ? new TargetSelection(CaptureTarget.Monitor(monitor.HMonitor), null)
+                    ? new TargetSelection(CaptureTarget.Monitor(monitor.HMonitor), null, monitor)
                     : null;
             }
 
@@ -441,7 +471,7 @@ public partial class App : Application
             {
                 var hwnd = await WindowPickerWindow.RunAsync();
                 return hwnd is { } h
-                    ? new TargetSelection(CaptureTarget.Window(h), null)
+                    ? new TargetSelection(CaptureTarget.Window(h), null, null)
                     : null;
             }
 
@@ -471,7 +501,46 @@ public partial class App : Application
             : region with { X = monitor.X + region.X, Y = monitor.Y + region.Y };
     }
 
-    private readonly record struct TargetSelection(CaptureTarget Target, PixelRect? Region);
+    private static MonitorInfo? ResolvePreferredMonitor(IMonitorService monitors, MultiMonitorCaptureMode mode) => mode switch
+    {
+        MultiMonitorCaptureMode.UnderCursor => monitors.GetMonitorUnderCursor() ?? monitors.GetPrimaryMonitor(),
+        MultiMonitorCaptureMode.MainDisplay => monitors.GetPrimaryMonitor(),
+        _ => null,
+    };
+
+    private static MonitorInfo? ResolveMonitorForTarget(CaptureTarget target)
+    {
+        var monitorService = Services.GetRequiredService<IMonitorService>();
+
+        if (target.HMonitor != 0)
+        {
+            var monitors = monitorService.GetMonitors();
+            return monitors.FirstOrDefault(m => m.HMonitor == target.HMonitor)
+                ?? monitorService.GetPrimaryMonitor();
+        }
+
+        if (target.Hwnd != 0)
+        {
+            return ResolveMonitorForWindowTarget(target.Hwnd) ?? monitorService.GetPrimaryMonitor();
+        }
+
+        return monitorService.GetPrimaryMonitor();
+    }
+
+    private static MonitorInfo? ResolveMonitorForWindowTarget(nint hwnd)
+    {
+        var monitorService = Services.GetRequiredService<IMonitorService>();
+        var hMonitor = MonitorFromWindow(hwnd, MonitorDefaultToNearest);
+        if (hMonitor == nint.Zero)
+        {
+            return monitorService.GetPrimaryMonitor();
+        }
+
+        var monitors = monitorService.GetMonitors();
+        return monitors.FirstOrDefault(m => m.HMonitor == hMonitor) ?? monitorService.GetPrimaryMonitor();
+    }
+
+    private readonly record struct TargetSelection(CaptureTarget Target, PixelRect? Region, MonitorInfo? Monitor);
 
     private async Task ToggleVideoAsync()
     {
@@ -544,6 +613,7 @@ public partial class App : Application
             HideRecordingIndicator();
             HideProcessingIndicator();
             CloseRecordingRegionIndicator();
+            _activeRecordingSelection = null;
             if (_isExiting)
             {
                 return;
@@ -582,13 +652,13 @@ public partial class App : Application
             if (video.IsRecording)
             {
                 HideRecordingIndicator();
-                ShowProcessingIndicator(CaptureType.Video);
+                ShowProcessingIndicator(CaptureType.Video, _activeRecordingSelection);
                 await video.StopAsync();
             }
             else if (gif.IsRecording)
             {
                 HideRecordingIndicator();
-                ShowProcessingIndicator(CaptureType.Gif);
+                ShowProcessingIndicator(CaptureType.Gif, _activeRecordingSelection);
                 await gif.StopAsync();
             }
         }
@@ -602,6 +672,7 @@ public partial class App : Application
             UpdateRecordingState();
             CloseRecordingRegionIndicatorIfNotRecording();
             HideRecordingIndicatorIfNotRecording();
+            _activeRecordingSelection = null;
         }
     }
 
@@ -643,7 +714,7 @@ public partial class App : Application
         window?.ClosePanel();
     }
 
-    private void ShowRecordingIndicator(CaptureType type)
+    private void ShowRecordingIndicator(CaptureType type, TargetSelection selection)
     {
         HideRecordingIndicator();
 
@@ -671,7 +742,12 @@ public partial class App : Application
 
         _recordingIndicator = window;
         window.UpdateElapsed(TimeSpan.Zero);
-        window.ShowNear();
+
+        var monitor = selection.Monitor ?? ResolveMonitorForTarget(selection.Target);
+        var region = selection.Region is { } selectedRegion
+            ? ToVirtualDesktopRegion(selection.Target, selectedRegion)
+            : null;
+        window.ShowNear(monitor, region);
 
         _recordingTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _recordingTimer.Tick += OnRecordingTimerTick;
@@ -703,7 +779,7 @@ public partial class App : Application
         window?.ClosePanel();
     }
 
-    private void ShowProcessingIndicator(CaptureType type)
+    private void ShowProcessingIndicator(CaptureType type, TargetSelection? selection = null)
     {
         HideProcessingIndicator();
 
@@ -717,7 +793,11 @@ public partial class App : Application
         };
 
         _processingIndicator = window;
-        window.ShowNear();
+        var monitor = selection is { } current ? current.Monitor ?? ResolveMonitorForTarget(current.Target) : null;
+        var region = selection is { Region: { } selectedRegion, Target: { } selectedTarget }
+            ? ToVirtualDesktopRegion(selectedTarget, selectedRegion)
+            : null;
+        window.ShowNear(monitor, region);
     }
 
     private void HideProcessingIndicator()
@@ -1141,6 +1221,9 @@ public partial class App : Application
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern nint MonitorFromWindow(nint hwnd, uint flags);
 
     private void ApplyTheme()
     {

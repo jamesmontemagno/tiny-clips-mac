@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using TinyClips.Core.Capture;
 using Windows.Graphics;
 using WinRT.Interop;
 using TinyClips.Core.Models;
@@ -37,7 +38,12 @@ public sealed partial class ProcessingIndicatorWindow : Window
 
     public void ShowNear()
     {
-        PositionNearPrimaryWorkArea();
+        ShowNear(null, null);
+    }
+
+    public void ShowNear(MonitorInfo? monitor, PixelRect? regionInVirtualDesktop)
+    {
+        PositionNearMonitorWorkArea(monitor, regionInVirtualDesktop);
         AppWindow.Show(false);
 
         // Keep the panel out of any concurrent capture.
@@ -70,7 +76,7 @@ public sealed partial class ProcessingIndicatorWindow : Window
         AppWindow.IsShownInSwitchers = false;
     }
 
-    private void PositionNearPrimaryWorkArea()
+    private void PositionNearMonitorWorkArea(MonitorInfo? monitor, PixelRect? regionInVirtualDesktop)
     {
         var scale = GetScale();
         var width = (int)Math.Round(WidthDip * scale);
@@ -79,12 +85,31 @@ public sealed partial class ProcessingIndicatorWindow : Window
 
         AppWindow.Resize(new SizeInt32(width, height));
 
-        if (DisplayArea.Primary?.WorkArea is { } work)
+        if (GetWorkArea(monitor) is { } work)
         {
             var x = work.X + Math.Max(0, (work.Width - width) / 2);
             var y = work.Y + topOffset;
+
+            if (regionInVirtualDesktop is { Width: > 0, Height: > 0 } region)
+            {
+                x = region.X + Math.Max(0, (region.Width - width) / 2);
+                y = region.Y + topOffset;
+            }
+
+            x = Math.Clamp(x, work.X, work.X + Math.Max(0, work.Width - width));
+            y = Math.Clamp(y, work.Y, work.Y + Math.Max(0, work.Height - height));
             AppWindow.Move(new PointInt32(x, y));
         }
+    }
+
+    private static RectInt32? GetWorkArea(MonitorInfo? monitor)
+    {
+        if (monitor is { WorkAreaWidth: > 0, WorkAreaHeight: > 0 })
+        {
+            return new RectInt32(monitor.WorkAreaX, monitor.WorkAreaY, monitor.WorkAreaWidth, monitor.WorkAreaHeight);
+        }
+
+        return DisplayArea.Primary?.WorkArea;
     }
 
     private double GetScale()

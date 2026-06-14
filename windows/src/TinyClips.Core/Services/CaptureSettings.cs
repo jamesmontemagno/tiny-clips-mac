@@ -311,10 +311,24 @@ public sealed class CaptureSettings : ICaptureSettings
         set => _settings.Set("hasCompletedOnboarding", value);
     }
 
-    public bool AlwaysCaptureMainDisplay
+    public MultiMonitorCaptureMode MultiMonitorCaptureMode
     {
-        get => _settings.Get("alwaysCaptureMainDisplay", false);
-        set => _settings.Set("alwaysCaptureMainDisplay", value);
+        get
+        {
+            var persisted = _settings.Get("multiMonitorCaptureMode", string.Empty);
+            if (string.IsNullOrWhiteSpace(persisted))
+            {
+                // Back-compat with the previous boolean toggle.
+                return _settings.Get("alwaysCaptureMainDisplay", false)
+                    ? Models.MultiMonitorCaptureMode.MainDisplay
+                    : Models.MultiMonitorCaptureMode.Picker;
+            }
+
+            return Enum.TryParse<MultiMonitorCaptureMode>(persisted, ignoreCase: true, out var parsed)
+                ? parsed
+                : Models.MultiMonitorCaptureMode.Picker;
+        }
+        set => _settings.Set("multiMonitorCaptureMode", value.ToString());
     }
 
     public bool ShowRegionIndicator
@@ -487,7 +501,7 @@ public sealed class CaptureSettings : ICaptureSettings
         ScreenshotCountdownEnabled = false;
         ScreenshotCountdownDuration = 3;
         HasCompletedOnboarding = false;
-        AlwaysCaptureMainDisplay = false;
+        MultiMonitorCaptureMode = Models.MultiMonitorCaptureMode.Picker;
         ShowRegionIndicator = true;
         IncludeTinyClipsInCapture = false;
         ShowBrandingOverlay = false;

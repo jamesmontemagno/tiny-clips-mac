@@ -21,6 +21,18 @@ public sealed record MonitorInfo
     /// <summary>Height in physical pixels.</summary>
     public required int Height { get; init; }
 
+    /// <summary>Work-area left edge in virtual-desktop physical pixels.</summary>
+    public required int WorkAreaX { get; init; }
+
+    /// <summary>Work-area top edge in virtual-desktop physical pixels.</summary>
+    public required int WorkAreaY { get; init; }
+
+    /// <summary>Work-area width in physical pixels.</summary>
+    public required int WorkAreaWidth { get; init; }
+
+    /// <summary>Work-area height in physical pixels.</summary>
+    public required int WorkAreaHeight { get; init; }
+
     public required int DpiX { get; init; }
 
     public required int DpiY { get; init; }

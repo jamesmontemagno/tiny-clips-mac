@@ -54,7 +54,7 @@ public interface ICaptureSettings
     bool ScreenshotCountdownEnabled { get; set; }
     int ScreenshotCountdownDuration { get; set; }
     bool HasCompletedOnboarding { get; set; }
-    bool AlwaysCaptureMainDisplay { get; set; }
+    MultiMonitorCaptureMode MultiMonitorCaptureMode { get; set; }
     bool ShowRegionIndicator { get; set; }
     bool IncludeTinyClipsInCapture { get; set; }
     bool ShowBrandingOverlay { get; set; }
