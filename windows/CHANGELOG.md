@@ -6,6 +6,10 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Added
+- **Branding overlay** — when enabled in Settings, captures get a subtle "Captured on Tiny Clips"
+  badge (a rounded black pill with white text) in the bottom-right corner, matching the macOS app.
+  It is burned into screenshots, every GIF frame, and every video frame; the badge scales with the
+  capture height. Off by default.
 - **Microphone & system-audio toggles in the recording bar** — while recording a video, the
   floating recording bar now shows two small icon toggles (microphone and system audio) next to
   Stop. Toggling them updates the audio defaults used for your next recording, so you can quickly
@@ -19,6 +23,12 @@ own `CHANGELOG.md` at the repository root.
   small always-on-top panel with a spinner and "Processing…" / "Finalizing your clip" appears while
   the clip is encoded, so it's clear the app is working before the trimmer or save completes. The
   panel is excluded from screen capture and dismisses automatically when finalizing finishes.
+
+### Removed
+- **Clips Manager & upload scaffolding removed** — the unused Clips Manager library service and the
+  Uploadcare/auto-upload settings (which had no UI and no working backend on Windows) were deleted
+  to keep the app focused. Browse your captures in File Explorer; "Show in Explorer" after each
+  capture still works.
 
 ### Fixed
 - **Trim bar handles & scrubbing now respond to the mouse** — the single-line trim control was

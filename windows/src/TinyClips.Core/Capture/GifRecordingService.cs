@@ -32,6 +32,7 @@ public sealed class GifRecordingService : IGifRecordingService
     private MouseClickOverlayStyle _clickStyle;
     private int _clickOriginX;
     private int _clickOriginY;
+    private BrandingOverlayCompositor? _branding;
 
     public GifRecordingService(
         IMonitorService monitors,
@@ -69,6 +70,7 @@ public sealed class GifRecordingService : IGifRecordingService
             _capture.Start();
 
             StartMouseClickOverlay(captureTarget, region);
+            _branding = _settings.ShowBrandingOverlay ? new BrandingOverlayCompositor() : null;
 
             IsRecording = true;
         }
@@ -92,6 +94,8 @@ public sealed class GifRecordingService : IGifRecordingService
                 _clickOriginY,
                 _clickStyle);
         }
+
+        _branding?.Draw(frame.BgraPixels, frame.Width, frame.Height);
 
         lock (_frameLock)
         {
@@ -141,6 +145,7 @@ public sealed class GifRecordingService : IGifRecordingService
             _capture?.Stop();
             _clickMonitor?.Dispose();
             _clickMonitor = null;
+            _branding = null;
 
             List<CapturedFrame> frames;
             lock (_frameLock)

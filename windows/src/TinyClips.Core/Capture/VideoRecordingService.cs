@@ -33,6 +33,7 @@ public sealed class VideoRecordingService : IVideoRecordingService
     private MouseClickOverlayStyle _clickStyle;
     private int _clickOriginX;
     private int _clickOriginY;
+    private BrandingOverlayCompositor? _branding;
 
     private AudioCaptureService? _audio;
     private AudioStreamDescriptor? _audioDescriptor;
@@ -84,6 +85,7 @@ public sealed class VideoRecordingService : IVideoRecordingService
                 _capture.Start();
 
                 StartMouseClickOverlay(captureTarget, region);
+                _branding = _settings.ShowBrandingOverlay ? new BrandingOverlayCompositor() : null;
 
                 var width = _capture.OutputWidth;
                 var height = _capture.OutputHeight;
@@ -171,6 +173,7 @@ public sealed class VideoRecordingService : IVideoRecordingService
     private void OnFrameReady(CapturedFrame frame, TimeSpan pts)
     {
         DrawClickOverlay(frame, pts);
+        _branding?.Draw(frame.BgraPixels, frame.Width, frame.Height);
         _channel?.Writer.TryWrite(new TimestampedFrame(CreateBottomUpVideoBuffer(frame), pts));
     }
 
@@ -241,6 +244,7 @@ public sealed class VideoRecordingService : IVideoRecordingService
         _limitTimer = null;
         _clickMonitor?.Dispose();
         _clickMonitor = null;
+        _branding = null;
         _capture?.Dispose();
         _capture = null;
         DisposeAudio();

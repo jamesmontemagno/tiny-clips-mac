@@ -6,6 +6,14 @@
 > It maps the macOS TinyClips app to a Windows-native WinUI 3 implementation with maximum feature parity,
 > native theming, a system-tray experience, and a packaging/distribution path to **winget + direct MSIX** first
 > and the **Microsoft Store** soon after.
+>
+> **Scope update (post-implementation):** the **Clips Manager library** and **upload/Uploadcare**
+> integration have been **removed from scope** — captures are browsed via File Explorer ("Show in
+> Explorer" after each capture) and there is no in-app sharing/upload. The SQLite clip catalog is
+> therefore not needed (prefs live in `LocalSettings`). Auto-update for the Direct build is handled
+> entirely through **winget** (see [§4 Phase 4](#phase-4--distribution--monetization)); the Store
+> build uses Store auto-update. Sections below that describe the Clips Manager, upload, or SQLite
+> catalog are retained for history but are **not being built**.
 
 ---
 
@@ -17,15 +25,15 @@
 | Minimum OS | **Windows 11 22H2 (build 22621+)** | Reliable `Windows.Graphics.Capture`: border control, cursor toggle, window exclusion, dirty-region; Mica/Acrylic |
 | Architectures | **x64 + ARM64** (both v1) | Store users on ARM64; pure-managed GIF keeps this clean |
 | Repo layout | Same repo, new top-level `/windows` folder | Shared history; macOS app untouched |
-| Scope | Full parity, phased (capture core → editors/settings → Clips Manager/Pro/upload) | Ship value early, de-risk the hard pipeline first |
+| Scope | Full parity, phased (capture core → editors/settings). **Clips Manager & upload removed from scope.** | Ship value early, de-risk the hard pipeline first |
 | Language/stack | C# + WinUI 3 (Windows App SDK), **packaged MSIX with identity** | Identity unlocks toasts, StartupTask, Store add-ons |
 | MVVM | CommunityToolkit.Mvvm + `Microsoft.Extensions.DependencyInjection` | Mirrors mac `ObservableObject`/`@Published` |
 | Tooling | **Windows App Development CLI (`winapp`)** for SDK restore, identity, manifest, certs, signing, MSIX pack | Single toolchain across CI/local |
-| Updater | **No Velopack.** Store build = Store updates; Direct build = MSIX `.appinstaller` + winget | MSIX already has identity/update semantics |
+| Updater | **No Velopack.** Store build = Store updates; **Direct build = winget** (`winget upgrade`, publishing each release's signed MSIX to winget-pkgs) | MSIX already has identity/update semantics; winget is the single Direct channel |
 | Pro / IAP | **Store build = `StoreContext` add-ons. Direct build is fully FREE** (all features unlocked, no purchase) | Store IAP only works in Store; avoids a separate license system entirely |
 | Signing | **Azure Trusted Signing** for direct MSIX (account **not yet set up — Phase 4 prerequisite**); stable publisher identity forever | Avoids cert-trust install friction; self-signed cert only for internal test until then |
 | Accounts | Microsoft **Partner Center: available**. Azure Trusted Signing: **to be provisioned** before Direct GA | Partner Center owns Store identity + name reservation |
-| Upload provider | **Uploadcare** (same as macOS) | Reuse existing integration/keys |
+| ~~Upload provider~~ | **Removed from scope** — no in-app upload/sharing | Browse captures in File Explorer instead |
 
 ---
 
@@ -43,9 +51,9 @@
 | Microphone | `Windows.Media.Capture` / WASAPI capture | Muxed via MF audio sink |
 | System audio loopback | **WASAPI loopback** (separate pipeline — WGC is video-only) | Audio clock can be master |
 | Carbon `RegisterEventHotKey` | Win32 `RegisterHotKey` with conflict detection | Registration service w/ failure UI |
-| Sparkle | Store auto-update (Store) / `.appinstaller` + winget (Direct) | No Velopack |
+| Sparkle | Store auto-update (Store) / **winget** (Direct) | No Velopack |
 | StoreKit 2 IAP | Microsoft Store add-ons via `StoreContext` (Store build only) | Direct build is fully free — no IAP/license |
-| `@AppStorage` (UserDefaults) | `ApplicationData.LocalSettings` (prefs) + **SQLite** (clip catalog) | LocalSettings only for small prefs |
+| `@AppStorage` (UserDefaults) | `ApplicationData.LocalSettings` (prefs) | No SQLite catalog (Clips Manager removed) |
 | `UserNotifications` | `AppNotificationManager` toasts | Requires identity (have it) |
 | Launch at login | Packaged **`StartupTask`** (no registry for Store) | User-visible state + OS-denied fallback |
 | Finder reveal / clipboard | Explorer `/select,`; `Clipboard` `DataPackage` | Save file before clipboard copy |
@@ -58,14 +66,15 @@
 ### Fully supported (high confidence)
 Screenshot (PNG/JPEG, scale/quality); video MP4/H.264 (fps + time limit); GIF; tray app + theming;
 global hotkeys; countdown; region indicator; processing indicator; full settings parity; editors/trimmers;
-Clips Manager (grid/list, tags, notes, filter/sort, quick actions); onboarding + guide; toasts; clipboard;
+mouse-click + branding overlays; onboarding + guide; toasts; clipboard;
 reveal in Explorer; launch at login; MSIX/winget/Store; auto-update.
 
 ### Supported with caveats (designed-for in this plan)
 - **Region capture** = capture monitor then crop each frame (GPU crop). Multi-monitor + per-monitor DPI handled via canonical coordinate model (§5.2).
 - **System audio** = separate WASAPI loopback pipeline (WGC does **not** provide audio).
 - **HDR monitors** = detect `R16G16B16A16Float` surfaces and tonemap to SDR BGRA8 before encode/GIF/PNG.
-- **Mouse-click + branding overlays** = composited into the GPU frame pipeline (Win2D/Direct2D).
+- **Mouse-click + branding overlays** = composited on the CPU into each BGRA frame before encode
+  (implemented; the branding badge is rasterized once with GDI+ and alpha-blended per frame).
 - **Self-window exclusion** = WGC exclusion API (22621+) with hide-windows + drop-pre-roll fallback.
 
 ### Not supported / platform-different (documented for users)
@@ -128,7 +137,7 @@ Design rules baked in from the review:
 
 ### 4.2 Build configurations
 Two MSBuild configs gate channel behavior via `DIRECT` / `STORE` constants (parallel to the mac `APPSTORE`):
-- **Direct:** `.appinstaller` + winget update path; **all Pro features unlocked for free** (`FreeEntitlementService`); no Store APIs, no purchase/license UI.
+- **Direct:** **winget** update path (`winget upgrade`); **all Pro features unlocked for free** (`FreeEntitlementService`); no Store APIs, no purchase/license UI.
 - **Store:** Store auto-update, `StoreEntitlementService` add-ons, **no reachable self-update / appinstaller / winget / external-purchase UI** (Store-cert requirement).
 - **Development:** `DevelopmentEntitlementService` (all features on, for local/dev).
 
@@ -184,14 +193,12 @@ Per clip: stable clip ID, original path + current path, size/hash fingerprint, c
 **missing-file state**, schema version. DB is **not** assumed source of truth when files are edited externally
 (OneDrive sync, rename, external delete, duplicate names). Schema versioning + migrations from day 0.
 
-### 5.8 Upload (opt-in, Phase 3 — modeled now)
-Provider = **Uploadcare** (reuse the macOS integration/keys). States: never / queued / uploading /
-failed-retryable / failed-permanent / uploaded / deletion-requested/deleted.
-Auth tokens in **PasswordVault/DPAPI**, never SQLite. **Opt-in, never auto-upload by default**; explicit user
-action, progress, cancel, retry, deletion semantics; clear privacy copy.
+### 5.8 Upload — REMOVED FROM SCOPE
+~~Provider = Uploadcare; opt-in upload states; secure token storage.~~ The Windows app ships **no
+in-app upload/sharing**. Users share captures from File Explorer. (Retained header for history.)
 
 ### 5.9 Trim policy (v1 = re-encode)
-Trim creates a **new clip**, preserves original, copies tags/notes, **resets upload state**, warns on repeated
+Trim creates a **new clip**, preserves original, warns on repeated
 re-encode quality loss. Precise trim through the same MF encoder (no keyframe-only fast path in v1). Prototype cost.
 
 ### 5.10 Permission / onboarding state model
@@ -236,22 +243,20 @@ indicators + start/stop panels; **atomic save** + toasts + launch-at-login; perm
 
 ### Phase 2 — Editors & Full Settings + Audio
 Screenshot editor; video trimmer (re-encode, new-clip policy); GIF trimmer; full settings UI (General, Video, GIF,
-Mouse Clicks, Screenshot, Hotkeys, Pro); mouse-click + branding overlays in pipeline; **mic + system (WASAPI
+Mouse Clicks, Screenshot, Hotkeys); mouse-click + branding overlays in pipeline; **mic + system (WASAPI
 loopback) audio enabled with AV sync** against master clock; HDR tonemap path validated on real HDR hardware.
 
-### Phase 3 — Clips Manager & Sharing
-Clips Manager window (SQLite catalog: grid/list, density, tags, notes, filter/sort/date, quick actions, archive,
-auto-refresh, confirm-delete, missing-file handling); **opt-in** upload provider integration (states + secure
-tokens); onboarding wizard + Guide window.
+### Phase 3 — Onboarding & Guide
+Onboarding wizard + Guide window. *(Clips Manager & upload/sharing were removed from scope.)*
 
 ### Phase 4 — Distribution & Monetization
-- **Direct (ships first):** signed MSIX + `.appinstaller` auto-update; winget manifest + CI publish;
-  test upgrade/downgrade/reinstall across `.appinstaller` and winget origins; **update ownership per origin**.
+- **Direct (ships first):** signed MSIX published to **winget** (manifest + CI publish); users update with
+  `winget upgrade`. Test upgrade/downgrade/reinstall from the winget origin; **update ownership per origin**.
   Direct build is **fully free** (no Pro gating, no purchase UI).
   - **Prerequisite:** provision **Azure Trusted Signing** before GA. Until then, use a self-signed cert for
     internal/sideload testing only (not public distribution).
 - **Store (soon after):** Partner Center listing; Store add-ons for Pro; Store auto-update; Pro gating via
-  `IEntitlementService`; **Store build ships no reachable self-update / appinstaller / winget / external-purchase UI**
+  `IEntitlementService`; **Store build ships no reachable self-update / winget / external-purchase UI**
   (cert requirement).
 - Identity matrix frozen per channel (package name, publisher, cert subject, PFN, AUMID, notification identity, upgrade path).
 
@@ -298,7 +303,7 @@ README/CONTRIBUTING/CHANGELOG + Windows build & packaging docs.
 
 **Resolved (human clarifications, 2026-06-12):**
 - Pro is **Store-only**; Direct build is **fully free** → no license-key system needed.
-- Upload provider = **Uploadcare** (reuse macOS integration).
+- ~~Upload provider = Uploadcare~~ → **upload/sharing removed from scope** (browse in File Explorer).
 - **Partner Center account available**; launch order kept **Direct first, Store soon after**.
 
 ## 10. Out of Scope (v1)

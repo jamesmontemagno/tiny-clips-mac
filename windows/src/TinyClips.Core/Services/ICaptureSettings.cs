@@ -14,25 +14,6 @@ public interface ICaptureSettings
     bool LaunchAtLogin { get; set; }
     bool ReopenPickerAfterCapture { get; set; }
     string FileNameTemplate { get; set; }
-    bool UploadcareEnabled { get; set; }
-    bool ClipsManagerShowAutoTags { get; set; }
-    bool ClipsManagerShowNotesPreview { get; set; }
-    bool ClipsManagerShowQuickActions { get; set; }
-    bool ClipsManagerShowUploadStatus { get; set; }
-    bool ClipsManagerConfirmDelete { get; set; }
-    bool ClipsManagerCompactListDensity { get; set; }
-    bool ClipsManagerSelectionRowTapSelects { get; set; }
-    bool ClipsManagerIgnoreNonTinyClipsFiles { get; set; }
-    bool ClipsManagerRememberLastState { get; set; }
-    string ClipsManagerDefaultViewMode { get; set; }
-    string ClipsManagerDefaultSortOption { get; set; }
-    string ClipsManagerDefaultFilterType { get; set; }
-    string ClipsManagerDefaultDateFilter { get; set; }
-    int ClipsManagerAutoRefreshSeconds { get; set; }
-    bool ClipsManagerArchiveOldClips { get; set; }
-    int ClipsManagerArchiveAfterDays { get; set; }
-    bool ClipsManagerAutoUploadAfterSave { get; set; }
-    bool ClipsManagerAutoCopyUploadLink { get; set; }
     double GifFrameRate { get; set; }
     int GifMaxWidth { get; set; }
     int VideoFrameRate { get; set; }

@@ -48,6 +48,12 @@ public sealed class ScreenshotService : IScreenshotService
             .ConfigureAwait(false);
 
         var path = _storage.GenerateFilePath(CaptureType.Screenshot);
+
+        if (_settings.ShowBrandingOverlay)
+        {
+            new BrandingOverlayCompositor().Draw(frame.BgraPixels, frame.Width, frame.Height);
+        }
+
         var encoded = await EncodeAsync(frame).ConfigureAwait(false);
 
         var directory = Path.GetDirectoryName(path);

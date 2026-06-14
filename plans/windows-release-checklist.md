@@ -77,11 +77,14 @@
   bundle is simpler for one InstallerUrl, per-arch gives smaller downloads. **Recommend per-arch MSIX**
   (matches the existing installer manifest, which already lists two `Installers`).
 
-### 2.3 (Optional) `.appinstaller` auto-update for Direct
-- ☐ Generate an `.appinstaller` pointing at a stable URL (GitHub Pages / release asset) so Direct
-  users get automatic updates without winget. Document the hosting URL and update cadence.
-- ☐ Verify update ownership: a package installed via `.appinstaller` vs winget must upgrade cleanly
-  (same identity/PFN); test cross-origin upgrade/downgrade/reinstall.
+### 2.3 Auto-update strategy for Direct = **winget**
+The Direct build updates **through winget** — no `.appinstaller`, no in-app self-updater. Once each
+release's manifest is merged into winget-pkgs (§2.5), users get the new version with
+`winget upgrade TinyClips.TinyClips` (or `winget upgrade --all`), and winget's background update
+scan picks it up automatically. There is nothing to host or ship inside the app.
+- ☐ Confirm the package identity/PFN is stable across releases so winget upgrades in place.
+- ☐ Test `winget upgrade` from the previous version → new version (and a clean `winget install`).
+- ☐ (Skipped) `.appinstaller` hosting — intentionally not used; winget is the single Direct channel.
 
 ### 2.4 GitHub Release
 - ☐ Tag `vX.Y.Z`; attach the **signed** MSIX/bundle assets (immutable — never replace a published asset).
@@ -197,8 +200,8 @@ The 3-file manifest lives in `windows/packaging/winget/`. Per release:
    OV/EV cert? This gates the entire Direct/winget path.
 2. **Direct package shape**: per-arch MSIX (matches current winget template) vs a single
    `.msixbundle`?
-3. **`.appinstaller` auto-update for Direct**: ship it (and host where — GitHub Pages?) or rely on
-   winget upgrades only for v1?
+3. **~~`.appinstaller` auto-update~~**: **Decided — Direct updates via winget only** (no
+   `.appinstaller`, no in-app self-updater). Nothing to host.
 4. **Store timing**: cut Direct/winget v1 first, then do the Store entitlement split + add-ons as a
    follow-up — confirm this order (matches the plan's "Direct first, Store soon after").
 5. **Pro on Windows**: confirm the same three add-ons as macOS (monthly/yearly/lifetime), or a

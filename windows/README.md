@@ -8,9 +8,9 @@ A native **WinUI 3 / Windows App SDK** port of Tiny Clips — a tray-based scree
 > capture picker, screenshot, MP4 video + animated GIF recording, post-capture screenshot editor
 > and video/GIF trimmers, an on-screen recording indicator, global hotkeys, pre-capture countdown
 > with a region outline, save toasts, launch-at-login, a full native Settings window, first-run
-> onboarding, and a Guide. Pro-only features (mouse-click visuals, branding overlay, upload) are
-> present but gated. Real-time overlay compositing and microphone/system-audio muxing are not yet
-> implemented; packaging/Store work is deferred. See the plan for the full roadmap.
+> onboarding, and a Guide. Mouse-click visual overlays, the branding overlay, and microphone +
+> system-audio capture are implemented. Packaging/Store work is deferred. See the plan for the
+> full roadmap.
 
 ## Features
 
