@@ -223,7 +223,10 @@
                         Click="OnToolClick"
                         Tag="Counter"
                         ToolTipService.ToolTip="Number (N)">
-                        <FontIcon FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xE8EF;" />
+                        <TextBlock
+                            FontSize="20"
+                            FontWeight="SemiBold"
+                            Text="#" />
                     </ToggleButton>
                     <ToggleButton
                         x:Name="ToolRedact"
