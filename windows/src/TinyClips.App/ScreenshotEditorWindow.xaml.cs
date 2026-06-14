@@ -84,6 +84,10 @@ public sealed partial class ScreenshotEditorWindow : Window
         public Color TextColor { get; set; } = Colors.White;
         public double FontSize { get; set; } = 28;
         public string FontFamily { get; set; } = "Segoe UI";
+        public bool Bold { get; set; }
+        public bool Italic { get; set; }
+        public bool Underline { get; set; }
+        public bool Strikethrough { get; set; }
 
         // Cached blurred preview for redaction annotations (invalidated on move / level change).
         public SoftwareBitmapSource? RedactPreview { get; set; }
@@ -107,6 +111,10 @@ public sealed partial class ScreenshotEditorWindow : Window
     private Color _numberTextColor = Colors.White;
     private double _textFontSize = 28;
     private string _textFontFamily = "Segoe UI";
+    private bool _textBold;
+    private bool _textItalic;
+    private bool _textUnderline;
+    private bool _textStrikethrough;
     private RedactionLevel _redactionLevel = RedactionLevel.Medium;
     private ArrowStyle _arrowStyle = ArrowStyle.Straight;
     private int _counterValue = 1;
@@ -115,8 +123,6 @@ public sealed partial class ScreenshotEditorWindow : Window
     private Point _dragStart;
     private Annotation? _movingAnnotation;
     private Point _moveOffset;
-    private Point _pendingTextOrigin;
-    private bool _textBoxFocused;
 
     // -- Export background / padding ------------------------------------------
 
@@ -361,7 +367,6 @@ public sealed partial class ScreenshotEditorWindow : Window
     {
         _tool = tool;
         _selectedAnnotation = null;
-        CommitPendingText();
 
         foreach (var (button, value) in ToolButtons())
         {
@@ -410,7 +415,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         {
             EditTool.Crop => "Drag to select an area, then choose Apply crop.",
             EditTool.Select => "Click an annotation to select it; drag to move, Del to remove.",
-            EditTool.Text => "Click where you want to add text, then type.",
+            EditTool.Text => "Click where you want text to open the editor; double-click text to edit it.",
             EditTool.Counter => "Click to drop a numbered badge.",
             EditTool.Pen => "Drag to draw freehand.",
             EditTool.Redact => "Drag over content to redact it.",
@@ -617,10 +622,6 @@ public sealed partial class ScreenshotEditorWindow : Window
         if (FontFamilyCombo.SelectedItem is ComboBoxItem { Tag: string font })
         {
             _textFontFamily = font;
-            if (TextEditBox.Visibility == Visibility.Visible)
-            {
-                TextEditBox.FontFamily = new FontFamily(font);
-            }
             if (_selectedAnnotation is { Tool: EditTool.Text } ann)
             {
                 ann.FontFamily = font;
@@ -638,11 +639,6 @@ public sealed partial class ScreenshotEditorWindow : Window
 
         _textFontSize = e.NewValue;
         UpdateInspectorHeaders();
-        if (TextEditBox.Visibility == Visibility.Visible)
-        {
-            var (scale, _, _) = ImageLayout();
-            TextEditBox.FontSize = Math.Max(10, _textFontSize * scale);
-        }
         if (_selectedAnnotation is { Tool: EditTool.Text } ann)
         {
             ann.FontSize = _textFontSize;
@@ -810,7 +806,6 @@ public sealed partial class ScreenshotEditorWindow : Window
             return;
         }
 
-        CommitPendingText();
         var p = e.GetCurrentPoint(OverlayCanvas).Position;
 
         if (_tool == EditTool.Crop)
@@ -1004,6 +999,21 @@ public sealed partial class ScreenshotEditorWindow : Window
         }
     }
 
+    private void OnOverlayDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (_bitmap is null)
+        {
+            return;
+        }
+
+        var p = e.GetPosition(OverlayCanvas);
+        if (HitTest(p) is { Tool: EditTool.Text } textAnn)
+        {
+            _selectedAnnotation = textAnn;
+            EditTextAnnotation(textAnn);
+        }
+    }
+
     private Annotation? HitTest(Point canvasPoint)
     {
         var pixel = CanvasToPixel(canvasPoint);
@@ -1074,98 +1084,105 @@ public sealed partial class ScreenshotEditorWindow : Window
 
     // -- Text entry -----------------------------------------------------------
 
-    private void BeginTextEntry(Point canvasPoint)
+    private async void BeginTextEntry(Point canvasPoint)
     {
-        _pendingTextOrigin = canvasPoint;
-        _textBoxFocused = false;
-        TextEditBox.Text = string.Empty;
-        var (scale, _, _) = ImageLayout();
-        TextEditBox.FontSize = Math.Max(10, _textFontSize * scale);
-        TextEditBox.FontFamily = new FontFamily(_textFontFamily);
-        TextEditBox.Foreground = new SolidColorBrush(_strokeColor);
-        Canvas.SetLeft(TextEditBox, canvasPoint.X);
-        Canvas.SetTop(TextEditBox, canvasPoint.Y);
-        TextEditBox.Visibility = Visibility.Visible;
-
-        // Focus must be deferred: setting focus synchronously inside the pointer-pressed
-        // handler is overridden when the pointer is released, which immediately fires
-        // LostFocus and dismisses the box ("clicks and goes away").
-        DispatcherQueue.TryEnqueue(() =>
+        var dialog = new TextEntryDialog(
+            FontChoices,
+            string.Empty,
+            _textFontFamily,
+            _textFontSize,
+            _strokeColor,
+            _textBold,
+            _textItalic,
+            _textUnderline,
+            _textStrikethrough,
+            isEdit: false)
         {
-            if (TextEditBox.Visibility == Visibility.Visible)
-            {
-                TextEditBox.Focus(FocusState.Programmatic);
-            }
+            XamlRoot = Content.XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(dialog.ResultText))
+        {
+            return;
+        }
+
+        // Remember the chosen styling as the new tool defaults.
+        _textFontFamily = dialog.ResultFont;
+        _textFontSize = dialog.ResultSize;
+        _strokeColor = dialog.ResultColor;
+        _textBold = dialog.ResultBold;
+        _textItalic = dialog.ResultItalic;
+        _textUnderline = dialog.ResultUnderline;
+        _textStrikethrough = dialog.ResultStrikethrough;
+
+        var pixel = CanvasToPixel(canvasPoint);
+        _annotations.Add(new Annotation
+        {
+            Tool = EditTool.Text,
+            Color = dialog.ResultColor,
+            Thickness = _strokeThickness,
+            Text = dialog.ResultText,
+            FontSize = dialog.ResultSize,
+            FontFamily = dialog.ResultFont,
+            Bold = dialog.ResultBold,
+            Italic = dialog.ResultItalic,
+            Underline = dialog.ResultUnderline,
+            Strikethrough = dialog.ResultStrikethrough,
+            Bounds = new Rect(pixel.X, pixel.Y, 0, 0),
         });
+        RedrawOverlay();
     }
 
-    private void OnTextEntryGotFocus(object sender, RoutedEventArgs e) => _textBoxFocused = true;
-
-    private void OnTextEntryKeyDown(object sender, KeyRoutedEventArgs e)
+    private async void EditTextAnnotation(Annotation ann)
     {
-        if (e.Key == Windows.System.VirtualKey.Enter)
+        var dialog = new TextEntryDialog(
+            FontChoices,
+            ann.Text,
+            ann.FontFamily,
+            ann.FontSize,
+            ann.Color,
+            ann.Bold,
+            ann.Italic,
+            ann.Underline,
+            ann.Strikethrough,
+            isEdit: true)
         {
-            e.Handled = true;
-            CommitPendingText();
-        }
-        else if (e.Key == Windows.System.VirtualKey.Escape)
-        {
-            e.Handled = true;
-            _textBoxFocused = false;
-            TextEditBox.Text = string.Empty;
-            TextEditBox.Visibility = Visibility.Collapsed;
-        }
-    }
+            XamlRoot = Content.XamlRoot,
+        };
 
-    private void OnTextEntryCommitted(object sender, RoutedEventArgs e)
-    {
-        // Ignore the transient LostFocus that fires before the box has actually gained
-        // focus (the deferred Focus() call races with pointer release).
-        if (!_textBoxFocused)
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary)
         {
             return;
         }
 
-        CommitPendingText();
-    }
-
-    private void CommitPendingText()
-    {
-        if (TextEditBox.Visibility != Visibility.Visible)
+        if (string.IsNullOrWhiteSpace(dialog.ResultText))
         {
-            return;
-        }
-
-        var text = TextEditBox.Text;
-        _textBoxFocused = false;
-        TextEditBox.Visibility = Visibility.Collapsed;
-
-        if (!string.IsNullOrWhiteSpace(text))
-        {
-            var pixel = CanvasToPixel(_pendingTextOrigin);
-            _annotations.Add(new Annotation
+            _annotations.Remove(ann);
+            if (ReferenceEquals(_selectedAnnotation, ann))
             {
-                Tool = EditTool.Text,
-                Color = _strokeColor,
-                Thickness = _strokeThickness,
-                Text = text,
-                FontSize = _textFontSize,
-                FontFamily = _textFontFamily,
-                Bounds = new Rect(pixel.X, pixel.Y, 0, 0),
-            });
+                _selectedAnnotation = null;
+            }
             RedrawOverlay();
+            return;
         }
+
+        ann.Text = dialog.ResultText;
+        ann.FontFamily = dialog.ResultFont;
+        ann.FontSize = dialog.ResultSize;
+        ann.Color = dialog.ResultColor;
+        ann.Bold = dialog.ResultBold;
+        ann.Italic = dialog.ResultItalic;
+        ann.Underline = dialog.ResultUnderline;
+        ann.Strikethrough = dialog.ResultStrikethrough;
+        RedrawOverlay();
     }
 
     // -- Keyboard -------------------------------------------------------------
 
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (TextEditBox.Visibility == Visibility.Visible)
-        {
-            return;
-        }
-
         var ctrl = Microsoft.UI.Input.InputKeyboardSource
             .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
             .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
@@ -1334,11 +1351,11 @@ public sealed partial class ScreenshotEditorWindow : Window
 
     private void RedrawOverlay(bool previewActive = false)
     {
-        // Remove all annotation visuals but keep SelectionRect and TextEditBox.
+        // Remove all annotation visuals but keep SelectionRect.
         for (var i = OverlayCanvas.Children.Count - 1; i >= 0; i--)
         {
             var child = OverlayCanvas.Children[i];
-            if (child != SelectionRect && child != TextEditBox)
+            if (child != SelectionRect)
             {
                 OverlayCanvas.Children.RemoveAt(i);
             }
@@ -1501,8 +1518,19 @@ public sealed partial class ScreenshotEditorWindow : Window
                     Foreground = brush,
                     FontSize = ann.FontSize * scale,
                     FontFamily = new FontFamily(ann.FontFamily),
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    FontWeight = ann.Bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
+                    FontStyle = ann.Italic ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
                 };
+                var decorations = Windows.UI.Text.TextDecorations.None;
+                if (ann.Underline)
+                {
+                    decorations |= Windows.UI.Text.TextDecorations.Underline;
+                }
+                if (ann.Strikethrough)
+                {
+                    decorations |= Windows.UI.Text.TextDecorations.Strikethrough;
+                }
+                text.TextDecorations = decorations;
                 Canvas.SetLeft(text, tl.X);
                 Canvas.SetTop(text, tl.Y);
                 OverlayCanvas.Children.Add(text);
@@ -2066,9 +2094,20 @@ public sealed partial class ScreenshotEditorWindow : Window
                 {
                     FontSize = fontSize,
                     FontFamily = ann.FontFamily,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    FontWeight = ann.Bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
+                    FontStyle = ann.Italic ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
+                    WordWrapping = CanvasWordWrapping.NoWrap,
                 };
-                ds.DrawText(ann.Text, new Vector2((float)ann.Bounds.X, (float)ann.Bounds.Y), color, format);
+                using var layout = new CanvasTextLayout(ds, ann.Text, format, 0, 0);
+                if (ann.Underline)
+                {
+                    layout.SetUnderline(0, ann.Text.Length, true);
+                }
+                if (ann.Strikethrough)
+                {
+                    layout.SetStrikethrough(0, ann.Text.Length, true);
+                }
+                ds.DrawTextLayout(layout, new Vector2((float)ann.Bounds.X, (float)ann.Bounds.Y), color);
                 break;
             }
             case EditTool.Counter:
@@ -2125,7 +2164,6 @@ public sealed partial class ScreenshotEditorWindow : Window
             return;
         }
 
-        CommitPendingText();
         await EncodeToFileAsync(_filePath);
         Close();
     }
@@ -2137,7 +2175,6 @@ public sealed partial class ScreenshotEditorWindow : Window
             return;
         }
 
-        CommitPendingText();
         var picker = new FileSavePicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
         picker.FileTypeChoices.Add("PNG image", new[] { ".png" });
         picker.FileTypeChoices.Add("JPEG image", new[] { ".jpg" });
@@ -2162,7 +2199,6 @@ public sealed partial class ScreenshotEditorWindow : Window
 
         try
         {
-            CommitPendingText();
             using var flattened = await RenderToBitmapAsync();
             using var stream = new InMemoryRandomAccessStream();
             var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);

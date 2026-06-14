@@ -32,6 +32,10 @@ own `CHANGELOG.md` at the repository root.
   abstraction were deleted to keep the app simple.
 
 ### Fixed
+- **Screenshot editor: text tool no longer vanishes on click** — adding text used a fragile inline
+  overlay box whose focus raced with the pointer release, so it appeared and instantly disappeared,
+  and its resize grip was tiny. Text now opens a proper modal **text dialog** with a multi-line entry
+  field, so the click-and-it's-gone behavior is gone.
 - **Screenshot editor: arrowhead tip poke-through** — the arrow shaft was drawn all the way to the
   tip with a round end cap, so the cap poked past the filled arrowhead. The shaft now stops short of
   the tip and the arrowhead is aligned to the true tangent at the tip, so the point looks clean.
@@ -53,6 +57,10 @@ own `CHANGELOG.md` at the repository root.
   "Open with Tiny Clips". The initialization guard now defaults on.
 
 ### Added
+- **Screenshot editor: rich text dialog** — the text tool now opens a dedicated dialog with **bold,
+  italic, underline and strikethrough** toggles, font and size pickers, a text color picker and a live
+  preview, confirmed with **OK**. Double-click an existing text label to reopen the dialog and edit
+  it (clearing the text deletes the label). Styling carries over to the next text you add.
 - **Screenshot editor: straight & curved arrows** — the arrow tool gains an **Arrow** style picker
   (Straight, Curved, Curved alt) in the inspector. Curved arrows bow to either side via a quadratic
   bezier shaft, and the style can be changed per-arrow after selecting it.

@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="TinyClips.App.TextEntryDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Add text"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary"
+    PrimaryButtonText="OK"
+    mc:Ignorable="d">
+
+    <StackPanel MinWidth="380" Spacing="12">
+
+        <!--  Formatting toolbar  -->
+        <StackPanel Orientation="Horizontal" Spacing="6">
+            <ToggleButton
+                x:Name="BoldToggle"
+                AutomationProperties.AutomationId="TextDialogBold"
+                AutomationProperties.Name="Bold"
+                Click="OnFormattingChanged"
+                ToolTipService.ToolTip="Bold">
+                <FontIcon FontSize="16" Glyph="&#xE8DD;" />
+            </ToggleButton>
+            <ToggleButton
+                x:Name="ItalicToggle"
+                AutomationProperties.AutomationId="TextDialogItalic"
+                AutomationProperties.Name="Italic"
+                Click="OnFormattingChanged"
+                ToolTipService.ToolTip="Italic">
+                <FontIcon FontSize="16" Glyph="&#xE8DB;" />
+            </ToggleButton>
+            <ToggleButton
+                x:Name="UnderlineToggle"
+                AutomationProperties.AutomationId="TextDialogUnderline"
+                AutomationProperties.Name="Underline"
+                Click="OnFormattingChanged"
+                ToolTipService.ToolTip="Underline">
+                <FontIcon FontSize="16" Glyph="&#xE8DC;" />
+            </ToggleButton>
+            <ToggleButton
+                x:Name="StrikeToggle"
+                AutomationProperties.AutomationId="TextDialogStrikethrough"
+                AutomationProperties.Name="Strikethrough"
+                Click="OnFormattingChanged"
+                ToolTipService.ToolTip="Strikethrough">
+                <FontIcon FontSize="16" Glyph="&#xEDE0;" />
+            </ToggleButton>
+
+            <Button
+                x:Name="ColorButton"
+                Width="40"
+                AutomationProperties.AutomationId="TextDialogColor"
+                AutomationProperties.Name="Text color"
+                ToolTipService.ToolTip="Text color">
+                <Border
+                    x:Name="ColorSwatch"
+                    Width="20"
+                    Height="20"
+                    CornerRadius="4" />
+                <Button.Flyout>
+                    <Flyout>
+                        <ColorPicker
+                            x:Name="TextColorPicker"
+                            ColorChanged="OnColorChanged"
+                            IsAlphaEnabled="False"
+                            IsColorSliderVisible="True"
+                            IsHexInputVisible="True" />
+                    </Flyout>
+                </Button.Flyout>
+            </Button>
+        </StackPanel>
+
+        <!--  Font + size  -->
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ComboBox
+                x:Name="FontCombo"
+                Grid.Column="0"
+                HorizontalAlignment="Stretch"
+                AutomationProperties.AutomationId="TextDialogFont"
+                AutomationProperties.Name="Font"
+                Header="Font"
+                SelectionChanged="OnFontChanged" />
+            <NumberBox
+                x:Name="SizeBox"
+                Grid.Column="1"
+                Width="120"
+                AutomationProperties.AutomationId="TextDialogSize"
+                AutomationProperties.Name="Font size"
+                Header="Size"
+                Maximum="400"
+                Minimum="8"
+                SmallChange="1"
+                SpinButtonPlacementMode="Inline"
+                ValueChanged="OnSizeChanged" />
+        </Grid>
+
+        <!--  Text entry  -->
+        <TextBox
+            x:Name="EntryBox"
+            MinHeight="80"
+            AcceptsReturn="True"
+            AutomationProperties.AutomationId="TextDialogEntry"
+            AutomationProperties.Name="Text"
+            Header="Text"
+            PlaceholderText="Type your text…"
+            TextChanged="OnTextChanged"
+            TextWrapping="Wrap" />
+
+        <!--  Live preview  -->
+        <Border
+            MinHeight="64"
+            Padding="12"
+            Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource ControlCornerRadius}">
+            <TextBlock
+                x:Name="PreviewText"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                TextWrapping="Wrap" />
+        </Border>
+    </StackPanel>
+</ContentDialog>

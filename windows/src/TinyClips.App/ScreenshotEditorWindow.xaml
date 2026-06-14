@@ -564,6 +564,7 @@
                 <Canvas
                     x:Name="OverlayCanvas"
                     Background="Transparent"
+                    DoubleTapped="OnOverlayDoubleTapped"
                     PointerMoved="OnPointerMoved"
                     PointerPressed="OnPointerPressed"
                     PointerReleased="OnPointerReleased">
@@ -574,20 +575,6 @@
                         Stroke="{ThemeResource AccentFillColorDefaultBrush}"
                         StrokeDashArray="4,2"
                         StrokeThickness="2"
-                        Visibility="Collapsed" />
-                    <TextBox
-                        x:Name="TextEditBox"
-                        MinWidth="120"
-                        Padding="6,2"
-                        AcceptsReturn="False"
-                        AutomationProperties.AutomationId="EditorTextEntry"
-                        Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                        BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
-                        BorderThickness="2"
-                        FontSize="16"
-                        GotFocus="OnTextEntryGotFocus"
-                        KeyDown="OnTextEntryKeyDown"
-                        LostFocus="OnTextEntryCommitted"
                         Visibility="Collapsed" />
                 </Canvas>
                 <TextBlock
