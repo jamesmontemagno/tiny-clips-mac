@@ -13,20 +13,25 @@ namespace TinyClips.App;
 /// </summary>
 public sealed partial class RecordingIndicatorWindow : Window
 {
-    private const int WidthDip = 248;
+    private const int WidthDip = 320;
     private const int HeightDip = 64;
     private const int TopOffsetDip = 24;
 
     private const uint WdaExcludeFromCapture = 0x11;
 
+    private const string MicGlyph = "\uE720";
+    private const string SystemAudioOnGlyph = "\uE767";
+    private const string SystemAudioOffGlyph = "\uE74F";
+
     private bool _stopRequested;
     private bool _closed;
+    private bool _suppressAudioEvents;
 
     private bool _dragging;
     private POINT _dragCursorStart;
     private PointInt32 _dragWindowStart;
 
-    public RecordingIndicatorWindow(string stopHint)
+    public RecordingIndicatorWindow(string stopHint, bool showAudioControls, bool micOn, bool systemAudioOn)
     {
         InitializeComponent();
 
@@ -34,11 +39,32 @@ public sealed partial class RecordingIndicatorWindow : Window
             ? "Stop from tray"
             : $"Stop: {stopHint}";
 
+        if (showAudioControls)
+        {
+            _suppressAudioEvents = true;
+            MicToggle.IsChecked = micOn;
+            SystemAudioToggle.IsChecked = systemAudioOn;
+            _suppressAudioEvents = false;
+            UpdateMicVisual(micOn);
+            UpdateSystemAudioVisual(systemAudioOn);
+        }
+        else
+        {
+            MicToggle.Visibility = Visibility.Collapsed;
+            SystemAudioToggle.Visibility = Visibility.Collapsed;
+        }
+
         ConfigurePresenter();
         Closed += OnClosed;
     }
 
     public Action? StopRequested { get; set; }
+
+    /// <summary>Raised when the microphone toggle changes; persists the default for the next recording.</summary>
+    public Action<bool>? MicrophoneToggled { get; set; }
+
+    /// <summary>Raised when the system-audio toggle changes; persists the default for the next recording.</summary>
+    public Action<bool>? SystemAudioToggled { get; set; }
 
     public void ShowNear()
     {
@@ -87,6 +113,48 @@ public sealed partial class RecordingIndicatorWindow : Window
         var callback = StopRequested;
         StopRequested = null;
         callback?.Invoke();
+    }
+
+    private void OnMicToggled(object sender, RoutedEventArgs e)
+    {
+        var on = MicToggle.IsChecked == true;
+        UpdateMicVisual(on);
+
+        if (_suppressAudioEvents)
+        {
+            return;
+        }
+
+        MicrophoneToggled?.Invoke(on);
+    }
+
+    private void OnSystemAudioToggled(object sender, RoutedEventArgs e)
+    {
+        var on = SystemAudioToggle.IsChecked == true;
+        UpdateSystemAudioVisual(on);
+
+        if (_suppressAudioEvents)
+        {
+            return;
+        }
+
+        SystemAudioToggled?.Invoke(on);
+    }
+
+    private void UpdateMicVisual(bool on)
+    {
+        MicIcon.Glyph = MicGlyph;
+        var state = on ? "On" : "Off";
+        Microsoft.UI.Xaml.Controls.ToolTipService.SetToolTip(MicToggle, $"Microphone: {state} (for the next recording)");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(MicToggle, $"Microphone {state}");
+    }
+
+    private void UpdateSystemAudioVisual(bool on)
+    {
+        SystemAudioIcon.Glyph = on ? SystemAudioOnGlyph : SystemAudioOffGlyph;
+        var state = on ? "On" : "Off";
+        Microsoft.UI.Xaml.Controls.ToolTipService.SetToolTip(SystemAudioToggle, $"System audio: {state} (for the next recording)");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(SystemAudioToggle, $"System audio {state}");
     }
 
     // Drag-anywhere support: pressing the Stop button is handled by the Button itself

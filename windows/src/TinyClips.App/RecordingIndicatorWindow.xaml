@@ -53,15 +53,49 @@
                         Text="Stop from tray" />
                 </StackPanel>
 
-                <Button
-                    x:Name="StopButton"
+                <StackPanel
                     Grid.Column="2"
-                    AutomationProperties.AutomationId="StopRecordingButton"
-                    AutomationProperties.Name="Stop recording"
-                    Click="OnStopClick"
-                    Content="Stop"
-                    Style="{StaticResource AccentButtonStyle}"
-                    ToolTipService.ToolTip="Stop recording" />
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center"
+                    Spacing="6">
+
+                    <ToggleButton
+                        x:Name="MicToggle"
+                        Width="32"
+                        Height="32"
+                        MinWidth="0"
+                        Padding="0"
+                        AutomationProperties.AutomationId="ToggleMicrophoneButton"
+                        AutomationProperties.Name="Microphone"
+                        Checked="OnMicToggled"
+                        Unchecked="OnMicToggled"
+                        ToolTipService.ToolTip="Microphone (for the next recording)">
+                        <FontIcon x:Name="MicIcon" FontSize="14" Glyph="&#xE720;" />
+                    </ToggleButton>
+
+                    <ToggleButton
+                        x:Name="SystemAudioToggle"
+                        Width="32"
+                        Height="32"
+                        MinWidth="0"
+                        Padding="0"
+                        AutomationProperties.AutomationId="ToggleSystemAudioButton"
+                        AutomationProperties.Name="System audio"
+                        Checked="OnSystemAudioToggled"
+                        Unchecked="OnSystemAudioToggled"
+                        ToolTipService.ToolTip="System audio (for the next recording)">
+                        <FontIcon x:Name="SystemAudioIcon" FontSize="14" Glyph="&#xE767;" />
+                    </ToggleButton>
+
+                    <Button
+                        x:Name="StopButton"
+                        AutomationProperties.AutomationId="StopRecordingButton"
+                        AutomationProperties.Name="Stop recording"
+                        Click="OnStopClick"
+                        Content="Stop"
+                        Style="{StaticResource AccentButtonStyle}"
+                        ToolTipService.ToolTip="Stop recording" />
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

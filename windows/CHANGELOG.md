@@ -6,6 +6,11 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Added
+- **Microphone & system-audio toggles in the recording bar** — while recording a video, the
+  floating recording bar now shows two small icon toggles (microphone and system audio) next to
+  Stop. Toggling them updates the audio defaults used for your next recording, so you can quickly
+  flip audio sources on/off without opening Settings. The toggles are hidden for GIF captures
+  (which have no audio).
 - **Drag the selected trim region** — on the video/GIF trim bar you can now grab the highlighted
   selection between the two handles and slide the whole range left or right (its length is
   preserved), in addition to dragging each handle individually. The cursor shows a move icon over

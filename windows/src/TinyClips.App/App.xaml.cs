@@ -650,8 +650,16 @@ public partial class App : Application
         _recordingStartedUtc = DateTime.UtcNow;
 
         var hotKeys = Services.GetRequiredService<IHotKeyService>();
-        var window = new RecordingIndicatorWindow(hotKeys.StopRecordingDisplayString);
+        var settings = Services.GetRequiredService<ICaptureSettings>();
+        var showAudioControls = type == CaptureType.Video;
+        var window = new RecordingIndicatorWindow(
+            hotKeys.StopRecordingDisplayString,
+            showAudioControls,
+            settings.RecordMicrophone,
+            settings.RecordAudio);
         window.StopRequested = () => _ = StopActiveRecordingAsync();
+        window.MicrophoneToggled = on => settings.RecordMicrophone = on;
+        window.SystemAudioToggled = on => settings.RecordAudio = on;
         window.Closed += (_, _) =>
         {
             if (ReferenceEquals(_recordingIndicator, window))
