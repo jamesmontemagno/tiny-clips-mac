@@ -744,9 +744,11 @@ public partial class App : Application
         window.UpdateElapsed(TimeSpan.Zero);
 
         var monitor = selection.Monitor ?? ResolveMonitorForTarget(selection.Target);
-        var region = selection.Region is { } selectedRegion
-            ? ToVirtualDesktopRegion(selection.Target, selectedRegion)
-            : null;
+        PixelRect? region = null;
+        if (selection.Region is { } selectedRegion)
+        {
+            region = ToVirtualDesktopRegion(selection.Target, selectedRegion);
+        }
         window.ShowNear(monitor, region);
 
         _recordingTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -794,9 +796,11 @@ public partial class App : Application
 
         _processingIndicator = window;
         var monitor = selection is { } current ? current.Monitor ?? ResolveMonitorForTarget(current.Target) : null;
-        var region = selection is { Region: { } selectedRegion, Target: { } selectedTarget }
-            ? ToVirtualDesktopRegion(selectedTarget, selectedRegion)
-            : null;
+        PixelRect? region = null;
+        if (selection is { Region: { } selectedRegion, Target: { } selectedTarget })
+        {
+            region = ToVirtualDesktopRegion(selectedTarget, selectedRegion);
+        }
         window.ShowNear(monitor, region);
     }
 
