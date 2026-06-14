@@ -17,3 +17,6 @@ Packages/
 .DS_Store
 TinyClips.xcodeproj/project.xcworkspace/xcuserdata/jamesmontemagno.xcuserdatad/UserInterfaceState.xcuserstate
 TinyClips.xcodeproj/xcuserdata/jamesmontemagno.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist
+
+# Visual Studio workspace/local state
+.vs/
