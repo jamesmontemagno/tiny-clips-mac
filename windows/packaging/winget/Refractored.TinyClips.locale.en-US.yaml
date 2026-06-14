@@ -3,6 +3,7 @@ PackageVersion: 1.0.0.0
 PackageLocale: en-US
 Publisher: Refractored
 PublisherUrl: https://github.com/jamesmontemagno
+PrivacyUrl: https://tinyclips.app/privacy.html
 PublisherSupportUrl: https://github.com/jamesmontemagno/tiny-clips/issues
 Author: James Montemagno
 PackageName: Tiny Clips

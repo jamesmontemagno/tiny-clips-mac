@@ -55,6 +55,9 @@ own `CHANGELOG.md` at the repository root.
   and store-specific distribution behavior is now controlled by
   `-p:TinyClipsStoreBuild=true` / `TINYCLIPS_STORE_BUILD` (for example, hiding direct/winget update
   surfaces in Store builds).
+- **Windows privacy policy URL is now set for distribution metadata** — the winget locale manifest
+  now publishes `PrivacyUrl: https://tinyclips.app/privacy.html`, and Windows packaging docs now
+  reference the same URL for Store listing metadata.
 - **Repository renamed to `jamesmontemagno/tiny-clips`** — the GitHub repository link on the
   Settings → About page, the winget manifests, and all documentation now point at the new
   `tiny-clips` repository (the old `tiny-clips-mac` URLs continue to redirect). The winget package
