@@ -38,6 +38,22 @@ public sealed class CaptureSettingsTests
     }
 
     [Fact]
+    public void MultiMonitorCaptureMode_UsesLegacyAlwaysCaptureMainDisplay_WhenModeIsMissing()
+    {
+        var mainDisplaySettingsService = new TestSettingsService();
+        mainDisplaySettingsService.Set("alwaysCaptureMainDisplay", true);
+        var mainDisplaySettings = new CaptureSettings(mainDisplaySettingsService);
+
+        Assert.Equal(MultiMonitorCaptureMode.MainDisplay, mainDisplaySettings.MultiMonitorCaptureMode);
+
+        var pickerSettingsService = new TestSettingsService();
+        pickerSettingsService.Set("alwaysCaptureMainDisplay", false);
+        var pickerSettings = new CaptureSettings(pickerSettingsService);
+
+        Assert.Equal(MultiMonitorCaptureMode.Picker, pickerSettings.MultiMonitorCaptureMode);
+    }
+
+    [Fact]
     public void ImageFormat_RoundTripsThroughScreenshotFormat()
     {
         var settings = CreateSettings();

@@ -320,13 +320,13 @@ public sealed class CaptureSettings : ICaptureSettings
             {
                 // Back-compat with the previous boolean toggle.
                 return _settings.Get("alwaysCaptureMainDisplay", false)
-                    ? Models.MultiMonitorCaptureMode.MainDisplay
-                    : Models.MultiMonitorCaptureMode.Picker;
+                    ? MultiMonitorCaptureMode.MainDisplay
+                    : MultiMonitorCaptureMode.Picker;
             }
 
             return Enum.TryParse<MultiMonitorCaptureMode>(persisted, ignoreCase: true, out var parsed)
                 ? parsed
-                : Models.MultiMonitorCaptureMode.Picker;
+                : MultiMonitorCaptureMode.Picker;
         }
         set => _settings.Set("multiMonitorCaptureMode", value.ToString());
     }
@@ -501,7 +501,7 @@ public sealed class CaptureSettings : ICaptureSettings
         ScreenshotCountdownEnabled = false;
         ScreenshotCountdownDuration = 3;
         HasCompletedOnboarding = false;
-        MultiMonitorCaptureMode = Models.MultiMonitorCaptureMode.Picker;
+        MultiMonitorCaptureMode = MultiMonitorCaptureMode.Picker;
         ShowRegionIndicator = true;
         IncludeTinyClipsInCapture = false;
         ShowBrandingOverlay = false;

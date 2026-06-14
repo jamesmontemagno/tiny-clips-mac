@@ -10,6 +10,10 @@ own `CHANGELOG.md` at the repository root.
   badge (a rounded black pill with white text) in the bottom-right corner, matching the macOS app.
   It is burned into screenshots, every GIF frame, and every video frame; the badge scales with the
   capture height. Off by default.
+- **Multi-monitor capture targeting** — on multi-display setups, Settings now includes a capture
+  target mode (**Ask every time**, **Display under cursor**, or **Main display**) for Screen/Region
+  captures. Region selection now works across all monitors when needed, and countdown/recording/
+  processing overlays are anchored to the selected display.
 - **Microphone & system-audio toggles in the recording bar** — while recording a video, the
   floating recording bar now shows two small icon toggles (microphone and system audio) next to
   Stop. Toggling them updates the audio defaults used for your next recording, so you can quickly
