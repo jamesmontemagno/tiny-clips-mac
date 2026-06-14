@@ -75,6 +75,11 @@
                     Content="Hotkeys"
                     Icon="Keyboard"
                     Tag="Hotkeys" />
+                <NavigationViewItem
+                    AutomationProperties.AutomationId="AboutNavigationItem"
+                    Content="About"
+                    Icon="Help"
+                    Tag="About" />
             </NavigationView.MenuItems>
 
             <ScrollViewer Padding="0,0,0,24">
@@ -1185,6 +1190,62 @@
                         </Grid>
                     </StackPanel>
                 </Border>
+                    </StackPanel>
+
+                    <StackPanel
+                        x:Name="AboutSection"
+                        Spacing="8"
+                            Visibility="Collapsed">
+<!--  ABOUT  -->
+                <TextBlock
+                    Margin="4,16,0,4"
+                    Style="{StaticResource SubtitleTextBlockStyle}"
+                    Text="About" />
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Tiny Clips for Windows" />
+                        <TextBlock
+                            x:Name="AboutVersionText"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="Version" />
+                        <TextBlock
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="A fast, beautiful screen capture app for screenshots, video, and GIFs." />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource SettingCardStyle}">
+                    <Grid ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Source code" />
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="View the project, report issues, and contribute on GitHub." />
+                        </StackPanel>
+                        <HyperlinkButton
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="AboutRepoLink"
+                            AutomationProperties.Name="Open the Tiny Clips GitHub repository"
+                            Content="GitHub repository"
+                            NavigateUri="https://github.com/jamesmontemagno/tiny-clips-mac" />
+                    </Grid>
+                </Border>
+
+                <TextBlock
+                    x:Name="AboutCopyrightText"
+                    Margin="4,4,0,0"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="© Refractored LLC" />
                     </StackPanel>
                 </Grid>
             </ScrollViewer>

@@ -46,6 +46,7 @@ public sealed partial class SettingsWindow : Window
         ApplyTheme();
         UpdateMouseClickPreview();
         UpdateGifMouseClickPreview();
+        UpdateAboutInfo();
         ViewModel.ThemeChanged += ApplyTheme;
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         Closed += OnClosed;
@@ -256,6 +257,28 @@ public sealed partial class SettingsWindow : Window
         }
     }
 
+    private void UpdateAboutInfo()
+    {
+        var version = "1.0.0";
+        try
+        {
+            var v = Windows.ApplicationModel.Package.Current.Id.Version;
+            version = $"{v.Major}.{v.Minor}.{v.Build}.{v.Revision}";
+        }
+        catch
+        {
+            // Unpackaged runs can't query the package version; fall back to the assembly version.
+            var asmVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            if (asmVersion is not null)
+            {
+                version = asmVersion.ToString();
+            }
+        }
+
+        AboutVersionText.Text = $"Version {version}";
+        AboutCopyrightText.Text = $"© {DateTime.Now.Year} Refractored LLC";
+    }
+
     private void ShowSettingsSection(string sectionTag)
     {
         GeneralSection.Visibility = sectionTag == "General" ? Visibility.Visible : Visibility.Collapsed;
@@ -265,6 +288,7 @@ public sealed partial class SettingsWindow : Window
         MouseClicksSection.Visibility = sectionTag == "MouseClicks" ? Visibility.Visible : Visibility.Collapsed;
         BrandingSection.Visibility = sectionTag == "Branding" ? Visibility.Visible : Visibility.Collapsed;
         HotkeysSection.Visibility = sectionTag == "Hotkeys" ? Visibility.Visible : Visibility.Collapsed;
+        AboutSection.Visibility = sectionTag == "About" ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void OnBrowseSaveDirectory(object sender, RoutedEventArgs e)

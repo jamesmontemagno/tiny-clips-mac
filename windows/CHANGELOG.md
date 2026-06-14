@@ -6,6 +6,9 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Changed
+- **Settings has an About page** — a new **About** section in Settings shows the app name and
+  version, a link to the project's **GitHub repository**, and a `© <year> Refractored LLC`
+  copyright line.
 - **Video & GIF trimmers now use a single-line trim bar (macOS-style)** — both trimmers replace the
   previous stacked start/end (and current-frame) sliders with one custom `TrimBar`: a dimmed track
   with an accent-colored selection between two draggable handles and a movable playhead. Drag a
