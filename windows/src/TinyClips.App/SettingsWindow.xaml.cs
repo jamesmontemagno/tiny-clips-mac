@@ -24,6 +24,8 @@ namespace TinyClips.App;
 public sealed partial class SettingsWindow : Window
 {
     public SettingsViewModel ViewModel { get; }
+    public bool IsStoreBuild => BuildFlavor.IsStoreBuild;
+    public bool IsDirectBuild => BuildFlavor.IsDirectBuild;
 
     public SettingsWindow()
     {
@@ -35,6 +37,7 @@ public sealed partial class SettingsWindow : Window
             App.Services.GetRequiredService<IClipStorageService>());
 
         InitializeComponent();
+        ApplyBuildFlavorVisibility();
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
@@ -308,6 +311,12 @@ public sealed partial class SettingsWindow : Window
         BrandingSection.Visibility = sectionTag == "Branding" ? Visibility.Visible : Visibility.Collapsed;
         HotkeysSection.Visibility = sectionTag == "Hotkeys" ? Visibility.Visible : Visibility.Collapsed;
         AboutSection.Visibility = sectionTag == "About" ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ApplyBuildFlavorVisibility()
+    {
+        DirectBuildUpdatesCard.Visibility = IsDirectBuild ? Visibility.Visible : Visibility.Collapsed;
+        StoreBuildUpdatesCard.Visibility = IsStoreBuild ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void OnBrowseSaveDirectory(object sender, RoutedEventArgs e)

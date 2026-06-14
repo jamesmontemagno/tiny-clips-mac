@@ -25,6 +25,19 @@
     <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!--
+      Build flavor switch:
+      - false (default): Direct/winget distribution
+      - true: Microsoft Store distribution
+    -->
+    <TinyClipsStoreBuild Condition="'$(TinyClipsStoreBuild)' == ''">false</TinyClipsStoreBuild>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TinyClipsStoreBuild)' == 'true'">
+    <DefineConstants>$(DefineConstants);TINYCLIPS_STORE_BUILD</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />
