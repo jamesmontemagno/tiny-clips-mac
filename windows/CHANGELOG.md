@@ -6,6 +6,11 @@ own `CHANGELOG.md` at the repository root.
 ## [Unreleased]
 
 ### Changed
+- **App & tray icon restyled to match the macOS app** — the Windows icon set now uses the same
+  glyph as the Mac app (four corner focus-brackets around a solid center dot) in place of the older
+  nested-squares-with-crosshair mark, while keeping the blue gradient background. Every asset
+  (tray icon, app icon, Start tiles, Store logo, splash screen, lock-screen logo) was regenerated
+  from a single source via `windows/tools/generate-icons.py`.
 - **Default save location now matches the macOS app (Desktop)** — newly captured clips default to
   the user's **Desktop** for every capture type, mirroring the Mac app, instead of
   `Pictures\TinyClips` / `Videos\TinyClips`. Picking a custom Save location still overrides this.
