@@ -32,6 +32,9 @@ own `CHANGELOG.md` at the repository root.
   selection marquee and hit-testing cover the entire annotation.
 
 ### Changed
+- **Default save location is now `Pictures\TinyClips`** — new clips default to a `TinyClips` folder
+  inside your Pictures library (matching the macOS app) instead of the Desktop, when you haven't
+  chosen a custom save folder in Settings.
 - **Video trimmer now uses a single play/pause button instead of the full media transport bar** —
   the built-in media transport controls are hidden (you scrub with the trim bar), replaced by one
   play/pause toggle next to the frame stepper. The icon swaps between play and pause, and preview

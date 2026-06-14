@@ -24,9 +24,10 @@ public sealed class ClipStorageService : IClipStorageService
             return _settings.SaveDirectory.Trim();
         }
 
-        // Match the macOS app, which saves every capture type directly to the
-        // user's Desktop by default (no per-type subfolder).
-        return _fileSystem.GetFolderPath(Environment.SpecialFolder.Desktop);
+        // Match the macOS app, which saves every capture type to a "TinyClips"
+        // folder inside the user's Pictures library by default.
+        var pictures = _fileSystem.GetFolderPath(Environment.SpecialFolder.MyPictures);
+        return Path.Combine(pictures, "TinyClips");
     }
 
     public string GenerateFilePath(CaptureType type, string? fileExtension = null, string? stemSuffix = null)

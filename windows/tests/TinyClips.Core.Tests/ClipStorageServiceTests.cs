@@ -19,13 +19,13 @@ public sealed class ClipStorageServiceTests
     }
 
     [Fact]
-    public void OutputDirectory_UsesSaveDirectoryOrDefaultsToDesktop()
+    public void OutputDirectory_UsesSaveDirectoryOrDefaultsToPicturesTinyClips()
     {
         var fakeFileSystem = new FakeFileSystem
         {
             FolderPaths =
             {
-                [Environment.SpecialFolder.Desktop] = "C:\\Users\\Test\\Desktop",
+                [Environment.SpecialFolder.MyPictures] = "C:\\Users\\Test\\Pictures",
             },
         };
 
@@ -38,9 +38,10 @@ public sealed class ClipStorageServiceTests
         settings.SaveDirectory = string.Empty;
         var defaultService = CreateService(settings, fakeFileSystem);
 
-        Assert.Equal("C:\\Users\\Test\\Desktop", defaultService.OutputDirectory(CaptureType.Screenshot));
-        Assert.Equal("C:\\Users\\Test\\Desktop", defaultService.OutputDirectory(CaptureType.Gif));
-        Assert.Equal("C:\\Users\\Test\\Desktop", defaultService.OutputDirectory(CaptureType.Video));
+        var expected = Path.Combine("C:\\Users\\Test\\Pictures", "TinyClips");
+        Assert.Equal(expected, defaultService.OutputDirectory(CaptureType.Screenshot));
+        Assert.Equal(expected, defaultService.OutputDirectory(CaptureType.Gif));
+        Assert.Equal(expected, defaultService.OutputDirectory(CaptureType.Video));
     }
 
     [Fact]
