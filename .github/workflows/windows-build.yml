@@ -31,8 +31,8 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Restore solution
-        run: dotnet restore windows/TinyClips.Windows.slnx
+      - name: Restore app for ${{ matrix.platform }}
+        run: dotnet restore windows/src/TinyClips.App/TinyClips.App.csproj -p:Platform=${{ matrix.platform }}
 
       - name: Build app for ${{ matrix.platform }}
         run: dotnet build windows/src/TinyClips.App/TinyClips.App.csproj -c Release -p:Platform=${{ matrix.platform }} --no-restore
