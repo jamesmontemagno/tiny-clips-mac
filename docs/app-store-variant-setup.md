@@ -2,8 +2,8 @@
 
 This repo now includes code paths for an `APPSTORE` build variant and Mac App Store-specific files:
 
-- `TinyClips/Info-MAS.plist`
-- `TinyClips/TinyClipsMAS.entitlements`
+- `mac/TinyClips/Info-MAS.plist`
+- `mac/TinyClips/TinyClipsMAS.entitlements`
 
 ## What is already implemented in code
 
@@ -50,5 +50,5 @@ Use Xcode Cloud for the Mac App Store (`TinyClipsMAS`) CI/CD path.
 ### Notes
 
 - Ensure the cloud workflow builds the `TinyClipsMAS` scheme for App Store validation/distribution.
-- If automatic Swift package resolution is disabled, commit `TinyClips.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` to the branch being built.
+- If automatic Swift package resolution is disabled, commit `mac/TinyClips.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved` to the branch being built.
 - In App Store Connect, make sure the app record and signing assets align with the MAS bundle identifier `com.refractored.tinyclips`.

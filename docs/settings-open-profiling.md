@@ -22,7 +22,7 @@ This script builds `TinyClips`, records a Time Profiler session, triggers Settin
 
 ```bash
 cd /path/to/tiny-clips
-xcodebuild build -project TinyClips.xcodeproj -scheme TinyClips -configuration Debug
+xcodebuild build -project mac/TinyClips.xcodeproj -scheme TinyClips -configuration Debug
 ```
 
 ## 3) Record trace from CLI

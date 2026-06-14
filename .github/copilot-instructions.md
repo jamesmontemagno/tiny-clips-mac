@@ -19,7 +19,7 @@ See `CONTRIBUTING.md` for full setup, project structure, and contribution workfl
 ## Code Style
 
 - `ObservableObject` / `@Published` / `@StateObject` — **not** `@Observable` (Observation framework).
-- `@AppStorage` for all user preferences (see `TinyClips/Models/CaptureSettings.swift`).
+- `@AppStorage` for all user preferences (see `mac/TinyClips/Models/CaptureSettings.swift`).
 - `@MainActor` on all UI-facing classes. `@unchecked Sendable` + `DispatchQueue` for off-main-thread capture classes. No actors or `@Sendable` closures.
 - `// MARK: -` comments for section organization within files.
 - SwiftUI views inside window files as `private struct`.
@@ -33,9 +33,9 @@ See `CONTRIBUTING.md` for full setup, project structure, and contribution workfl
 
 ```bash
 # Build both variants (CI, no signing) — always validate BOTH schemes
-xcodebuild build -project TinyClips.xcodeproj -scheme TinyClips -configuration Debug \
+xcodebuild build -project mac/TinyClips.xcodeproj -scheme TinyClips -configuration Debug \
   CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
-xcodebuild build -project TinyClips.xcodeproj -scheme TinyClipsMAS -configuration Debug \
+xcodebuild build -project mac/TinyClips.xcodeproj -scheme TinyClipsMAS -configuration Debug \
   CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 ```
 
@@ -48,7 +48,7 @@ xcodebuild build -project TinyClips.xcodeproj -scheme TinyClipsMAS -configuratio
 ### Windows
 - **SwiftUI `Window` scenes** for long-lived windows (`clips-manager`, `settings-window`). **AppKit subclasses** for capture-time panels.
 - Open scene windows via `openWindow(id:)`, then activate + bring to front with dual-pass (immediate + 0.1s delay to escape menu tracking timing).
-- For capture-time window/panel conventions (callback guards, floating panel recipe, SwiftUI hosting, keyboard interactivity, lifecycle), see `.github/instructions/capture-windows.instructions.md` — auto-applied to `TinyClips/Views/*Panel.swift` and `*Window.swift`.
+- For capture-time window/panel conventions (callback guards, floating panel recipe, SwiftUI hosting, keyboard interactivity, lifecycle), see `.github/instructions/capture-windows.instructions.md` — auto-applied to `mac/TinyClips/Views/*Panel.swift` and `*Window.swift`.
 - For `ProcessingIndicatorWindow` and similar floating panels:
   - Do not combine `NSWindowCollectionBehaviorCanJoinAllSpaces` with `NSWindowCollectionBehaviorMoveToActiveSpace` (AppKit asserts and crashes).
   - Avoid calling `layoutSubtreeIfNeeded()` from `show()` or while AppKit/SwiftUI is already in a layout pass; this can trigger layout recursion warnings and future breakage.

@@ -9,8 +9,8 @@ from pathlib import Path
 STATE_DIR_NAME = ".state"
 CHANGELOG_PATH = "CHANGELOG.md"
 SOURCE_PREFIXES = (
-    "TinyClips/",
-    "TinyClips.xcodeproj/",
+    "mac/TinyClips/",
+    "mac/TinyClips.xcodeproj/",
 )
 EDIT_TOOL_NAMES = {
     "apply_patch",

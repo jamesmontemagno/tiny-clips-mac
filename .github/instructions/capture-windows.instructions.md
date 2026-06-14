@@ -1,6 +1,6 @@
 ---
 description: "Use when editing capture-time AppKit windows or floating panels: StopRecordingPanel, StartRecordingPanel, CapturePickerPanel, CountdownWindow, ScreenPickerWindow, RegionIndicatorPanel, VideoTrimmerWindow, GifTrimmerWindow, ScreenshotEditorWindow, OnboardingWizardWindow, GuideWindow."
-applyTo: "TinyClips/Views/*Panel.swift, TinyClips/Views/*Window.swift"
+applyTo: "mac/TinyClips/Views/*Panel.swift, mac/TinyClips/Views/*Window.swift"
 ---
 
 # Capture-Time Window & Panel Conventions

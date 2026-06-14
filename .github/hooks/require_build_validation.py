@@ -9,8 +9,8 @@ from pathlib import Path
 STATE_DIR_NAME = ".state"
 STATE_FILE_SUFFIX = "-build-validation.json"
 SOURCE_PREFIXES = (
-    "TinyClips/",
-    "TinyClips.xcodeproj/",
+    "mac/TinyClips/",
+    "mac/TinyClips.xcodeproj/",
 )
 EDIT_TOOL_NAMES = {
     "apply_patch",
@@ -250,9 +250,9 @@ def handle_stop(payload, repo_root):
     reason = (
         "Product source files changed in this session, but required scheme builds are missing or stale. "
         f"Run successful builds for: {', '.join(missing_schemes)}. "
-        "Preferred commands: xcodebuild build -project TinyClips.xcodeproj -scheme TinyClips -configuration Debug "
+        "Preferred commands: xcodebuild build -project mac/TinyClips.xcodeproj -scheme TinyClips -configuration Debug "
         "CODE_SIGN_IDENTITY=\"\" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO and xcodebuild build -project "
-        "TinyClips.xcodeproj -scheme TinyClipsMAS -configuration Debug CODE_SIGN_IDENTITY=\"\" CODE_SIGNING_REQUIRED=NO "
+        "mac/TinyClips.xcodeproj -scheme TinyClipsMAS -configuration Debug CODE_SIGN_IDENTITY=\"\" CODE_SIGNING_REQUIRED=NO "
         "CODE_SIGNING_ALLOWED=NO."
     )
     emit(

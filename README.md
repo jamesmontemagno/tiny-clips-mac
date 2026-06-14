@@ -57,7 +57,7 @@ Download the latest release from the [Releases](https://github.com/jamesmontemag
    ```
 2. Open in Xcode:
    ```bash
-   open TinyClips.xcodeproj
+   open mac/TinyClips.xcodeproj
    ```
 3. Add the Sparkle package dependency (see [Sparkle Setup](#sparkle-setup))
 4. Build and run (⌘R)
@@ -143,7 +143,7 @@ See the [Windows README](windows/README.md) for full build, layout, and CI detai
 
 Sparkle must be added manually via Xcode:
 
-1. Open `TinyClips.xcodeproj` in Xcode
+1. Open `mac/TinyClips.xcodeproj` in Xcode
 2. Go to **File → Add Package Dependencies...**
 3. Enter URL: `https://github.com/sparkle-project/Sparkle`
 4. Select version rule: **Up to Next Major Version** from `2.8.1`

@@ -8,7 +8,7 @@
             "args": [
                 "build",
                 "-project",
-                "TinyClips.xcodeproj",
+                "mac/TinyClips.xcodeproj",
                 "-scheme",
                 "TinyClips",
                 "-destination",
@@ -30,7 +30,7 @@
             "args": [
                 "build",
                 "-project",
-                "TinyClips.xcodeproj",
+                "mac/TinyClips.xcodeproj",
                 "-scheme",
                 "TinyClipsMAS",
                 "-destination",
