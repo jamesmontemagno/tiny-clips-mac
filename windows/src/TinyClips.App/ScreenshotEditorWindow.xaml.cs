@@ -1020,6 +1020,11 @@ public sealed partial class ScreenshotEditorWindow : Window
         if (_dragging && _activeAnnotation is not null)
         {
             _dragging = false;
+            if (_activeAnnotation.Tool == EditTool.Pen)
+            {
+                UpdatePenBounds(_activeAnnotation);
+            }
+
             var b = _activeAnnotation.Bounds;
             var significant = _activeAnnotation.Tool == EditTool.Pen
                 ? _activeAnnotation.Points.Count > 1
@@ -1080,6 +1085,76 @@ public sealed partial class ScreenshotEditorWindow : Window
         var x = b.Width < 0 ? b.X + b.Width : b.X;
         var y = b.Height < 0 ? b.Y + b.Height : b.Y;
         return new Rect(x, y, Math.Abs(b.Width), Math.Abs(b.Height));
+    }
+
+    // Freehand strokes track their path in Points but not in Bounds; recompute the bounding box
+    // (padded by half the stroke width) so hit-testing and the selection marquee cover the whole
+    // drawing rather than just the start point.
+    private static void UpdatePenBounds(Annotation ann)
+    {
+        if (ann.Points.Count == 0)
+        {
+            return;
+        }
+
+        float minX = ann.Points[0].X, minY = ann.Points[0].Y, maxX = minX, maxY = minY;
+        foreach (var pt in ann.Points)
+        {
+            minX = Math.Min(minX, pt.X);
+            minY = Math.Min(minY, pt.Y);
+            maxX = Math.Max(maxX, pt.X);
+            maxY = Math.Max(maxY, pt.Y);
+        }
+
+        var half = ann.Thickness / 2.0;
+        ann.Bounds = new Rect(
+            minX - half,
+            minY - half,
+            (maxX - minX) + ann.Thickness,
+            (maxY - minY) + ann.Thickness);
+    }
+
+    // Text annotations are created with a zero-size box; measure the laid-out text so Bounds
+    // matches what's rendered, giving the selection marquee and hit-test the full text area.
+    private void UpdateTextBounds(Annotation ann)
+    {
+        if (ann.Tool != EditTool.Text || string.IsNullOrEmpty(ann.Text))
+        {
+            return;
+        }
+
+        try
+        {
+            var device = CanvasDevice.GetSharedDevice();
+            using var format = new CanvasTextFormat
+            {
+                FontSize = (float)ann.FontSize,
+                FontFamily = ann.FontFamily,
+                FontWeight = ann.Bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
+                FontStyle = ann.Italic ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
+                WordWrapping = CanvasWordWrapping.NoWrap,
+            };
+            using var layout = new CanvasTextLayout(device, ann.Text, format, 0, 0);
+            if (ann.Underline)
+            {
+                layout.SetUnderline(0, ann.Text.Length, true);
+            }
+            if (ann.Strikethrough)
+            {
+                layout.SetStrikethrough(0, ann.Text.Length, true);
+            }
+
+            // Union the layout box with the (possibly overhanging, e.g. italic) ink bounds.
+            var lb = layout.LayoutBounds;
+            var db = layout.DrawBounds;
+            var width = Math.Max(lb.Width, db.X + db.Width);
+            var height = Math.Max(lb.Height, db.Y + db.Height);
+            ann.Bounds = new Rect(ann.Bounds.X, ann.Bounds.Y, width, height);
+        }
+        catch
+        {
+            // Measurement is best-effort; leave bounds as-is on failure.
+        }
     }
 
     private static (Vector2 Start, Vector2 End) Segment(Annotation ann)
@@ -1151,7 +1226,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         _textStrikethrough = dialog.ResultStrikethrough;
 
         var pixel = CanvasToPixel(canvasPoint);
-        _annotations.Add(new Annotation
+        var textAnnotation = new Annotation
         {
             Tool = EditTool.Text,
             Color = dialog.ResultColor,
@@ -1164,7 +1239,9 @@ public sealed partial class ScreenshotEditorWindow : Window
             Underline = dialog.ResultUnderline,
             Strikethrough = dialog.ResultStrikethrough,
             Bounds = new Rect(pixel.X, pixel.Y, 0, 0),
-        });
+        };
+        UpdateTextBounds(textAnnotation);
+        _annotations.Add(textAnnotation);
         RedrawOverlay();
     }
 
@@ -1210,6 +1287,7 @@ public sealed partial class ScreenshotEditorWindow : Window
         ann.Italic = dialog.ResultItalic;
         ann.Underline = dialog.ResultUnderline;
         ann.Strikethrough = dialog.ResultStrikethrough;
+        UpdateTextBounds(ann);
         RedrawOverlay();
     }
 

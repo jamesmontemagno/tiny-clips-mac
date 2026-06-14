@@ -5,6 +5,13 @@ own `CHANGELOG.md` at the repository root.
 
 ## [Unreleased]
 
+### Fixed
+- **Editor selection box now covers text & freehand annotations fully** — selecting a text or
+  draw (freehand) annotation previously showed a tiny selection box anchored at the start point,
+  and the clickable hit area was just as small. Text is now measured to its rendered size and
+  freehand strokes recompute their bounds from the drawn path (padded by the stroke width), so the
+  selection marquee and hit-testing cover the entire annotation.
+
 ### Changed
 - **GIF now uses the Settings "Pictures" icon in the tray & picker** — the GIF capture tile in the
   system-tray popup and the GIF mode badge in the capture picker now use the same Pictures glyph
