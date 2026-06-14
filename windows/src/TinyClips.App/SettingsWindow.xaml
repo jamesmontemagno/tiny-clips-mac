@@ -265,6 +265,33 @@
                                    IsOn="{x:Bind ViewModel.ReopenPickerAfterCapture, Mode=TwoWay}" />
                            </Grid>
                        </Border>
+
+                       <Border Style="{StaticResource SettingCardStyle}">
+                           <Grid ColumnSpacing="16">
+                               <Grid.ColumnDefinitions>
+                                   <ColumnDefinition Width="*" />
+                                   <ColumnDefinition Width="Auto" />
+                               </Grid.ColumnDefinitions>
+                               <StackPanel VerticalAlignment="Center">
+                                   <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Multi-monitor capture mode" />
+                                   <TextBlock
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="Choose how Screen and Region decide which display to target." />
+                               </StackPanel>
+                               <ComboBox
+                                   Grid.Column="1"
+                                   Width="240"
+                                   VerticalAlignment="Center"
+                                   AutomationProperties.AutomationId="MultiMonitorCaptureModeComboBox"
+                                   AutomationProperties.Name="Multi-monitor capture mode"
+                                   SelectedIndex="{x:Bind ViewModel.MultiMonitorCaptureModeIndex, Mode=TwoWay}">
+                                   <ComboBoxItem Content="Show picker" />
+                                   <ComboBoxItem Content="Capture monitor under cursor" />
+                                   <ComboBoxItem Content="Always use main display" />
+                               </ComboBox>
+                           </Grid>
+                       </Border>
                    </StackPanel>
 
                    <StackPanel

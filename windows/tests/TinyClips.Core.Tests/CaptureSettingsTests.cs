@@ -16,6 +16,7 @@ public sealed class CaptureSettingsTests
         Assert.Equal(100, settings.ScreenshotScale);
         Assert.Equal("TinyClips {date} at {time}", settings.FileNameTemplate);
         Assert.True(settings.ShowTrimmer);
+        Assert.Equal(MultiMonitorCaptureMode.Picker, settings.MultiMonitorCaptureMode);
     }
 
     [Fact]
@@ -27,11 +28,29 @@ public sealed class CaptureSettingsTests
         settings.GifFrameRate = 24.5;
         settings.VideoFrameRate = 60;
         settings.FileNameTemplate = "Custom {date}";
+        settings.MultiMonitorCaptureMode = MultiMonitorCaptureMode.UnderCursor;
 
         Assert.False(settings.CopyScreenshotToClipboard);
         Assert.Equal(24.5, settings.GifFrameRate);
         Assert.Equal(60, settings.VideoFrameRate);
         Assert.Equal("Custom {date}", settings.FileNameTemplate);
+        Assert.Equal(MultiMonitorCaptureMode.UnderCursor, settings.MultiMonitorCaptureMode);
+    }
+
+    [Fact]
+    public void MultiMonitorCaptureMode_UsesLegacyAlwaysCaptureMainDisplay_WhenModeIsMissing()
+    {
+        var mainDisplaySettingsService = new TestSettingsService();
+        mainDisplaySettingsService.Set("alwaysCaptureMainDisplay", true);
+        var mainDisplaySettings = new CaptureSettings(mainDisplaySettingsService);
+
+        Assert.Equal(MultiMonitorCaptureMode.MainDisplay, mainDisplaySettings.MultiMonitorCaptureMode);
+
+        var pickerSettingsService = new TestSettingsService();
+        pickerSettingsService.Set("alwaysCaptureMainDisplay", false);
+        var pickerSettings = new CaptureSettings(pickerSettingsService);
+
+        Assert.Equal(MultiMonitorCaptureMode.Picker, pickerSettings.MultiMonitorCaptureMode);
     }
 
     [Fact]

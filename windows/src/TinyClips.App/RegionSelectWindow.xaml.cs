@@ -4,7 +4,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Foundation;
 using Windows.Graphics;
@@ -14,22 +13,24 @@ using TinyClips.Core.Capture;
 namespace TinyClips.App;
 
 /// <summary>
-/// A full-screen, borderless overlay that lets the user rubber-band a rectangle on the
-/// primary monitor. Returns the selection as a monitor-relative <see cref="PixelRect"/>
-/// in physical pixels, or null if cancelled (Esc / empty selection).
+/// A full-screen, borderless overlay that lets the user rubber-band a rectangle on one
+/// monitor and reports a monitor-relative region in physical pixels.
 /// </summary>
 public sealed partial class RegionSelectWindow : Window
 {
-    private readonly TaskCompletionSource<PixelRect?> _result =
-        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly MonitorInfo _monitor;
     private readonly CapturedFrame? _backdropFrame;
+    private readonly Action<RegionSelectResult?> _onComplete;
     private Point _start;
     private bool _dragging;
     private bool _completed;
+    private bool _closedByController;
 
-    private RegionSelectWindow(MonitorInfo monitor, CapturedFrame? backdropFrame)
+    internal RegionSelectWindow(MonitorInfo monitor, CapturedFrame? backdropFrame, Action<RegionSelectResult?> onComplete)
     {
+        _monitor = monitor;
         _backdropFrame = backdropFrame;
+        _onComplete = onComplete;
 
         InitializeComponent();
 
@@ -45,22 +46,8 @@ public sealed partial class RegionSelectWindow : Window
     /// <summary>Shows the overlay on the given monitor and resolves with the chosen region.</summary>
     public static async Task<PixelRect?> RunAsync(MonitorInfo monitor)
     {
-        // Snapshot the monitor BEFORE the overlay is shown so the dim panels never get baked
-        // into the backdrop image (otherwise we'd capture our own darkening).
-        CapturedFrame? frame = null;
-        try
-        {
-            var capture = App.Services.GetRequiredService<IScreenCaptureService>();
-            frame = await capture.CaptureMonitorAsync(monitor.HMonitor);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Region backdrop capture failed: {ex}");
-        }
-
-        var window = new RegionSelectWindow(monitor, frame);
-        window.Activate();
-        return await window._result.Task;
+        var result = await RegionSelectController.RunAsync(new[] { monitor });
+        return result?.Region;
     }
 
     private void OnActivated(object sender, WindowActivatedEventArgs args)
@@ -236,26 +223,32 @@ public sealed partial class RegionSelectWindow : Window
         _completed = true;
         _dragging = false;
         RootGrid.ReleasePointerCaptures();
-        Closed -= OnClosed;
-        try
-        {
-            Close();
-        }
-        finally
-        {
-            _result.TrySetResult(region);
-        }
+        _onComplete(region is { } selected
+            ? new RegionSelectResult(_monitor.HMonitor, selected)
+            : null);
+        Close();
     }
 
     private void OnClosed(object sender, WindowEventArgs args)
     {
-        if (_completed)
+        if (_closedByController || _completed)
         {
             return;
         }
 
         _completed = true;
         _dragging = false;
-        _result.TrySetResult(null);
+        _onComplete(null);
+    }
+
+    internal void CloseFromController()
+    {
+        if (_closedByController)
+        {
+            return;
+        }
+
+        _closedByController = true;
+        Close();
     }
 }
