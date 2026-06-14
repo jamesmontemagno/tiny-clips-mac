@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="TinyClips.App.VideoTrimmerWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:TinyClips.App"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Tiny Clips — Trim Video"
+    mc:Ignorable="d">
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid
+            x:Name="AppTitleBar"
+            Grid.Row="0"
+            Height="48"
+            Padding="16,0">
+            <TextBlock
+                VerticalAlignment="Center"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Trim video" />
+        </Grid>
+
+        <!--  Preview  -->
+        <Grid
+            Grid.Row="1"
+            Margin="16,0,16,16"
+            Background="{ThemeResource SubtleFillColorTertiaryBrush}"
+            CornerRadius="{ThemeResource OverlayCornerRadius}">
+            <MediaPlayerElement
+                x:Name="Player"
+                AreTransportControlsEnabled="False"
+                AutomationProperties.AutomationId="VideoTrimmerPlayer"
+                AutomationProperties.Name="Video preview"
+                Stretch="Uniform" />
+        </Grid>
+
+        <!--  Trim range  -->
+        <StackPanel
+            Grid.Row="2"
+            Margin="16,0,16,12"
+            Spacing="8">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    Grid.Column="0"
+                    HorizontalAlignment="Left"
+                    Style="{StaticResource CaptionTextBlockStyle}">
+                    <Run Text="Start: " /><Run x:Name="StartLabel" Text="0:00.0" />
+                </TextBlock>
+                <TextBlock
+                    x:Name="DurationLabel"
+                    Grid.Column="1"
+                    HorizontalAlignment="Center"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="Duration: 0:00.0" />
+                <TextBlock
+                    Grid.Column="2"
+                    HorizontalAlignment="Right"
+                    Style="{StaticResource CaptionTextBlockStyle}">
+                    <Run Text="End: " /><Run x:Name="EndLabel" Text="0:00.0" />
+                </TextBlock>
+            </Grid>
+
+            <local:TrimBar
+                x:Name="TrimBar"
+                Margin="0,6,0,2"
+                AutomationProperties.AutomationId="VideoTrimBar"
+                AutomationProperties.Name="Trim range and playback position"
+                EndFractionChanged="OnTrimEndChanged"
+                RangeChanged="OnTrimRangeChanged"
+                SeekRequested="OnTrimSeek"
+                StartFractionChanged="OnTrimStartChanged" />
+
+            <!--  Playback + frame stepper: play/pause, nudge a frame at a time, export the current frame.  -->
+            <Grid Margin="0,4,0,0" ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ToggleButton
+                    x:Name="PlayToggle"
+                    Grid.Column="0"
+                    AutomationProperties.AutomationId="VideoPlayToggle"
+                    AutomationProperties.Name="Play preview"
+                    Checked="OnPlayToggled"
+                    Unchecked="OnPlayToggled"
+                    ToolTipService.ToolTip="Play or pause the preview">
+                    <FontIcon x:Name="PlayIcon" FontSize="14" Glyph="&#xE768;" />
+                </ToggleButton>
+                <Button
+                    Grid.Column="1"
+                    AutomationProperties.AutomationId="VideoPrevFrameButton"
+                    AutomationProperties.Name="Step back one frame"
+                    Click="OnPrevFrame"
+                    ToolTipService.ToolTip="Step back one frame">
+                    <FontIcon FontSize="14" Glyph="&#xE76B;" />
+                </Button>
+                <Button
+                    Grid.Column="2"
+                    AutomationProperties.AutomationId="VideoNextFrameButton"
+                    AutomationProperties.Name="Step forward one frame"
+                    Click="OnNextFrame"
+                    ToolTipService.ToolTip="Step forward one frame">
+                    <FontIcon FontSize="14" Glyph="&#xE76C;" />
+                </Button>
+                <TextBlock
+                    x:Name="PositionLabel"
+                    Grid.Column="3"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Position: 0:00.0" />
+                <Button
+                    x:Name="ExportFrameButton"
+                    Grid.Column="4"
+                    AutomationProperties.AutomationId="VideoExportFrameButton"
+                    AutomationProperties.Name="Export current frame as PNG"
+                    Click="OnExportFrame"
+                    ToolTipService.ToolTip="Export the current frame as a PNG image">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon FontSize="14" Glyph="&#xE722;" />
+                        <TextBlock Text="Export frame" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <ProgressBar
+                x:Name="BusyBar"
+                Margin="0,4,0,0"
+                IsIndeterminate="True"
+                Visibility="Collapsed" />
+        </StackPanel>
+
+        <!--  Footer: speed + primary actions  -->
+        <Grid
+            Grid.Row="3"
+            Margin="16,0,16,16"
+            Padding="16,12"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            ColumnSpacing="16"
+            CornerRadius="{ThemeResource OverlayCornerRadius}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel
+                Grid.Column="0"
+                VerticalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="8">
+                <TextBlock
+                    VerticalAlignment="Center"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="Speed" />
+                <ComboBox
+                    x:Name="SpeedCombo"
+                    MinWidth="96"
+                    AutomationProperties.AutomationId="VideoSpeedCombo"
+                    AutomationProperties.Name="Playback and output speed"
+                    SelectionChanged="OnSpeedChanged"
+                    ToolTipService.ToolTip="Adjusts preview speed (output speed is not supported for video).">
+                    <ComboBoxItem Content="0.1x" Tag="0.1" />
+                    <ComboBoxItem Content="0.25x" Tag="0.25" />
+                    <ComboBoxItem Content="0.5x" Tag="0.5" />
+                    <ComboBoxItem Content="0.75x" Tag="0.75" />
+                    <ComboBoxItem Content="1x" Tag="1" />
+                    <ComboBoxItem Content="1.25x" Tag="1.25" />
+                    <ComboBoxItem Content="1.5x" Tag="1.5" />
+                    <ComboBoxItem Content="1.75x" Tag="1.75" />
+                    <ComboBoxItem Content="2x" Tag="2" />
+                    <ComboBoxItem Content="2.5x" Tag="2.5" />
+                    <ComboBoxItem Content="3x" Tag="3" />
+                    <ComboBoxItem Content="4x" Tag="4" />
+                    <ComboBoxItem Content="5x" Tag="5" />
+                </ComboBox>
+            </StackPanel>
+
+            <StackPanel
+                Grid.Column="1"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="8">
+                <Button
+                    AutomationProperties.AutomationId="VideoTrimmerCloseButton"
+                    Click="OnDone"
+                    Content="Cancel" />
+                <Button
+                    AutomationProperties.AutomationId="VideoSaveOriginalButton"
+                    Click="OnDone"
+                    Content="Keep original" />
+                <Button
+                    x:Name="SaveTrimmedButton"
+                    AutomationProperties.AutomationId="VideoSaveTrimmedButton"
+                    Click="OnSaveTrimmed"
+                    Content="Save trimmed"
+                    Style="{StaticResource AccentButtonStyle}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

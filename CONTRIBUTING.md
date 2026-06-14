@@ -28,14 +28,14 @@ Thank you for your interest in contributing to TinyClips! This guide covers ever
 ### 1. Fork and clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/tiny-clips-mac.git
-cd tiny-clips-mac
+git clone https://github.com/<your-username>/tiny-clips.git
+cd tiny-clips
 ```
 
 ### 2. Open the project in Xcode
 
 ```bash
-open TinyClips.xcodeproj
+open mac/TinyClips.xcodeproj
 ```
 
 ### 3. Add the Sparkle dependency (direct distribution target only)
@@ -62,11 +62,11 @@ Press **⌘R** to build and run the selected scheme.
 
 ```bash
 # Direct distribution
-xcodebuild build -project TinyClips.xcodeproj -scheme TinyClips -configuration Debug \
+xcodebuild build -project mac/TinyClips.xcodeproj -scheme TinyClips -configuration Debug \
   CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 
 # Mac App Store variant
-xcodebuild build -project TinyClips.xcodeproj -scheme TinyClipsMAS -configuration Debug \
+xcodebuild build -project mac/TinyClips.xcodeproj -scheme TinyClipsMAS -configuration Debug \
   CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 ```
 
@@ -79,7 +79,7 @@ TinyClips requires **Screen Recording** permission at runtime. On first launch, 
 ## Project Structure
 
 ```
-TinyClips/
+mac/TinyClips/
 ├── TinyClipsApp.swift          # App entry point, MenuBarExtra, CaptureManager
 ├── Models/
 │   ├── CaptureSettings.swift   # @AppStorage settings model and shared types
@@ -155,10 +155,10 @@ Accessibility is treated as a release gate. When adding or changing UI:
 4. **Make your changes** following the code style guidelines below.
 5. **Build both schemes** to confirm nothing is broken:
    ```bash
-   xcodebuild build -project TinyClips.xcodeproj -scheme TinyClips -configuration Debug \
+   xcodebuild build -project mac/TinyClips.xcodeproj -scheme TinyClips -configuration Debug \
      CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
 
-   xcodebuild build -project TinyClips.xcodeproj -scheme TinyClipsMAS -configuration Debug \
+   xcodebuild build -project mac/TinyClips.xcodeproj -scheme TinyClipsMAS -configuration Debug \
      CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
    ```
 6. **Push your branch** and open a pull request against `main`.

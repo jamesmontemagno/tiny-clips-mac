@@ -1,0 +1,24 @@
+# Installer manifest for the signed MSIX produced by `winapp pack`.
+# Fill in InstallerUrl + InstallerSha256 after publishing a signed release asset.
+# SignatureSha256 is required for msix installers (the package signature hash):
+#   winget hash --msix <path-to-msix>
+PackageIdentifier: Refractored.TinyClips
+PackageVersion: 1.0.0.0
+MinimumOSVersion: 10.0.22621.0
+InstallerType: msix
+Scope: user
+InstallModes:
+  - silent
+  - silentWithProgress
+PackageFamilyName: Refractored.TinyClips_<publisher-id-hash>
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/jamesmontemagno/tiny-clips/releases/download/v1.0.0/TinyClips-1.0.0-x64.msix
+    InstallerSha256: <FILL-IN-SHA256>
+    SignatureSha256: <FILL-IN-SIGNATURE-SHA256>
+  - Architecture: arm64
+    InstallerUrl: https://github.com/jamesmontemagno/tiny-clips/releases/download/v1.0.0/TinyClips-1.0.0-arm64.msix
+    InstallerSha256: <FILL-IN-SHA256>
+    SignatureSha256: <FILL-IN-SIGNATURE-SHA256>
+ManifestType: installer
+ManifestVersion: 1.6.0

@@ -12,7 +12,7 @@ This document describes the manual setup steps required to enable Sparkle auto-u
 
 **⚠️ IMPORTANT: Sparkle must be added via Xcode's UI. The package reference is NOT included in the repository.**
 
-1. Open `TinyClips.xcodeproj` in Xcode
+1. Open `mac/TinyClips.xcodeproj` in Xcode
 2. Go to **File → Add Package Dependencies...**
 3. Enter URL: `https://github.com/sparkle-project/Sparkle`
 4. Select version rule: **Up to Next Major Version** from `2.8.1`
@@ -61,7 +61,7 @@ Sparkle uses EdDSA (Ed25519) signatures for security. Generate your key pair:
 
 ### Add Public Key to Info.plist
 
-Replace the placeholder `SUPublicEDKey` value in `TinyClips/Info.plist` with your actual public key.
+Replace the placeholder `SUPublicEDKey` value in `mac/TinyClips/Info.plist` with your actual public key.
 
 ## Step 3: Configure GitHub Secrets
 
@@ -108,7 +108,7 @@ Add these secrets to your GitHub repository (**Settings → Secrets and variable
 3. Click **Save**
 4. Wait for deployment (may take a few minutes)
 5. Verify appcast is accessible at:
-   `https://jamesmontemagno.github.io/tiny-clips-mac/appcast.xml`
+   `https://jamesmontemagno.github.io/tiny-clips/appcast.xml`
 
 ## Step 5: Create a Release
 

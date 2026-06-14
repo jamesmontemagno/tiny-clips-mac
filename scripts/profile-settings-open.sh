@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Records a Time Profiler trace, triggers Settings with Cmd+, and exports TOC/signpost XML.
 
-ROOT_DIR="/Users/jamesmontemagno/Projects/tiny-clips-mac"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUTPUT_DIR="${1:-$HOME/Desktop}"
 SCHEME="TinyClips"
 TIME_LIMIT_SECONDS="${TIME_LIMIT_SECONDS:-30}"
@@ -17,7 +18,7 @@ SIGNPOSTS_PATH="$OUTPUT_DIR/tinyclips-settings-$STAMP.signposts.xml"
 
 cd "$ROOT_DIR"
 echo "Building $SCHEME (Debug)..."
-xcodebuild build -project TinyClips.xcodeproj -scheme "$SCHEME" -configuration Debug CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO >/dev/null
+xcodebuild build -project mac/TinyClips.xcodeproj -scheme "$SCHEME" -configuration Debug CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO >/dev/null
 
 APP_PATH=$(find "$HOME"/Library/Developer/Xcode/DerivedData -path "*/Build/Products/Debug/TinyClips.app" -print -quit 2>/dev/null || true)
 if [[ -z "$APP_PATH" ]]; then

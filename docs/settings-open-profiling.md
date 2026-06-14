@@ -9,7 +9,7 @@ This workflow captures all three diagnostics together:
 ## 1) Preferred: run the script
 
 ```bash
-cd /Users/jamesmontemagno/Projects/tiny-clips-mac
+cd /path/to/tiny-clips
 ./scripts/profile-settings-open.sh
 ```
 
@@ -21,8 +21,8 @@ This script builds `TinyClips`, records a Time Profiler session, triggers Settin
 ## 2) Manual build + record (if you prefer CLI steps)
 
 ```bash
-cd /Users/jamesmontemagno/Projects/tiny-clips-mac
-xcodebuild build -project TinyClips.xcodeproj -scheme TinyClips -configuration Debug
+cd /path/to/tiny-clips
+xcodebuild build -project mac/TinyClips.xcodeproj -scheme TinyClips -configuration Debug
 ```
 
 ## 3) Record trace from CLI

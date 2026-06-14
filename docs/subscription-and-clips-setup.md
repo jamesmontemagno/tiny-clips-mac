@@ -101,8 +101,8 @@ TinyClips does not ship with Uploadcare credentials. Users configure their own U
 
 | Item | Location |
 |---|---|
-| Product IDs | `TinyClips/Services/StoreService.swift` (`ProPlan`) |
-| Paywall UI | `TinyClips/Views/SubscriptionView.swift` |
-| Clips Manager | `TinyClips/Views/ClipsManagerWindow.swift` |
-| Settings Pro tab | `TinyClips/Views/SettingsView.swift` (`ProSettingsSection`) |
-| Uploadcare client | `TinyClips/Services/SaveService.swift` (`UploadcareService`) |
+| Product IDs | `mac/TinyClips/Services/StoreService.swift` (`ProPlan`) |
+| Paywall UI | `mac/TinyClips/Views/SubscriptionView.swift` |
+| Clips Manager | `mac/TinyClips/Views/ClipsManagerWindow.swift` |
+| Settings Pro tab | `mac/TinyClips/Views/SettingsView.swift` (`ProSettingsSection`) |
+| Uploadcare client | `mac/TinyClips/Services/SaveService.swift` (`UploadcareService`) |

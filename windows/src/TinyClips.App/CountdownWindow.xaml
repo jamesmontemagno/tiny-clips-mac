@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="TinyClips.App.CountdownWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Window.SystemBackdrop>
+        <DesktopAcrylicBackdrop />
+    </Window.SystemBackdrop>
+
+    <!--  A single rounded-square card. The window region is clipped to the same rounded
+          square (see code-behind) so the card fills the window edge-to-edge with no
+          mismatched "box in a box" frame.  -->
+    <Border
+        x:Name="RootBorder"
+        Background="Transparent"
+        BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+        BorderThickness="3"
+        CornerRadius="20">
+        <TextBlock
+            x:Name="CountText"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            AutomationProperties.LiveSetting="Assertive"
+            FontSize="64"
+            FontWeight="SemiBold"
+            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+            Text="3" />
+    </Border>
+</Window>

@@ -5,10 +5,12 @@ All notable changes to this project will be documented in this file.
 ## Unreleased
 
 ### Improved
+- Reorganized the repository so the macOS Xcode project lives under `mac/` (alongside the existing `windows/` WinUI port); updated CI/CD workflows, VS Code tasks, validation hooks, and documentation accordingly. History preserved via `git mv`.
 - Redesigned the screenshot editor with a left flyout for tools, style/background controls, and export actions; added configurable canvas padding/background options and curved arrow styles.
 ### Added
 - "Captured on Tiny Clips" branding overlay: a global setting (off by default) that burns a semi-transparent watermark into the bottom-right corner of screenshots, video recordings, and GIFs.
 - Recommendation link for installing ClickLight was added to mouse click settings for enhanced click animation visuals.
+- **Windows (WinUI 3) port — Phase 1 capture core:** native system-tray app with screenshot and drag-to-select region capture, hardware-accelerated H.264 MP4 video recording, animated GIF recording, app-wide global hotkeys (Ctrl+Shift+5/6/7), pre-capture countdown, save toast notifications, and a Fluent Settings window. Plus winget packaging templates and a packaging guide.
 
 ### Fixed
 - Start recording panel now falls back to the system default microphone when the previously selected device is no longer connected, and clears the stale saved selection.

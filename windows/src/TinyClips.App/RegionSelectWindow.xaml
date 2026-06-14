@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="TinyClips.App.RegionSelectWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Grid
+        x:Name="RootGrid"
+        Background="Transparent"
+        PointerPressed="OnPointerPressed"
+        PointerMoved="OnPointerMoved"
+        PointerReleased="OnPointerReleased"
+        KeyDown="OnKeyDown">
+        <Image
+            x:Name="Backdrop"
+            Stretch="Fill" />
+        <Canvas x:Name="OverlayCanvas" SizeChanged="OnOverlaySizeChanged">
+            <!--  Full-screen dim shown until the user starts dragging  -->
+            <Rectangle
+                x:Name="FullDim"
+                Fill="#73000000" />
+            <!--  Four dim panels that surround the selection, leaving it clear  -->
+            <Rectangle x:Name="TopDim" Fill="#73000000" Visibility="Collapsed" />
+            <Rectangle x:Name="BottomDim" Fill="#73000000" Visibility="Collapsed" />
+            <Rectangle x:Name="LeftDim" Fill="#73000000" Visibility="Collapsed" />
+            <Rectangle x:Name="RightDim" Fill="#73000000" Visibility="Collapsed" />
+            <Rectangle
+                x:Name="SelectionRect"
+                Stroke="{ThemeResource AccentFillColorDefaultBrush}"
+                StrokeThickness="2"
+                Visibility="Collapsed" />
+        </Canvas>
+        <Border
+            Margin="0,48,0,0"
+            Padding="16,8"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            Background="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}"
+            CornerRadius="{StaticResource ControlCornerRadius}">
+            <TextBlock
+                Style="{StaticResource BodyTextBlockStyle}"
+                Text="Drag to select a region  ·  Esc to cancel" />
+        </Border>
+    </Grid>
+</Window>

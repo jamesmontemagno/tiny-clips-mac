@@ -33,13 +33,13 @@ jobs:
       - name: Resolve Swift packages
         run: |
           xcodebuild -resolvePackageDependencies \
-            -project ${{ env.SCHEME }}.xcodeproj \
+            -project mac/${{ env.SCHEME }}.xcodeproj \
             -scheme ${{ env.SCHEME }}
 
       - name: Build project
         run: |
           xcodebuild build \
-            -project ${{ env.SCHEME }}.xcodeproj \
+            -project mac/${{ env.SCHEME }}.xcodeproj \
             -scheme ${{ env.SCHEME }} \
             -configuration Debug \
             CODE_SIGN_IDENTITY="" \

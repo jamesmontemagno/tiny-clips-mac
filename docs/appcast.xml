@@ -26,9 +26,9 @@
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             
             
-            <description><![CDATA[<h3>What's Changed</h3><ul><li>chore: update CHANGELOG for v1.4.0.3 release</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips-mac/compare/v1.4.0.2...v1.4.0.3">Full Changelog</a></p>]]></description>
-            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips-mac/releases/tag/v1.4.0.3</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/v1.4.0.3/TinyClips-v1.4.0.3.zip" length="3151026" type="application/octet-stream" sparkle:edSignature="Jwt6HMMjj0If94hOmbGqWS7xu5Zfe+nLD31VzgcEYwDoCC2ezMMPY/9jh5RAUYVasWkGBS4zw/QWqSbnZUcLAg=="/>
+            <description><![CDATA[<h3>What's Changed</h3><ul><li>chore: update CHANGELOG for v1.4.0.3 release</li></ul><p><a href="https://github.com/jamesmontemagno/tiny-clips/compare/v1.4.0.2...v1.4.0.3">Full Changelog</a></p>]]></description>
+            <sparkle:releaseNotesLink>https://github.com/jamesmontemagno/tiny-clips/releases/tag/v1.4.0.3</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/jamesmontemagno/tiny-clips/releases/download/v1.4.0.3/TinyClips-v1.4.0.3.zip" length="3151026" type="application/octet-stream" sparkle:edSignature="Jwt6HMMjj0If94hOmbGqWS7xu5Zfe+nLD31VzgcEYwDoCC2ezMMPY/9jh5RAUYVasWkGBS4zw/QWqSbnZUcLAg=="/>
             
         
         </item>

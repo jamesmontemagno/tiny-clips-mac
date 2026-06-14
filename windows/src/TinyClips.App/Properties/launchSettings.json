@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "TinyClips.App (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "TinyClips.App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

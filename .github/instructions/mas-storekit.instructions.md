@@ -1,6 +1,6 @@
 ---
 description: "Use when editing Mac App Store StoreKit or subscription code: StoreService, ProPlan, SubscriptionView, Pro-gating, in-app purchases."
-applyTo: "TinyClips/Services/StoreService.swift, TinyClips/Views/SubscriptionView.swift"
+applyTo: "mac/TinyClips/Services/StoreService.swift, mac/TinyClips/Views/SubscriptionView.swift"
 ---
 
 # Mac App Store & StoreKit Conventions

@@ -1,0 +1,2406 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Graphics.Canvas;
+using Microsoft.Graphics.Canvas.Brushes;
+using Microsoft.Graphics.Canvas.Effects;
+using Microsoft.Graphics.Canvas.Geometry;
+using Microsoft.Graphics.Canvas.Text;
+using Microsoft.UI;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Shapes;
+using TinyClips.Core.Models;
+using TinyClips.Core.Services;
+using Windows.Foundation;
+using Windows.Graphics.Imaging;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using Windows.Storage.Streams;
+using Windows.UI;
+using Windows.ApplicationModel.DataTransfer;
+
+namespace TinyClips.App;
+
+/// <summary>
+/// Screenshot editor with annotation parity to the macOS app: crop plus rectangle, ellipse,
+/// arrow, line, freehand draw, text, numbered badges and redaction. Annotations are stored in
+/// image-pixel coordinates and previewed live with XAML shapes; on export they are baked into
+/// the bitmap at full resolution with Win2D so output matches the preview exactly.
+/// </summary>
+public sealed partial class ScreenshotEditorWindow : Window
+{
+    private enum EditTool
+    {
+        Select,
+        Crop,
+        Rectangle,
+        Ellipse,
+        Arrow,
+        Line,
+        Pen,
+        Text,
+        Counter,
+        Redact,
+    }
+
+    private enum RedactionLevel
+    {
+        Light,
+        Medium,
+        Heavy,
+    }
+
+    private enum RedactionStyle
+    {
+        Blur,
+        Pixelate,
+        Solid,
+    }
+
+    private enum ArrowStyle
+    {
+        Straight,
+        Curved1,
+        Curved2,
+    }
+
+    private sealed class Annotation
+    {
+        public EditTool Tool { get; set; }
+        public Rect Bounds { get; set; }
+        public Color Color { get; set; }
+        public Color FillColor { get; set; } = Colors.Transparent;
+        public double Thickness { get; set; }
+        public string Text { get; set; } = string.Empty;
+        public int Number { get; set; }
+        public double SizeScale { get; set; } = 1.0;
+        public RedactionLevel Redaction { get; set; } = RedactionLevel.Medium;
+        public RedactionStyle RedactStyle { get; set; } = RedactionStyle.Blur;
+        public ArrowStyle ArrowStyle { get; set; } = ArrowStyle.Straight;
+        public List<Vector2> Points { get; } = new();
+
+        // Text annotations: independent font + size; numbered badges: text color.
+        public Color TextColor { get; set; } = Colors.White;
+        public double FontSize { get; set; } = 28;
+        public string FontFamily { get; set; } = "Segoe UI";
+        public bool Bold { get; set; }
+        public bool Italic { get; set; }
+        public bool Underline { get; set; }
+        public bool Strikethrough { get; set; }
+
+        // Cached blurred preview for redaction annotations (invalidated on move / level change).
+        public SoftwareBitmapSource? RedactPreview { get; set; }
+        public Rect RedactPreviewBounds { get; set; }
+        public RedactionLevel RedactPreviewLevel { get; set; }
+        public RedactionStyle RedactPreviewStyle { get; set; }
+    }
+
+    private readonly string _filePath;
+    private SoftwareBitmap? _bitmap;
+    private CanvasBitmap? _canvasSource;
+
+    private readonly List<Annotation> _annotations = new();
+    private Annotation? _activeAnnotation;
+    private Annotation? _selectedAnnotation;
+    private EditTool _tool = EditTool.Crop;
+    private Color _strokeColor = Colors.Red;
+    private double _strokeThickness = 6;
+    private bool _fillEnabled;
+    private Color _fillColor = Color.FromArgb(96, 255, 213, 0);
+    private double _numberScale = 1.0;
+    private Color _numberTextColor = Colors.White;
+    private double _textFontSize = 28;
+    private string _textFontFamily = "Segoe UI";
+    private bool _textBold;
+    private bool _textItalic;
+    private bool _textUnderline;
+    private bool _textStrikethrough;
+    private RedactionLevel _redactionLevel = RedactionLevel.Medium;
+    private RedactionStyle _redactionStyle = RedactionStyle.Blur;
+    private ArrowStyle _arrowStyle = ArrowStyle.Straight;
+    private int _counterValue = 1;
+
+    private bool _dragging;
+    private Point _dragStart;
+    private Annotation? _movingAnnotation;
+    private Point _moveOffset;
+
+    // -- Export background / padding ------------------------------------------
+
+    private enum ExportBackgroundStyle
+    {
+        Transparent,
+        Solid,
+        Gradient,
+    }
+
+    private sealed record BackgroundPreset(string Id, string Label, ExportBackgroundStyle Style, Color Primary, Color? Secondary);
+
+    private ExportBackgroundStyle _bgStyle = ExportBackgroundStyle.Transparent;
+    private Color _bgColor = Color.FromArgb(255, 245, 245, 250);
+    private Color _bgColor2 = Color.FromArgb(255, 214, 230, 252);
+    private double _canvasPadding;
+    private double _canvasCornerRadius;
+    private double _canvasShadow;
+    private bool _bgInitializing;
+    private bool _inspectorInitializing = true;
+
+    private static readonly BackgroundPreset[] SolidPresets =
+    {
+        new("white", "White", ExportBackgroundStyle.Solid, Color.FromArgb(255, 255, 255, 255), null),
+        new("ink", "Ink", ExportBackgroundStyle.Solid, Color.FromArgb(255, 20, 23, 26), null),
+        new("coral", "Coral", ExportBackgroundStyle.Solid, Color.FromArgb(255, 255, 122, 107), null),
+        new("lemon", "Lemon", ExportBackgroundStyle.Solid, Color.FromArgb(255, 255, 224, 64), null),
+        new("mint", "Mint", ExportBackgroundStyle.Solid, Color.FromArgb(255, 105, 219, 158), null),
+        new("sky", "Sky", ExportBackgroundStyle.Solid, Color.FromArgb(255, 87, 171, 245), null),
+        new("lilac", "Lilac", ExportBackgroundStyle.Solid, Color.FromArgb(255, 179, 148, 240), null),
+        new("bubblegum", "Bubblegum", ExportBackgroundStyle.Solid, Color.FromArgb(255, 255, 107, 194), null),
+        new("tangerine", "Tangerine", ExportBackgroundStyle.Solid, Color.FromArgb(255, 255, 143, 41), null),
+        new("lagoon", "Lagoon", ExportBackgroundStyle.Solid, Color.FromArgb(255, 0, 184, 199), null),
+        new("plum", "Plum", ExportBackgroundStyle.Solid, Color.FromArgb(255, 99, 46, 148), null),
+        new("slate", "Slate", ExportBackgroundStyle.Solid, Color.FromArgb(255, 86, 101, 115), null),
+    };
+
+    private static readonly BackgroundPreset[] GradientPresets =
+    {
+        new("sunset", "Sunset", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 255, 122, 94), Color.FromArgb(255, 255, 219, 79)),
+        new("ocean", "Ocean", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 38, 135, 232), Color.FromArgb(255, 46, 224, 191)),
+        new("candy", "Candy", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 255, 107, 173), Color.FromArgb(255, 140, 199, 255)),
+        new("forest", "Forest", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 41, 143, 89), Color.FromArgb(255, 184, 224, 107)),
+        new("ember", "Ember", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 56, 20, 13), Color.FromArgb(255, 255, 115, 41)),
+        new("aurora", "Aurora", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 71, 240, 184), Color.FromArgb(255, 133, 107, 255)),
+        new("peach", "Peach", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 255, 184, 133), Color.FromArgb(255, 250, 107, 138)),
+        new("glacier", "Glacier", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 186, 240, 255), Color.FromArgb(255, 107, 148, 245)),
+        new("neon", "Neon", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 13, 255, 138), Color.FromArgb(255, 255, 20, 179)),
+        new("mango", "Mango", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 255, 199, 51), Color.FromArgb(255, 255, 66, 46)),
+        new("midnight", "Midnight", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 13, 18, 46), Color.FromArgb(255, 0, 148, 209)),
+        new("prism", "Prism", ExportBackgroundStyle.Gradient, Color.FromArgb(255, 250, 41, 97), Color.FromArgb(255, 46, 219, 237)),
+    };
+
+    public ScreenshotEditorWindow(string filePath)
+    {
+        _filePath = filePath;
+
+        InitializeComponent();
+
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(1100, 800));
+        (AppWindow.Presenter as Microsoft.UI.Windowing.OverlappedPresenter)?.Maximize();
+
+        var settings = App.Services.GetRequiredService<ICaptureSettings>();
+        RootGrid.RequestedTheme = settings.Theme switch
+        {
+            AppTheme.Light => ElementTheme.Light,
+            AppTheme.Dark => ElementTheme.Dark,
+            _ => ElementTheme.Default,
+        };
+
+        AnnotationColorPicker.Color = _strokeColor;
+        ColorSwatch.Background = new SolidColorBrush(_strokeColor);
+        NumberColorPicker.Color = _numberTextColor;
+        NumberColorSwatch.Background = new SolidColorBrush(_numberTextColor);
+        RedactionCombo.SelectedIndex = 1;
+        RedactStyleCombo.SelectedIndex = 0;
+
+        InitializeInspectorControls();
+        InitializeBackgroundControls();
+
+        SelectTool(EditTool.Crop);
+
+        RootGrid.KeyDown += OnRootKeyDown;
+
+        _ = LoadAsync();
+    }
+
+    private static readonly string[] FontChoices =
+    {
+        "Segoe UI",
+        "Segoe UI Semibold",
+        "Arial",
+        "Calibri",
+        "Cambria",
+        "Comic Sans MS",
+        "Consolas",
+        "Courier New",
+        "Georgia",
+        "Impact",
+        "Times New Roman",
+        "Trebuchet MS",
+        "Verdana",
+    };
+
+    private void InitializeInspectorControls()
+    {
+        _inspectorInitializing = true;
+
+        foreach (var font in FontChoices)
+        {
+            FontFamilyCombo.Items.Add(new ComboBoxItem { Content = font, Tag = font });
+        }
+        FontFamilyCombo.SelectedIndex = 0;
+
+        StrokeSlider.Value = _strokeThickness;
+        NumberSizeSlider.Value = _numberScale;
+        FontSizeSlider.Value = _textFontSize;
+        FillCheck.IsChecked = _fillEnabled;
+        FillColorPicker.Color = _fillColor;
+        FillColorSwatch.Background = new SolidColorBrush(_fillEnabled ? _fillColor : Colors.Transparent);
+        UpdateInspectorHeaders();
+
+        _inspectorInitializing = false;
+    }
+
+    private void UpdateInspectorHeaders()
+    {
+        StrokeSlider.Header = $"Stroke — {(int)_strokeThickness} px";
+        NumberSizeSlider.Header = $"Badge size — {(int)Math.Round(_numberScale * 100)}%";
+        FontSizeSlider.Header = $"Font size — {(int)_textFontSize} px";
+    }
+
+    private void InitializeBackgroundControls()
+    {
+        _bgInitializing = true;
+
+        foreach (var preset in SolidPresets)
+        {
+            SolidPresetGrid.Items.Add(CreatePresetSwatch(preset));
+        }
+
+        foreach (var preset in GradientPresets)
+        {
+            GradientPresetGrid.Items.Add(CreatePresetSwatch(preset));
+        }
+
+        BgStyleCombo.SelectedIndex = 0;
+        BgColorPicker.Color = _bgColor;
+        PaddingSlider.Value = _canvasPadding;
+        CornerSlider.Value = _canvasCornerRadius;
+        ShadowSlider.Value = _canvasShadow;
+        UpdateSliderHeaders();
+        UpdateBackgroundStyleUi();
+        ImageCard.Shadow = new ThemeShadow();
+
+        _bgInitializing = false;
+    }
+
+    private Button CreatePresetSwatch(BackgroundPreset preset)
+    {
+        Brush fill = preset.Style == ExportBackgroundStyle.Gradient && preset.Secondary is { } secondary
+            ? new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 1),
+                GradientStops =
+                {
+                    new GradientStop { Color = preset.Primary, Offset = 0 },
+                    new GradientStop { Color = secondary, Offset = 1 },
+                },
+            }
+            : new SolidColorBrush(preset.Primary);
+
+        var button = new Button
+        {
+            Width = 30,
+            Height = 30,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0),
+            CornerRadius = new CornerRadius(6),
+            Background = fill,
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(40, 0, 0, 0)),
+            Tag = preset,
+        };
+        ToolTipService.SetToolTip(button, preset.Label);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, $"{preset.Label} background");
+        button.Click += OnPresetSwatchClick;
+        return button;
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var file = await StorageFile.GetFileFromPathAsync(_filePath);
+            using var stream = await file.OpenAsync(FileAccessMode.Read);
+            var decoder = await BitmapDecoder.CreateAsync(stream);
+            var bitmap = await decoder.GetSoftwareBitmapAsync(
+                BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+            await SetBitmapAsync(bitmap);
+            _annotations.Clear();
+            _counterValue = 1;
+            RedrawOverlay();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Editor load failed: {ex}");
+        }
+    }
+
+    private async Task SetBitmapAsync(SoftwareBitmap bitmap)
+    {
+        _bitmap?.Dispose();
+        _bitmap = bitmap;
+
+        _canvasSource?.Dispose();
+        _canvasSource = CanvasBitmap.CreateFromSoftwareBitmap(CanvasDevice.GetSharedDevice(), bitmap);
+
+        var source = new SoftwareBitmapSource();
+        await source.SetBitmapAsync(bitmap);
+        PreviewImage.Source = source;
+
+        ImageSizeText.Text = $"{bitmap.PixelWidth} × {bitmap.PixelHeight} px";
+
+        ClearSelection();
+        LayoutCanvas();
+    }
+
+    // -- Tool selection -------------------------------------------------------
+
+    private void OnToolClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is ToggleButton { Tag: string tag } && Enum.TryParse<EditTool>(tag, out var tool))
+        {
+            SelectTool(tool);
+        }
+    }
+
+    private void SelectTool(EditTool tool)
+    {
+        _tool = tool;
+        _selectedAnnotation = null;
+
+        foreach (var (button, value) in ToolButtons())
+        {
+            button.IsChecked = value == tool;
+        }
+
+        var showsStroke = tool is EditTool.Rectangle or EditTool.Ellipse or EditTool.Arrow
+            or EditTool.Line or EditTool.Pen;
+        var showsFill = tool is EditTool.Rectangle or EditTool.Ellipse;
+        var showsColor = tool is EditTool.Rectangle or EditTool.Ellipse or EditTool.Arrow
+            or EditTool.Line or EditTool.Pen or EditTool.Text or EditTool.Counter;
+        var showsText = tool is EditTool.Text;
+        var showsNumber = tool is EditTool.Counter;
+        var showsRedact = tool is EditTool.Redact;
+        var showsArrowStyle = tool is EditTool.Arrow;
+
+        ColorSection.Visibility = showsColor ? Visibility.Visible : Visibility.Collapsed;
+        StrokeSection.Visibility = showsStroke ? Visibility.Visible : Visibility.Collapsed;
+        ArrowStyleSection.Visibility = showsArrowStyle ? Visibility.Visible : Visibility.Collapsed;
+        FillSection.Visibility = showsFill ? Visibility.Visible : Visibility.Collapsed;
+        TextSection.Visibility = showsText ? Visibility.Visible : Visibility.Collapsed;
+        CounterSection.Visibility = showsNumber ? Visibility.Visible : Visibility.Collapsed;
+        RedactSection.Visibility = showsRedact ? Visibility.Visible : Visibility.Collapsed;
+
+        if (showsArrowStyle)
+        {
+            ArrowStyleCombo.SelectedIndex = (int)_arrowStyle;
+        }
+
+        if (showsRedact)
+        {
+            RedactStyleCombo.SelectedIndex = (int)_redactionStyle;
+            RedactionCombo.SelectedIndex = (int)_redactionLevel;
+        }
+
+        InspectorTitle.Text = tool switch
+        {
+            EditTool.Select => "Select & move",
+            EditTool.Crop => "Crop",
+            EditTool.Rectangle => "Rectangle",
+            EditTool.Ellipse => "Ellipse",
+            EditTool.Arrow => "Arrow",
+            EditTool.Line => "Line",
+            EditTool.Pen => "Draw",
+            EditTool.Text => "Text",
+            EditTool.Counter => "Number badge",
+            EditTool.Redact => "Redact",
+            _ => "Tool",
+        };
+
+        HintText.Text = tool switch
+        {
+            EditTool.Crop => "Drag to select an area, then choose Apply crop.",
+            EditTool.Select => "Click an annotation to select it; drag to move, Del to remove.",
+            EditTool.Text => "Click where you want text to open the editor; double-click text to edit it.",
+            EditTool.Counter => "Click to drop a numbered badge.",
+            EditTool.Pen => "Drag to draw freehand.",
+            EditTool.Redact => "Drag over content to redact it.",
+            EditTool.Rectangle or EditTool.Ellipse => "Drag to draw. Hold Shift for a perfect shape.",
+            EditTool.Line or EditTool.Arrow => "Drag in any direction. Hold Shift to snap.",
+            _ => "Drag on the image to draw.",
+        };
+
+        ApplyCropButton.IsEnabled = false;
+        SelectionRect.Visibility = Visibility.Collapsed;
+        RedrawOverlay();
+    }
+
+    // While the Select tool is active, reveal the property controls for the chosen annotation
+    // and load its current values so the user can tweak color, size, font, etc.
+    private void ShowInspectorForSelection(Annotation ann)
+    {
+        _inspectorInitializing = true;
+
+        var isShape = ann.Tool is EditTool.Rectangle or EditTool.Ellipse or EditTool.Arrow
+            or EditTool.Line or EditTool.Pen;
+        var isFillable = ann.Tool is EditTool.Rectangle or EditTool.Ellipse;
+        var isText = ann.Tool is EditTool.Text;
+        var isCounter = ann.Tool is EditTool.Counter;
+        var isRedact = ann.Tool is EditTool.Redact;
+        var isArrow = ann.Tool is EditTool.Arrow;
+        var hasColor = isShape || isText || isCounter;
+
+        ColorSection.Visibility = hasColor ? Visibility.Visible : Visibility.Collapsed;
+        StrokeSection.Visibility = isShape ? Visibility.Visible : Visibility.Collapsed;
+        ArrowStyleSection.Visibility = isArrow ? Visibility.Visible : Visibility.Collapsed;
+        FillSection.Visibility = isFillable ? Visibility.Visible : Visibility.Collapsed;
+        TextSection.Visibility = isText ? Visibility.Visible : Visibility.Collapsed;
+        CounterSection.Visibility = isCounter ? Visibility.Visible : Visibility.Collapsed;
+        RedactSection.Visibility = isRedact ? Visibility.Visible : Visibility.Collapsed;
+        InspectorTitle.Text = $"{ann.Tool} (selected)";
+
+        if (isArrow)
+        {
+            ArrowStyleCombo.SelectedIndex = (int)ann.ArrowStyle;
+        }
+
+        if (hasColor)
+        {
+            AnnotationColorPicker.Color = ann.Color;
+            ColorSwatch.Background = new SolidColorBrush(ann.Color);
+        }
+        if (isShape)
+        {
+            StrokeSlider.Value = ann.Thickness;
+        }
+        if (isFillable)
+        {
+            var hasFill = ann.FillColor.A > 0;
+            FillCheck.IsChecked = hasFill;
+            var pick = hasFill ? ann.FillColor : _fillColor;
+            FillColorPicker.Color = pick;
+            FillColorSwatch.Background = new SolidColorBrush(hasFill ? ann.FillColor : Colors.Transparent);
+        }
+        if (isText)
+        {
+            FontSizeSlider.Value = ann.FontSize;
+            SelectFontInCombo(ann.FontFamily);
+        }
+        if (isCounter)
+        {
+            NumberSizeSlider.Value = ann.SizeScale;
+            NumberColorPicker.Color = ann.TextColor;
+            NumberColorSwatch.Background = new SolidColorBrush(ann.TextColor);
+        }
+        if (isRedact)
+        {
+            RedactionCombo.SelectedIndex = (int)ann.Redaction;
+            RedactStyleCombo.SelectedIndex = (int)ann.RedactStyle;
+        }
+
+        UpdateInspectorHeaders();
+        _inspectorInitializing = false;
+    }
+
+    private void SelectFontInCombo(string font)
+    {
+        for (var i = 0; i < FontFamilyCombo.Items.Count; i++)
+        {
+            if (FontFamilyCombo.Items[i] is ComboBoxItem { Tag: string f } && f == font)
+            {
+                FontFamilyCombo.SelectedIndex = i;
+                return;
+            }
+        }
+    }
+
+    private IEnumerable<(ToggleButton Button, EditTool Tool)> ToolButtons()
+    {
+        yield return (ToolSelect, EditTool.Select);
+        yield return (ToolCrop, EditTool.Crop);
+        yield return (ToolRectangle, EditTool.Rectangle);
+        yield return (ToolEllipse, EditTool.Ellipse);
+        yield return (ToolArrow, EditTool.Arrow);
+        yield return (ToolLine, EditTool.Line);
+        yield return (ToolPen, EditTool.Pen);
+        yield return (ToolText, EditTool.Text);
+        yield return (ToolCounter, EditTool.Counter);
+        yield return (ToolRedact, EditTool.Redact);
+    }
+
+    private void OnColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+    {
+        _strokeColor = args.NewColor;
+        ColorSwatch.Background = new SolidColorBrush(_strokeColor);
+        if (_selectedAnnotation is not null)
+        {
+            _selectedAnnotation.Color = _strokeColor;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnNumberColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+    {
+        _numberTextColor = args.NewColor;
+        NumberColorSwatch.Background = new SolidColorBrush(_numberTextColor);
+        if (_selectedAnnotation is { Tool: EditTool.Counter } ann)
+        {
+            ann.TextColor = _numberTextColor;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnStrokeChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        _strokeThickness = e.NewValue;
+        UpdateInspectorHeaders();
+        if (_selectedAnnotation is { Tool: not EditTool.Counter and not EditTool.Text } ann)
+        {
+            ann.Thickness = _strokeThickness;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnArrowStyleChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        var style = (ArrowStyle)Math.Clamp(ArrowStyleCombo.SelectedIndex, 0, 2);
+        if (_selectedAnnotation is { Tool: EditTool.Arrow } ann)
+        {
+            ann.ArrowStyle = style;
+            RedrawOverlay();
+        }
+        else
+        {
+            _arrowStyle = style;
+        }
+    }
+
+    private void OnFillToggled(object sender, RoutedEventArgs e)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        _fillEnabled = FillCheck.IsChecked == true;
+        FillColorSwatch.Background = new SolidColorBrush(_fillEnabled ? _fillColor : Colors.Transparent);
+        if (_selectedAnnotation is { Tool: EditTool.Rectangle or EditTool.Ellipse } ann)
+        {
+            ann.FillColor = _fillEnabled ? _fillColor : Colors.Transparent;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnFillColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        _fillColor = args.NewColor;
+        _fillEnabled = true;
+        FillCheck.IsChecked = true;
+        FillColorSwatch.Background = new SolidColorBrush(_fillColor);
+        if (_selectedAnnotation is { Tool: EditTool.Rectangle or EditTool.Ellipse } ann)
+        {
+            ann.FillColor = _fillColor;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnFontFamilyChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        if (FontFamilyCombo.SelectedItem is ComboBoxItem { Tag: string font })
+        {
+            _textFontFamily = font;
+            if (_selectedAnnotation is { Tool: EditTool.Text } ann)
+            {
+                ann.FontFamily = font;
+                RedrawOverlay();
+            }
+        }
+    }
+
+    private void OnFontSizeChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        _textFontSize = e.NewValue;
+        UpdateInspectorHeaders();
+        if (_selectedAnnotation is { Tool: EditTool.Text } ann)
+        {
+            ann.FontSize = _textFontSize;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnNumberSizeChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_inspectorInitializing)
+        {
+            return;
+        }
+
+        _numberScale = e.NewValue;
+        UpdateInspectorHeaders();
+        if (_selectedAnnotation is { Tool: EditTool.Counter } ann)
+        {
+            ann.SizeScale = _numberScale;
+            var center = new Point(ann.Bounds.X + ann.Bounds.Width / 2, ann.Bounds.Y + ann.Bounds.Height / 2);
+            var radius = CounterRadius(_numberScale);
+            ann.Bounds = new Rect(center.X - radius, center.Y - radius, radius * 2, radius * 2);
+            RedrawOverlay();
+        }
+    }
+
+    private void OnRedactionLevelChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (RedactionCombo.SelectedItem is ComboBoxItem { Tag: string tag }
+            && Enum.TryParse<RedactionLevel>(tag, out var level))
+        {
+            _redactionLevel = level;
+            if (_selectedAnnotation is { Tool: EditTool.Redact } ann)
+            {
+                ann.Redaction = level;
+                ann.RedactPreview = null;
+                RedrawOverlay();
+            }
+        }
+    }
+
+    private void OnRedactionStyleChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (RedactStyleCombo.SelectedItem is ComboBoxItem { Tag: string tag }
+            && Enum.TryParse<RedactionStyle>(tag, out var style))
+        {
+            _redactionStyle = style;
+            if (_selectedAnnotation is { Tool: EditTool.Redact } ann)
+            {
+                ann.RedactStyle = style;
+                ann.RedactPreview = null;
+                RedrawOverlay();
+            }
+        }
+    }
+
+    private double CounterRadius(double scale) => Math.Max(12, 22 * scale);
+
+    // -- Export background handlers -------------------------------------------
+
+    private void OnPresetSwatchClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: BackgroundPreset preset })
+        {
+            _bgStyle = preset.Style;
+            _bgColor = preset.Primary;
+            _bgColor2 = preset.Secondary ?? preset.Primary;
+
+            _bgInitializing = true;
+            BgStyleCombo.SelectedIndex = preset.Style == ExportBackgroundStyle.Gradient ? 2 : 1;
+            BgColorPicker.Color = _bgColor;
+            _bgInitializing = false;
+
+            UpdateBackgroundStyleUi();
+            LayoutCanvas();
+        }
+    }
+
+    private void OnBgStyleChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_bgInitializing)
+        {
+            return;
+        }
+
+        _bgStyle = BgStyleCombo.SelectedIndex switch
+        {
+            1 => ExportBackgroundStyle.Solid,
+            2 => ExportBackgroundStyle.Gradient,
+            _ => ExportBackgroundStyle.Transparent,
+        };
+        UpdateBackgroundStyleUi();
+        LayoutCanvas();
+    }
+
+    private void UpdateBackgroundStyleUi()
+    {
+        SolidPresetGrid.Visibility = _bgStyle == ExportBackgroundStyle.Solid ? Visibility.Visible : Visibility.Collapsed;
+        GradientPresetGrid.Visibility = _bgStyle == ExportBackgroundStyle.Gradient ? Visibility.Visible : Visibility.Collapsed;
+        CustomColorPanel.Visibility = _bgStyle == ExportBackgroundStyle.Solid ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnBgCustomColorChanged(ColorPicker sender, ColorChangedEventArgs args)
+    {
+        if (_bgInitializing)
+        {
+            return;
+        }
+
+        _bgColor = args.NewColor;
+        if (_bgStyle == ExportBackgroundStyle.Solid)
+        {
+            LayoutCanvas();
+        }
+    }
+
+    private void OnApplyCustomSolidBackground(object sender, RoutedEventArgs e)
+    {
+        _bgStyle = ExportBackgroundStyle.Solid;
+        _bgColor = BgColorPicker.Color;
+
+        _bgInitializing = true;
+        BgStyleCombo.SelectedIndex = 1;
+        _bgInitializing = false;
+
+        UpdateBackgroundStyleUi();
+        LayoutCanvas();
+    }
+
+    private void OnPaddingChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_bgInitializing)
+        {
+            return;
+        }
+
+        _canvasPadding = e.NewValue;
+        UpdateSliderHeaders();
+        LayoutCanvas();
+        RedrawOverlay();
+    }
+
+    private void OnCornerChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_bgInitializing)
+        {
+            return;
+        }
+
+        _canvasCornerRadius = e.NewValue;
+        UpdateSliderHeaders();
+        LayoutCanvas();
+    }
+
+    private void OnShadowChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (_bgInitializing)
+        {
+            return;
+        }
+
+        _canvasShadow = e.NewValue;
+        UpdateSliderHeaders();
+        LayoutCanvas();
+    }
+
+    private void UpdateSliderHeaders()
+    {
+        PaddingSlider.Header = $"Padding — {(int)_canvasPadding} px";
+        CornerSlider.Header = $"Corners — {(int)_canvasCornerRadius} px";
+        ShadowSlider.Header = $"Shadow — {(int)_canvasShadow}";
+    }
+
+    // -- Pointer interaction --------------------------------------------------
+
+    private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (_bitmap is null)
+        {
+            return;
+        }
+
+        var p = e.GetCurrentPoint(OverlayCanvas).Position;
+
+        if (_tool == EditTool.Crop)
+        {
+            _dragging = true;
+            _dragStart = p;
+            Canvas.SetLeft(SelectionRect, p.X);
+            Canvas.SetTop(SelectionRect, p.Y);
+            SelectionRect.Width = 0;
+            SelectionRect.Height = 0;
+            SelectionRect.Visibility = Visibility.Visible;
+            OverlayCanvas.CapturePointer(e.Pointer);
+            return;
+        }
+
+        if (_tool == EditTool.Select)
+        {
+            var hit = HitTest(p);
+            _selectedAnnotation = hit;
+            if (hit is not null)
+            {
+                _movingAnnotation = hit;
+                var origin = PixelToCanvas(new Point(hit.Bounds.X, hit.Bounds.Y));
+                _moveOffset = new Point(p.X - origin.X, p.Y - origin.Y);
+                OverlayCanvas.CapturePointer(e.Pointer);
+                ShowInspectorForSelection(hit);
+            }
+            RedrawOverlay();
+            return;
+        }
+
+        if (_tool == EditTool.Text)
+        {
+            BeginTextEntry(p);
+            return;
+        }
+
+        if (_tool == EditTool.Counter)
+        {
+            var center = CanvasToPixel(p);
+            var radius = CounterRadius(_numberScale);
+            var ann = new Annotation
+            {
+                Tool = EditTool.Counter,
+                Color = _strokeColor,
+                Thickness = _strokeThickness,
+                SizeScale = _numberScale,
+                TextColor = _numberTextColor,
+                Number = _counterValue++,
+                Bounds = new Rect(center.X - radius, center.Y - radius, radius * 2, radius * 2),
+            };
+            _annotations.Add(ann);
+            RedrawOverlay();
+            return;
+        }
+
+        // Shape / line / arrow / pen / redact: begin a drag.
+        _dragging = true;
+        _dragStart = p;
+        var pixel = CanvasToPixel(p);
+        _activeAnnotation = new Annotation
+        {
+            Tool = _tool,
+            Color = _strokeColor,
+            FillColor = (_tool is EditTool.Rectangle or EditTool.Ellipse && _fillEnabled)
+                ? _fillColor
+                : Colors.Transparent,
+            Thickness = _strokeThickness,
+            Redaction = _redactionLevel,
+            RedactStyle = _redactionStyle,
+            ArrowStyle = _arrowStyle,
+            Bounds = new Rect(pixel.X, pixel.Y, 0, 0),
+        };
+        if (_tool == EditTool.Pen)
+        {
+            _activeAnnotation.Points.Add(new Vector2((float)pixel.X, (float)pixel.Y));
+        }
+        else if (_tool is EditTool.Line or EditTool.Arrow)
+        {
+            // Lines and arrows are stored as directed endpoints so they can point any direction.
+            _activeAnnotation.Points.Add(new Vector2((float)pixel.X, (float)pixel.Y));
+            _activeAnnotation.Points.Add(new Vector2((float)pixel.X, (float)pixel.Y));
+        }
+        OverlayCanvas.CapturePointer(e.Pointer);
+    }
+
+    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        var p = e.GetCurrentPoint(OverlayCanvas).Position;
+
+        if (_tool == EditTool.Crop && _dragging)
+        {
+            var x = Math.Min(p.X, _dragStart.X);
+            var y = Math.Min(p.Y, _dragStart.Y);
+            Canvas.SetLeft(SelectionRect, x);
+            Canvas.SetTop(SelectionRect, y);
+            SelectionRect.Width = Math.Abs(p.X - _dragStart.X);
+            SelectionRect.Height = Math.Abs(p.Y - _dragStart.Y);
+            return;
+        }
+
+        if (_tool == EditTool.Select && _movingAnnotation is not null)
+        {
+            var targetCanvas = new Point(p.X - _moveOffset.X, p.Y - _moveOffset.Y);
+            var targetPixel = CanvasToPixel(targetCanvas);
+            var b = _movingAnnotation.Bounds;
+            var dx = targetPixel.X - b.X;
+            var dy = targetPixel.Y - b.Y;
+            MoveAnnotation(_movingAnnotation, dx, dy);
+            RedrawOverlay();
+            return;
+        }
+
+        if (_dragging && _activeAnnotation is not null)
+        {
+            var pixel = CanvasToPixel(p);
+            if (_activeAnnotation.Tool == EditTool.Pen)
+            {
+                _activeAnnotation.Points.Add(new Vector2((float)pixel.X, (float)pixel.Y));
+            }
+
+            var startPixel = CanvasToPixel(_dragStart);
+            if (_activeAnnotation.Tool is EditTool.Line or EditTool.Arrow)
+            {
+                // Store the directed endpoints; keep Bounds as a normalized box for hit-testing.
+                var end = pixel;
+                if (IsShiftDown())
+                {
+                    end = ConstrainToAxisOrDiagonal(startPixel, pixel);
+                }
+                if (_activeAnnotation.Points.Count < 2)
+                {
+                    _activeAnnotation.Points.Add(new Vector2((float)end.X, (float)end.Y));
+                }
+                else
+                {
+                    _activeAnnotation.Points[1] = new Vector2((float)end.X, (float)end.Y);
+                }
+                var nx = Math.Min(startPixel.X, end.X);
+                var ny = Math.Min(startPixel.Y, end.Y);
+                _activeAnnotation.Bounds = new Rect(nx, ny, Math.Abs(end.X - startPixel.X), Math.Abs(end.Y - startPixel.Y));
+            }
+            else
+            {
+                var endX = pixel.X;
+                var endY = pixel.Y;
+                // Shift constrains rectangles/ellipses to a perfect square/circle.
+                if (IsShiftDown() && _activeAnnotation.Tool is EditTool.Rectangle or EditTool.Ellipse)
+                {
+                    var side = Math.Max(Math.Abs(pixel.X - startPixel.X), Math.Abs(pixel.Y - startPixel.Y));
+                    endX = startPixel.X + Math.Sign(pixel.X - startPixel.X) * side;
+                    endY = startPixel.Y + Math.Sign(pixel.Y - startPixel.Y) * side;
+                }
+                var x = Math.Min(endX, startPixel.X);
+                var y = Math.Min(endY, startPixel.Y);
+                _activeAnnotation.Bounds = new Rect(x, y, Math.Abs(endX - startPixel.X), Math.Abs(endY - startPixel.Y));
+            }
+            RedrawOverlay(previewActive: true);
+        }
+    }
+
+    private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        OverlayCanvas.ReleasePointerCapture(e.Pointer);
+
+        if (_tool == EditTool.Crop && _dragging)
+        {
+            _dragging = false;
+            ApplyCropButton.IsEnabled = SelectionRect.Width > 4 && SelectionRect.Height > 4;
+            return;
+        }
+
+        if (_tool == EditTool.Select)
+        {
+            _movingAnnotation = null;
+            return;
+        }
+
+        if (_dragging && _activeAnnotation is not null)
+        {
+            _dragging = false;
+            if (_activeAnnotation.Tool == EditTool.Pen)
+            {
+                UpdatePenBounds(_activeAnnotation);
+            }
+
+            var b = _activeAnnotation.Bounds;
+            var significant = _activeAnnotation.Tool == EditTool.Pen
+                ? _activeAnnotation.Points.Count > 1
+                : Math.Abs(b.Width) > 3 || Math.Abs(b.Height) > 3;
+            if (significant)
+            {
+                _annotations.Add(_activeAnnotation);
+            }
+            _activeAnnotation = null;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnOverlayDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (_bitmap is null)
+        {
+            return;
+        }
+
+        var p = e.GetPosition(OverlayCanvas);
+        if (HitTest(p) is { Tool: EditTool.Text } textAnn)
+        {
+            _selectedAnnotation = textAnn;
+            EditTextAnnotation(textAnn);
+        }
+    }
+
+    private Annotation? HitTest(Point canvasPoint)
+    {
+        var pixel = CanvasToPixel(canvasPoint);
+        for (var i = _annotations.Count - 1; i >= 0; i--)
+        {
+            var ann = _annotations[i];
+            var b = NormalizedBounds(ann);
+            var pad = ann.Thickness + 6;
+            var inflated = new Rect(b.X - pad, b.Y - pad, b.Width + pad * 2, b.Height + pad * 2);
+            if (inflated.Contains(new Point(pixel.X, pixel.Y)))
+            {
+                return ann;
+            }
+        }
+        return null;
+    }
+
+    private static void MoveAnnotation(Annotation ann, double dx, double dy)
+    {
+        ann.Bounds = new Rect(ann.Bounds.X + dx, ann.Bounds.Y + dy, ann.Bounds.Width, ann.Bounds.Height);
+        for (var i = 0; i < ann.Points.Count; i++)
+        {
+            ann.Points[i] = new Vector2(ann.Points[i].X + (float)dx, ann.Points[i].Y + (float)dy);
+        }
+    }
+
+    private static Rect NormalizedBounds(Annotation ann)
+    {
+        var b = ann.Bounds;
+        var x = b.Width < 0 ? b.X + b.Width : b.X;
+        var y = b.Height < 0 ? b.Y + b.Height : b.Y;
+        return new Rect(x, y, Math.Abs(b.Width), Math.Abs(b.Height));
+    }
+
+    // Freehand strokes track their path in Points but not in Bounds; recompute the bounding box
+    // (padded by half the stroke width) so hit-testing and the selection marquee cover the whole
+    // drawing rather than just the start point.
+    private static void UpdatePenBounds(Annotation ann)
+    {
+        if (ann.Points.Count == 0)
+        {
+            return;
+        }
+
+        float minX = ann.Points[0].X, minY = ann.Points[0].Y, maxX = minX, maxY = minY;
+        foreach (var pt in ann.Points)
+        {
+            minX = Math.Min(minX, pt.X);
+            minY = Math.Min(minY, pt.Y);
+            maxX = Math.Max(maxX, pt.X);
+            maxY = Math.Max(maxY, pt.Y);
+        }
+
+        var half = ann.Thickness / 2.0;
+        ann.Bounds = new Rect(
+            minX - half,
+            minY - half,
+            (maxX - minX) + ann.Thickness,
+            (maxY - minY) + ann.Thickness);
+    }
+
+    // Text annotations are created with a zero-size box; measure the laid-out text so Bounds
+    // matches what's rendered, giving the selection marquee and hit-test the full text area.
+    private void UpdateTextBounds(Annotation ann)
+    {
+        if (ann.Tool != EditTool.Text || string.IsNullOrEmpty(ann.Text))
+        {
+            return;
+        }
+
+        try
+        {
+            var device = CanvasDevice.GetSharedDevice();
+            using var format = new CanvasTextFormat
+            {
+                FontSize = (float)ann.FontSize,
+                FontFamily = ann.FontFamily,
+                FontWeight = ann.Bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
+                FontStyle = ann.Italic ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
+                WordWrapping = CanvasWordWrapping.NoWrap,
+            };
+            using var layout = new CanvasTextLayout(device, ann.Text, format, 0, 0);
+            if (ann.Underline)
+            {
+                layout.SetUnderline(0, ann.Text.Length, true);
+            }
+            if (ann.Strikethrough)
+            {
+                layout.SetStrikethrough(0, ann.Text.Length, true);
+            }
+
+            // Union the layout box with the (possibly overhanging, e.g. italic) ink bounds.
+            var lb = layout.LayoutBounds;
+            var db = layout.DrawBounds;
+            var width = Math.Max(lb.Width, db.X + db.Width);
+            var height = Math.Max(lb.Height, db.Y + db.Height);
+            ann.Bounds = new Rect(ann.Bounds.X, ann.Bounds.Y, width, height);
+        }
+        catch
+        {
+            // Measurement is best-effort; leave bounds as-is on failure.
+        }
+    }
+
+    private static (Vector2 Start, Vector2 End) Segment(Annotation ann)
+    {
+        if (ann.Points.Count >= 2)
+        {
+            return (ann.Points[0], ann.Points[^1]);
+        }
+        var s = new Vector2((float)ann.Bounds.X, (float)ann.Bounds.Y);
+        return (s, s);
+    }
+
+    private static bool IsShiftDown() =>
+        Microsoft.UI.Input.InputKeyboardSource
+            .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Shift)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+    private static Point ConstrainToAxisOrDiagonal(Point start, Point end)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var adx = Math.Abs(dx);
+        var ady = Math.Abs(dy);
+        // Snap to the nearest of horizontal, vertical, or 45° diagonal.
+        if (adx > ady * 2)
+        {
+            return new Point(end.X, start.Y);
+        }
+        if (ady > adx * 2)
+        {
+            return new Point(start.X, end.Y);
+        }
+        var len = Math.Max(adx, ady);
+        return new Point(start.X + Math.Sign(dx) * len, start.Y + Math.Sign(dy) * len);
+    }
+
+    // -- Text entry -----------------------------------------------------------
+
+    private async void BeginTextEntry(Point canvasPoint)
+    {
+        var dialog = new TextEntryDialog(
+            FontChoices,
+            string.Empty,
+            _textFontFamily,
+            _textFontSize,
+            _strokeColor,
+            _textBold,
+            _textItalic,
+            _textUnderline,
+            _textStrikethrough,
+            isEdit: false)
+        {
+            XamlRoot = Content.XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(dialog.ResultText))
+        {
+            return;
+        }
+
+        // Remember the chosen styling as the new tool defaults.
+        _textFontFamily = dialog.ResultFont;
+        _textFontSize = dialog.ResultSize;
+        _strokeColor = dialog.ResultColor;
+        _textBold = dialog.ResultBold;
+        _textItalic = dialog.ResultItalic;
+        _textUnderline = dialog.ResultUnderline;
+        _textStrikethrough = dialog.ResultStrikethrough;
+
+        var pixel = CanvasToPixel(canvasPoint);
+        var textAnnotation = new Annotation
+        {
+            Tool = EditTool.Text,
+            Color = dialog.ResultColor,
+            Thickness = _strokeThickness,
+            Text = dialog.ResultText,
+            FontSize = dialog.ResultSize,
+            FontFamily = dialog.ResultFont,
+            Bold = dialog.ResultBold,
+            Italic = dialog.ResultItalic,
+            Underline = dialog.ResultUnderline,
+            Strikethrough = dialog.ResultStrikethrough,
+            Bounds = new Rect(pixel.X, pixel.Y, 0, 0),
+        };
+        UpdateTextBounds(textAnnotation);
+        _annotations.Add(textAnnotation);
+        RedrawOverlay();
+    }
+
+    private async void EditTextAnnotation(Annotation ann)
+    {
+        var dialog = new TextEntryDialog(
+            FontChoices,
+            ann.Text,
+            ann.FontFamily,
+            ann.FontSize,
+            ann.Color,
+            ann.Bold,
+            ann.Italic,
+            ann.Underline,
+            ann.Strikethrough,
+            isEdit: true)
+        {
+            XamlRoot = Content.XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(dialog.ResultText))
+        {
+            _annotations.Remove(ann);
+            if (ReferenceEquals(_selectedAnnotation, ann))
+            {
+                _selectedAnnotation = null;
+            }
+            RedrawOverlay();
+            return;
+        }
+
+        ann.Text = dialog.ResultText;
+        ann.FontFamily = dialog.ResultFont;
+        ann.FontSize = dialog.ResultSize;
+        ann.Color = dialog.ResultColor;
+        ann.Bold = dialog.ResultBold;
+        ann.Italic = dialog.ResultItalic;
+        ann.Underline = dialog.ResultUnderline;
+        ann.Strikethrough = dialog.ResultStrikethrough;
+        UpdateTextBounds(ann);
+        RedrawOverlay();
+    }
+
+    // -- Keyboard -------------------------------------------------------------
+
+    private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        var ctrl = Microsoft.UI.Input.InputKeyboardSource
+            .GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
+            .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
+
+        if (ctrl && e.Key == Windows.System.VirtualKey.Z)
+        {
+            OnUndo(this, new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key is Windows.System.VirtualKey.Delete or Windows.System.VirtualKey.Back && _selectedAnnotation is not null)
+        {
+            OnDeleteSelected(this, new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
+
+        var tool = e.Key switch
+        {
+            Windows.System.VirtualKey.V => EditTool.Select,
+            Windows.System.VirtualKey.C => EditTool.Crop,
+            Windows.System.VirtualKey.R => EditTool.Rectangle,
+            Windows.System.VirtualKey.O => EditTool.Ellipse,
+            Windows.System.VirtualKey.A => EditTool.Arrow,
+            Windows.System.VirtualKey.L => EditTool.Line,
+            Windows.System.VirtualKey.D => EditTool.Pen,
+            Windows.System.VirtualKey.T => EditTool.Text,
+            Windows.System.VirtualKey.N => EditTool.Counter,
+            Windows.System.VirtualKey.B => EditTool.Redact,
+            _ => (EditTool?)null,
+        };
+        if (tool is { } t)
+        {
+            SelectTool(t);
+            e.Handled = true;
+        }
+    }
+
+    private void OnUndo(object sender, RoutedEventArgs e)
+    {
+        if (_annotations.Count > 0)
+        {
+            var last = _annotations[^1];
+            if (last.Tool == EditTool.Counter)
+            {
+                _counterValue = Math.Max(1, _counterValue - 1);
+            }
+            _annotations.RemoveAt(_annotations.Count - 1);
+            _selectedAnnotation = null;
+            RedrawOverlay();
+        }
+    }
+
+    private void OnDeleteSelected(object sender, RoutedEventArgs e)
+    {
+        if (_selectedAnnotation is not null)
+        {
+            _annotations.Remove(_selectedAnnotation);
+            _selectedAnnotation = null;
+            RedrawOverlay();
+        }
+    }
+
+    // -- Coordinate mapping ---------------------------------------------------
+
+    private (double Scale, double OffsetX, double OffsetY) ImageLayout()
+    {
+        double imgW = _bitmap?.PixelWidth ?? 1;
+        double imgH = _bitmap?.PixelHeight ?? 1;
+        double hostW = ImageHost.ActualWidth;
+        double hostH = ImageHost.ActualHeight;
+        if (imgW <= 0 || imgH <= 0 || hostW <= 0 || hostH <= 0)
+        {
+            return (1, 0, 0);
+        }
+
+        // The composite (background frame) is the image plus padding on every side.
+        var pad = _canvasPadding;
+        var compW = imgW + pad * 2;
+        var compH = imgH + pad * 2;
+        var scale = Math.Min(hostW / compW, hostH / compH);
+        var frameOffsetX = (hostW - compW * scale) / 2.0;
+        var frameOffsetY = (hostH - compH * scale) / 2.0;
+        // Offsets returned are the image card's top-left (inside the padded frame),
+        // so annotation pixel<->canvas mapping stays aligned with the screenshot.
+        var offsetX = frameOffsetX + pad * scale;
+        var offsetY = frameOffsetY + pad * scale;
+        return (scale, offsetX, offsetY);
+    }
+
+    private void LayoutCanvas()
+    {
+        if (_bitmap is null)
+        {
+            return;
+        }
+
+        double imgW = _bitmap.PixelWidth;
+        double imgH = _bitmap.PixelHeight;
+        var (scale, imageOffX, imageOffY) = ImageLayout();
+        var pad = _canvasPadding * scale;
+
+        // Background frame spans image + padding on all sides.
+        Canvas.SetLeft(CanvasBackground, imageOffX - pad);
+        Canvas.SetTop(CanvasBackground, imageOffY - pad);
+        CanvasBackground.Width = imgW * scale + pad * 2;
+        CanvasBackground.Height = imgH * scale + pad * 2;
+        CanvasBackground.CornerRadius = new CornerRadius(0);
+        CanvasBackground.Background = _bgStyle == ExportBackgroundStyle.Transparent ? null : MakeBackgroundBrush();
+        CanvasBackground.Visibility = _bgStyle == ExportBackgroundStyle.Transparent
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+        // Image card sits inside the frame, rounded + elevated to match export.
+        Canvas.SetLeft(ImageCard, imageOffX);
+        Canvas.SetTop(ImageCard, imageOffY);
+        ImageCard.Width = imgW * scale;
+        ImageCard.Height = imgH * scale;
+        ImageCard.CornerRadius = new CornerRadius(_canvasCornerRadius * scale);
+        ImageCard.Translation = new Vector3(0, 0, (float)(_canvasShadow > 0 ? Math.Max(8, _canvasShadow) : 0));
+    }
+
+    private Brush MakeBackgroundBrush()
+    {
+        if (_bgStyle == ExportBackgroundStyle.Gradient)
+        {
+            return new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 1),
+                GradientStops =
+                {
+                    new GradientStop { Color = _bgColor, Offset = 0 },
+                    new GradientStop { Color = _bgColor2, Offset = 1 },
+                },
+            };
+        }
+
+        return new SolidColorBrush(_bgColor);
+    }
+
+    private Point CanvasToPixel(Point canvas)
+    {
+        var (scale, offX, offY) = ImageLayout();
+        if (scale <= 0)
+        {
+            return canvas;
+        }
+        return new Point((canvas.X - offX) / scale, (canvas.Y - offY) / scale);
+    }
+
+    private Point PixelToCanvas(Point pixel)
+    {
+        var (scale, offX, offY) = ImageLayout();
+        return new Point(pixel.X * scale + offX, pixel.Y * scale + offY);
+    }
+
+    private void OnImageHostSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        LayoutCanvas();
+        RedrawOverlay();
+    }
+
+    // -- Live overlay rendering ----------------------------------------------
+
+    private void RedrawOverlay(bool previewActive = false)
+    {
+        // Remove all annotation visuals but keep SelectionRect.
+        for (var i = OverlayCanvas.Children.Count - 1; i >= 0; i--)
+        {
+            var child = OverlayCanvas.Children[i];
+            if (child != SelectionRect)
+            {
+                OverlayCanvas.Children.RemoveAt(i);
+            }
+        }
+
+        if (_bitmap is null)
+        {
+            return;
+        }
+
+        foreach (var ann in _annotations)
+        {
+            DrawAnnotationPreview(ann, ann == _selectedAnnotation);
+        }
+
+        if (previewActive && _activeAnnotation is not null)
+        {
+            DrawAnnotationPreview(_activeAnnotation, false);
+        }
+    }
+
+    private void DrawAnnotationPreview(Annotation ann, bool selected)
+    {
+        var (scale, _, _) = ImageLayout();
+        var brush = new SolidColorBrush(ann.Color);
+        var thickness = Math.Max(1, ann.Thickness * scale);
+
+        switch (ann.Tool)
+        {
+            case EditTool.Rectangle:
+            {
+                var b = NormalizedBounds(ann);
+                var tl = PixelToCanvas(new Point(b.X, b.Y));
+                var rect = new Rectangle
+                {
+                    Width = b.Width * scale,
+                    Height = b.Height * scale,
+                    Stroke = brush,
+                    StrokeThickness = thickness,
+                    Fill = new SolidColorBrush(ann.FillColor),
+                };
+                Canvas.SetLeft(rect, tl.X);
+                Canvas.SetTop(rect, tl.Y);
+                OverlayCanvas.Children.Add(rect);
+                break;
+            }
+            case EditTool.Ellipse:
+            {
+                var b = NormalizedBounds(ann);
+                var tl = PixelToCanvas(new Point(b.X, b.Y));
+                var ellipse = new Ellipse
+                {
+                    Width = b.Width * scale,
+                    Height = b.Height * scale,
+                    Stroke = brush,
+                    StrokeThickness = thickness,
+                    Fill = new SolidColorBrush(ann.FillColor),
+                };
+                Canvas.SetLeft(ellipse, tl.X);
+                Canvas.SetTop(ellipse, tl.Y);
+                OverlayCanvas.Children.Add(ellipse);
+                break;
+            }
+            case EditTool.Line:
+            {
+                var (s, en) = Segment(ann);
+                var start = PixelToCanvas(new Point(s.X, s.Y));
+                var end = PixelToCanvas(new Point(en.X, en.Y));
+                OverlayCanvas.Children.Add(new Line
+                {
+                    X1 = start.X,
+                    Y1 = start.Y,
+                    X2 = end.X,
+                    Y2 = end.Y,
+                    Stroke = brush,
+                    StrokeThickness = thickness,
+                    StrokeStartLineCap = PenLineCap.Round,
+                    StrokeEndLineCap = PenLineCap.Round,
+                });
+                break;
+            }
+            case EditTool.Arrow:
+            {
+                var (s, en) = Segment(ann);
+                var start = PixelToCanvas(new Point(s.X, s.Y));
+                var end = PixelToCanvas(new Point(en.X, en.Y));
+                AddArrowShapes(start, end, brush, thickness, ann.ArrowStyle);
+                break;
+            }
+            case EditTool.Pen:
+            {
+                if (ann.Points.Count > 1)
+                {
+                    var poly = new Polyline
+                    {
+                        Stroke = brush,
+                        StrokeThickness = thickness,
+                        StrokeLineJoin = PenLineJoin.Round,
+                        StrokeStartLineCap = PenLineCap.Round,
+                        StrokeEndLineCap = PenLineCap.Round,
+                    };
+                    foreach (var pt in ann.Points)
+                    {
+                        var c = PixelToCanvas(new Point(pt.X, pt.Y));
+                        poly.Points.Add(c);
+                    }
+                    OverlayCanvas.Children.Add(poly);
+                }
+                break;
+            }
+            case EditTool.Redact:
+            {
+                var b = NormalizedBounds(ann);
+                var tl = PixelToCanvas(new Point(b.X, b.Y));
+                var w = b.Width * scale;
+                var h = b.Height * scale;
+
+                // Committed redactions show a real blurred crop; the in-progress drag shows a
+                // lightweight frosted rectangle (recomputing the blur every move is too costly).
+                if (ann != _activeAnnotation)
+                {
+                    EnsureRedactPreview(ann);
+                }
+
+                if (ann.RedactPreview is not null)
+                {
+                    var img = new Image
+                    {
+                        Source = ann.RedactPreview,
+                        Width = w,
+                        Height = h,
+                        Stretch = Stretch.Fill,
+                    };
+                    Canvas.SetLeft(img, tl.X);
+                    Canvas.SetTop(img, tl.Y);
+                    OverlayCanvas.Children.Add(img);
+                }
+                else
+                {
+                    var rect = new Rectangle
+                    {
+                        Width = w,
+                        Height = h,
+                        Fill = new SolidColorBrush(Color.FromArgb(200, 40, 40, 40)),
+                        RadiusX = 4,
+                        RadiusY = 4,
+                    };
+                    Canvas.SetLeft(rect, tl.X);
+                    Canvas.SetTop(rect, tl.Y);
+                    OverlayCanvas.Children.Add(rect);
+                }
+                break;
+            }
+            case EditTool.Text:
+            {
+                var tl = PixelToCanvas(new Point(ann.Bounds.X, ann.Bounds.Y));
+                var text = new TextBlock
+                {
+                    Text = ann.Text,
+                    Foreground = brush,
+                    FontSize = ann.FontSize * scale,
+                    FontFamily = new FontFamily(ann.FontFamily),
+                    FontWeight = ann.Bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
+                    FontStyle = ann.Italic ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
+                };
+                var decorations = Windows.UI.Text.TextDecorations.None;
+                if (ann.Underline)
+                {
+                    decorations |= Windows.UI.Text.TextDecorations.Underline;
+                }
+                if (ann.Strikethrough)
+                {
+                    decorations |= Windows.UI.Text.TextDecorations.Strikethrough;
+                }
+                text.TextDecorations = decorations;
+                Canvas.SetLeft(text, tl.X);
+                Canvas.SetTop(text, tl.Y);
+                OverlayCanvas.Children.Add(text);
+                break;
+            }
+            case EditTool.Counter:
+            {
+                var b = NormalizedBounds(ann);
+                var tl = PixelToCanvas(new Point(b.X, b.Y));
+                var diameter = b.Width * scale;
+                var grid = new Grid
+                {
+                    Width = diameter,
+                    Height = diameter,
+                };
+                grid.Children.Add(new Ellipse { Fill = brush });
+                grid.Children.Add(new TextBlock
+                {
+                    Text = ann.Number.ToString(),
+                    Foreground = new SolidColorBrush(ann.TextColor),
+                    FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+                    FontSize = diameter * 0.5,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                });
+                Canvas.SetLeft(grid, tl.X);
+                Canvas.SetTop(grid, tl.Y);
+                OverlayCanvas.Children.Add(grid);
+                break;
+            }
+        }
+
+        if (selected)
+        {
+            var b = NormalizedBounds(ann);
+            var tl = PixelToCanvas(new Point(b.X, b.Y));
+            var marquee = new Rectangle
+            {
+                Width = Math.Max(b.Width * scale, 8) + 12,
+                Height = Math.Max(b.Height * scale, 8) + 12,
+                Stroke = new SolidColorBrush(Colors.DeepSkyBlue),
+                StrokeThickness = 1.5,
+                StrokeDashArray = new DoubleCollection { 4, 2 },
+            };
+            Canvas.SetLeft(marquee, tl.X - 6);
+            Canvas.SetTop(marquee, tl.Y - 6);
+            OverlayCanvas.Children.Add(marquee);
+        }
+    }
+
+    private readonly record struct ArrowShape(
+        bool Curved,
+        Vector2 ShaftStart,
+        Vector2 ShaftControl,
+        Vector2 ShaftEnd,
+        Vector2 Tip,
+        Vector2 Head1,
+        Vector2 Head2);
+
+    private static ArrowShape BuildArrow(Vector2 start, Vector2 end, double thickness, ArrowStyle style)
+    {
+        var dir = end - start;
+        var len = dir.Length();
+        var headLen = (float)Math.Max(12, thickness * 3.5);
+        const double spread = Math.PI / 7;
+
+        if (len < 0.001f)
+        {
+            return new ArrowShape(false, start, start, start, end, end, end);
+        }
+
+        if (style == ArrowStyle.Straight)
+        {
+            var u = dir / len;
+            var trim = Math.Min(headLen * 0.9f, len * 0.98f);
+            var shaftEnd = end - u * trim;
+            var angle = Math.Atan2(dir.Y, dir.X);
+            var h1 = new Vector2(
+                (float)(end.X - headLen * Math.Cos(angle - spread)),
+                (float)(end.Y - headLen * Math.Sin(angle - spread)));
+            var h2 = new Vector2(
+                (float)(end.X - headLen * Math.Cos(angle + spread)),
+                (float)(end.Y - headLen * Math.Sin(angle + spread)));
+            return new ArrowShape(false, start, shaftEnd, shaftEnd, end, h1, h2);
+        }
+
+        // Curved: quadratic bezier bowed perpendicular to the start→end line.
+        var mid = (start + end) * 0.5f;
+        var perp = new Vector2(-dir.Y, dir.X) / len;
+        var bow = (float)(len * 0.22);
+        if (style == ArrowStyle.Curved2)
+        {
+            bow = -bow;
+        }
+        var control = mid + perp * bow;
+
+        // Tangent at the tip of a quadratic bezier is proportional to (end - control).
+        var tipTangent = end - control;
+        var tlen = tipTangent.Length();
+        tipTangent = tlen < 0.001f ? dir / len : tipTangent / tlen;
+        var tipAngle = Math.Atan2(tipTangent.Y, tipTangent.X);
+        var ch1 = new Vector2(
+            (float)(end.X - headLen * Math.Cos(tipAngle - spread)),
+            (float)(end.Y - headLen * Math.Sin(tipAngle - spread)));
+        var ch2 = new Vector2(
+            (float)(end.X - headLen * Math.Cos(tipAngle + spread)),
+            (float)(end.Y - headLen * Math.Sin(tipAngle + spread)));
+
+        // de Casteljau split so the shaft stops short of the tip and the cap never pokes through.
+        var trimC = Math.Min(headLen * 0.9f, len * 0.6f);
+        var t = (float)Math.Clamp(1.0 - trimC / len, 0.02, 0.98);
+        var a = Vector2.Lerp(start, control, t);
+        var b = Vector2.Lerp(control, end, t);
+        var bt = Vector2.Lerp(a, b, t);
+        return new ArrowShape(true, start, a, bt, end, ch1, ch2);
+    }
+
+    private void AddArrowShapes(Point start, Point end, Brush brush, double thickness, ArrowStyle arrowStyle)
+    {
+        var shape = BuildArrow(
+            new Vector2((float)start.X, (float)start.Y),
+            new Vector2((float)end.X, (float)end.Y),
+            thickness,
+            arrowStyle);
+
+        if (shape.Curved)
+        {
+            var figure = new PathFigure { StartPoint = new Point(shape.ShaftStart.X, shape.ShaftStart.Y) };
+            figure.Segments.Add(new QuadraticBezierSegment
+            {
+                Point1 = new Point(shape.ShaftControl.X, shape.ShaftControl.Y),
+                Point2 = new Point(shape.ShaftEnd.X, shape.ShaftEnd.Y),
+            });
+            var geo = new PathGeometry();
+            geo.Figures.Add(figure);
+            OverlayCanvas.Children.Add(new Microsoft.UI.Xaml.Shapes.Path
+            {
+                Data = geo,
+                Stroke = brush,
+                StrokeThickness = thickness,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+            });
+        }
+        else
+        {
+            OverlayCanvas.Children.Add(new Line
+            {
+                X1 = shape.ShaftStart.X,
+                Y1 = shape.ShaftStart.Y,
+                X2 = shape.ShaftEnd.X,
+                Y2 = shape.ShaftEnd.Y,
+                Stroke = brush,
+                StrokeThickness = thickness,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+            });
+        }
+
+        var head = new Polygon { Fill = brush };
+        head.Points.Add(new Point(shape.Tip.X, shape.Tip.Y));
+        head.Points.Add(new Point(shape.Head1.X, shape.Head1.Y));
+        head.Points.Add(new Point(shape.Head2.X, shape.Head2.Y));
+        OverlayCanvas.Children.Add(head);
+    }
+
+    // -- Crop -----------------------------------------------------------------
+
+    private void ClearSelection()
+    {
+        SelectionRect.Visibility = Visibility.Collapsed;
+        SelectionRect.Width = 0;
+        SelectionRect.Height = 0;
+        ApplyCropButton.IsEnabled = false;
+    }
+
+    private async void OnApplyCrop(object sender, RoutedEventArgs e)
+    {
+        if (_bitmap is null || SelectionRect.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        var bounds = MapSelectionToPixels();
+        if (bounds is not { } rect || rect.Width < 1 || rect.Height < 1)
+        {
+            return;
+        }
+
+        try
+        {
+            // Bake annotations first so they crop with the image, then crop.
+            // The export background is applied at save time, not during crop.
+            var flattened = await RenderToBitmapAsync(includeBackground: false);
+            var cropped = await CropAsync(flattened, rect);
+            flattened.Dispose();
+            await SetBitmapAsync(cropped);
+            _annotations.Clear();
+            _counterValue = 1;
+            RedrawOverlay();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Crop failed: {ex}");
+        }
+    }
+
+    private BitmapBounds? MapSelectionToPixels()
+    {
+        if (_bitmap is null)
+        {
+            return null;
+        }
+
+        double imgW = _bitmap.PixelWidth;
+        double imgH = _bitmap.PixelHeight;
+        var (scale, offsetX, offsetY) = ImageLayout();
+        if (scale <= 0)
+        {
+            return null;
+        }
+
+        var selLeft = Canvas.GetLeft(SelectionRect);
+        var selTop = Canvas.GetTop(SelectionRect);
+
+        var pxLeft = Math.Clamp((selLeft - offsetX) / scale, 0, imgW);
+        var pxTop = Math.Clamp((selTop - offsetY) / scale, 0, imgH);
+        var pxRight = Math.Clamp((selLeft + SelectionRect.Width - offsetX) / scale, 0, imgW);
+        var pxBottom = Math.Clamp((selTop + SelectionRect.Height - offsetY) / scale, 0, imgH);
+
+        return new BitmapBounds
+        {
+            X = (uint)Math.Round(pxLeft),
+            Y = (uint)Math.Round(pxTop),
+            Width = (uint)Math.Round(pxRight - pxLeft),
+            Height = (uint)Math.Round(pxBottom - pxTop),
+        };
+    }
+
+    private static async Task<SoftwareBitmap> CropAsync(SoftwareBitmap source, BitmapBounds bounds)
+    {
+        using var stream = new InMemoryRandomAccessStream();
+        var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);
+        encoder.SetSoftwareBitmap(source);
+        await encoder.FlushAsync();
+
+        stream.Seek(0);
+        var decoder = await BitmapDecoder.CreateAsync(stream);
+        var transform = new BitmapTransform { Bounds = bounds };
+        return await decoder.GetSoftwareBitmapAsync(
+            BitmapPixelFormat.Bgra8,
+            BitmapAlphaMode.Premultiplied,
+            transform,
+            ExifOrientationMode.IgnoreExifOrientation,
+            ColorManagementMode.DoNotColorManage);
+    }
+
+    private void OnReset(object sender, RoutedEventArgs e) => _ = LoadAsync();
+
+    // -- Win2D baking of annotations -----------------------------------------
+
+    /// <summary>
+    /// Flattens the current bitmap plus all annotations into a new <see cref="SoftwareBitmap"/>
+    /// at full resolution using Win2D. Returns a copy even when there are no annotations.
+    /// </summary>
+    private async Task<SoftwareBitmap> RenderToBitmapAsync(bool includeBackground = true)
+    {
+        if (_bitmap is null)
+        {
+            throw new InvalidOperationException("No bitmap loaded.");
+        }
+
+        await Task.CompletedTask;
+        var device = CanvasDevice.GetSharedDevice();
+        using var source = CanvasBitmap.CreateFromSoftwareBitmap(device, _bitmap);
+        var imgW = (float)_bitmap.PixelWidth;
+        var imgH = (float)_bitmap.PixelHeight;
+
+        var hasBackground = _bgStyle != ExportBackgroundStyle.Transparent
+            || _canvasPadding > 0
+            || _canvasCornerRadius > 0
+            || _canvasShadow > 0;
+
+        // Simple path: no background/padding/corners/shadow, or caller opted out (crop pre-bake).
+        if (!includeBackground || !hasBackground)
+        {
+            using var flatTarget = new CanvasRenderTarget(device, imgW, imgH, 96);
+            using (var ds = flatTarget.CreateDrawingSession())
+            {
+                ds.Clear(Colors.Transparent);
+                ds.DrawImage(source);
+                foreach (var ann in _annotations.Where(a => a.Tool == EditTool.Redact))
+                {
+                    DrawRedaction(ds, source, ann);
+                }
+                foreach (var ann in _annotations.Where(a => a.Tool != EditTool.Redact))
+                {
+                    DrawAnnotationToSession(ds, ann);
+                }
+            }
+
+            return SoftwareBitmap.CreateCopyFromBuffer(
+                flatTarget.GetPixelBytes().AsBuffer(),
+                BitmapPixelFormat.Bgra8,
+                (int)imgW,
+                (int)imgH,
+                BitmapAlphaMode.Premultiplied);
+        }
+
+        // Composited path: padded background frame, rounded screenshot card, optional shadow.
+        var pad = (float)Math.Round(_canvasPadding);
+        var corner = (float)_canvasCornerRadius;
+        var outW = imgW + pad * 2;
+        var outH = imgH + pad * 2;
+
+        using var target = new CanvasRenderTarget(device, outW, outH, 96);
+        using (var ds = target.CreateDrawingSession())
+        {
+            ds.Clear(Colors.Transparent);
+
+            var fullRect = new Rect(0, 0, outW, outH);
+            if (_bgStyle == ExportBackgroundStyle.Solid)
+            {
+                ds.FillRectangle(fullRect, _bgColor);
+            }
+            else if (_bgStyle == ExportBackgroundStyle.Gradient)
+            {
+                using var brush = new CanvasLinearGradientBrush(device, _bgColor, _bgColor2)
+                {
+                    StartPoint = new Vector2(0, 0),
+                    EndPoint = new Vector2(outW, outH),
+                };
+                ds.FillRectangle(fullRect, brush);
+            }
+
+            using var cardGeo = CanvasGeometry.CreateRoundedRectangle(device, pad, pad, imgW, imgH, corner, corner);
+
+            if (_canvasShadow > 0)
+            {
+                using var shadowList = new CanvasCommandList(device);
+                using (var sds = shadowList.CreateDrawingSession())
+                {
+                    sds.FillGeometry(cardGeo, Colors.Black);
+                }
+
+                using var shadow = new ShadowEffect
+                {
+                    Source = shadowList,
+                    BlurAmount = (float)_canvasShadow,
+                    ShadowColor = Color.FromArgb(120, 0, 0, 0),
+                };
+                ds.DrawImage(shadow, new Vector2(0, (float)(_canvasShadow * 0.35)));
+            }
+
+            using (ds.CreateLayer(1f, cardGeo))
+            {
+                ds.Transform = Matrix3x2.CreateTranslation(pad, pad);
+                ds.DrawImage(source);
+                foreach (var ann in _annotations.Where(a => a.Tool == EditTool.Redact))
+                {
+                    DrawRedaction(ds, source, ann);
+                }
+                foreach (var ann in _annotations.Where(a => a.Tool != EditTool.Redact))
+                {
+                    DrawAnnotationToSession(ds, ann);
+                }
+                ds.Transform = Matrix3x2.Identity;
+            }
+        }
+
+        return SoftwareBitmap.CreateCopyFromBuffer(
+            target.GetPixelBytes().AsBuffer(),
+            BitmapPixelFormat.Bgra8,
+            (int)outW,
+            (int)outH,
+            BitmapAlphaMode.Premultiplied);
+    }
+
+    private static float BlurAmountFor(RedactionLevel level) => level switch
+    {
+        RedactionLevel.Light => 6f,
+        RedactionLevel.Medium => 12f,
+        RedactionLevel.Heavy => 22f,
+        _ => 12f,
+    };
+
+    private static int PixelSizeFor(RedactionLevel level) => level switch
+    {
+        RedactionLevel.Light => 8,
+        RedactionLevel.Medium => 16,
+        RedactionLevel.Heavy => 28,
+        _ => 16,
+    };
+
+    private void EnsureRedactPreview(Annotation ann)
+    {
+        if (_canvasSource is null)
+        {
+            return;
+        }
+
+        var b = NormalizedBounds(ann);
+        if (b.Width < 1 || b.Height < 1)
+        {
+            ann.RedactPreview = null;
+            return;
+        }
+
+        // Reuse the cached preview when nothing relevant changed.
+        if (ann.RedactPreview is not null
+            && ann.RedactPreviewLevel == ann.Redaction
+            && ann.RedactPreviewStyle == ann.RedactStyle
+            && SameRect(ann.RedactPreviewBounds, b))
+        {
+            return;
+        }
+
+        try
+        {
+            var device = CanvasDevice.GetSharedDevice();
+            var w = (int)Math.Round(b.Width);
+            var h = (int)Math.Round(b.Height);
+            if (w < 1 || h < 1)
+            {
+                return;
+            }
+
+            var srcRect = new Rect(b.X, b.Y, w, h);
+            using var rt = new CanvasRenderTarget(device, w, h, 96);
+            using (var ds = rt.CreateDrawingSession())
+            {
+                ds.Clear(Colors.Transparent);
+                using var effect = BuildRedactEffect(_canvasSource, srcRect, ann.Redaction, ann.RedactStyle);
+                ds.DrawImage(effect, new Rect(0, 0, w, h), srcRect);
+            }
+
+            var sb = SoftwareBitmap.CreateCopyFromBuffer(
+                rt.GetPixelBytes().AsBuffer(),
+                BitmapPixelFormat.Bgra8,
+                w,
+                h,
+                BitmapAlphaMode.Premultiplied);
+
+            var preview = new SoftwareBitmapSource();
+            ann.RedactPreview = preview;
+            ann.RedactPreviewBounds = b;
+            ann.RedactPreviewLevel = ann.Redaction;
+            ann.RedactPreviewStyle = ann.RedactStyle;
+            _ = preview.SetBitmapAsync(sb).AsTask().ContinueWith(
+                _ => DispatcherQueue.TryEnqueue(RedrawOverlayDefault),
+                System.Threading.Tasks.TaskScheduler.Default);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Redact preview failed: {ex}");
+        }
+    }
+
+    private void RedrawOverlayDefault() => RedrawOverlay();
+
+    private static bool SameRect(Rect a, Rect b) =>
+        Math.Abs(a.X - b.X) < 0.5 && Math.Abs(a.Y - b.Y) < 0.5
+        && Math.Abs(a.Width - b.Width) < 0.5 && Math.Abs(a.Height - b.Height) < 0.5;
+
+    private static ICanvasImage BuildRedactEffect(CanvasBitmap source, Rect region, RedactionLevel level, RedactionStyle style)
+    {
+        if (style == RedactionStyle.Solid)
+        {
+            return new ColorSourceEffect { Color = Colors.Black };
+        }
+
+        var crop = new CropEffect { Source = source, SourceRectangle = region };
+        // Clamp the edges so the effect doesn't pull transparency in from outside the crop.
+        var border = new BorderEffect
+        {
+            Source = crop,
+            ExtendX = CanvasEdgeBehavior.Clamp,
+            ExtendY = CanvasEdgeBehavior.Clamp,
+        };
+
+        if (style == RedactionStyle.Pixelate)
+        {
+            // Win2D has no pixelate effect: downscale (linear) then upscale (nearest-neighbor)
+            // about the region center so the geometry is unchanged but the detail is quantized
+            // into blocks.
+            float size = PixelSizeFor(level);
+            var center = new Vector2(
+                (float)(region.X + region.Width / 2),
+                (float)(region.Y + region.Height / 2));
+            var down = new ScaleEffect
+            {
+                Source = border,
+                Scale = new Vector2(1f / size, 1f / size),
+                CenterPoint = center,
+                InterpolationMode = CanvasImageInterpolation.Linear,
+            };
+            return new ScaleEffect
+            {
+                Source = down,
+                Scale = new Vector2(size, size),
+                CenterPoint = center,
+                InterpolationMode = CanvasImageInterpolation.NearestNeighbor,
+            };
+        }
+
+        return new GaussianBlurEffect
+        {
+            Source = border,
+            BlurAmount = BlurAmountFor(level),
+            BorderMode = EffectBorderMode.Hard,
+        };
+    }
+
+    private static void DrawRedaction(CanvasDrawingSession ds, CanvasBitmap source, Annotation ann)
+    {
+        var b = NormalizedBounds(ann);
+        if (b.Width < 1 || b.Height < 1)
+        {
+            return;
+        }
+
+        var rect = new Rect(b.X, b.Y, b.Width, b.Height);
+        using var effect = BuildRedactEffect(source, rect, ann.Redaction, ann.RedactStyle);
+        ds.DrawImage(effect, rect, rect);
+    }
+
+    private void DrawAnnotationToSession(CanvasDrawingSession ds, Annotation ann)
+    {
+        var color = ann.Color;
+        var thickness = (float)ann.Thickness;
+
+        switch (ann.Tool)
+        {
+            case EditTool.Rectangle:
+            {
+                var b = NormalizedBounds(ann);
+                if (ann.FillColor.A > 0)
+                {
+                    ds.FillRectangle((float)b.X, (float)b.Y, (float)b.Width, (float)b.Height, ann.FillColor);
+                }
+                ds.DrawRectangle((float)b.X, (float)b.Y, (float)b.Width, (float)b.Height, color, thickness);
+                break;
+            }
+            case EditTool.Ellipse:
+            {
+                var b = NormalizedBounds(ann);
+                if (ann.FillColor.A > 0)
+                {
+                    ds.FillEllipse(
+                        (float)(b.X + b.Width / 2),
+                        (float)(b.Y + b.Height / 2),
+                        (float)(b.Width / 2),
+                        (float)(b.Height / 2),
+                        ann.FillColor);
+                }
+                ds.DrawEllipse(
+                    (float)(b.X + b.Width / 2),
+                    (float)(b.Y + b.Height / 2),
+                    (float)(b.Width / 2),
+                    (float)(b.Height / 2),
+                    color,
+                    thickness);
+                break;
+            }
+            case EditTool.Line:
+            {
+                var (s, en) = Segment(ann);
+                ds.DrawLine(
+                    s,
+                    en,
+                    color,
+                    thickness,
+                    new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round });
+                break;
+            }
+            case EditTool.Arrow:
+            {
+                DrawArrowToSession(ds, ann, color, thickness);
+                break;
+            }
+            case EditTool.Pen:
+            {
+                if (ann.Points.Count > 1)
+                {
+                    var style = new CanvasStrokeStyle
+                    {
+                        StartCap = CanvasCapStyle.Round,
+                        EndCap = CanvasCapStyle.Round,
+                        LineJoin = CanvasLineJoin.Round,
+                    };
+                    for (var i = 1; i < ann.Points.Count; i++)
+                    {
+                        ds.DrawLine(ann.Points[i - 1], ann.Points[i], color, thickness, style);
+                    }
+                }
+                break;
+            }
+            case EditTool.Text:
+            {
+                var fontSize = (float)ann.FontSize;
+                using var format = new CanvasTextFormat
+                {
+                    FontSize = fontSize,
+                    FontFamily = ann.FontFamily,
+                    FontWeight = ann.Bold ? Microsoft.UI.Text.FontWeights.Bold : Microsoft.UI.Text.FontWeights.Normal,
+                    FontStyle = ann.Italic ? Windows.UI.Text.FontStyle.Italic : Windows.UI.Text.FontStyle.Normal,
+                    WordWrapping = CanvasWordWrapping.NoWrap,
+                };
+                using var layout = new CanvasTextLayout(ds, ann.Text, format, 0, 0);
+                if (ann.Underline)
+                {
+                    layout.SetUnderline(0, ann.Text.Length, true);
+                }
+                if (ann.Strikethrough)
+                {
+                    layout.SetStrikethrough(0, ann.Text.Length, true);
+                }
+                ds.DrawTextLayout(layout, new Vector2((float)ann.Bounds.X, (float)ann.Bounds.Y), color);
+                break;
+            }
+            case EditTool.Counter:
+            {
+                var b = NormalizedBounds(ann);
+                var cx = (float)(b.X + b.Width / 2);
+                var cy = (float)(b.Y + b.Height / 2);
+                var radius = (float)(b.Width / 2);
+                ds.FillCircle(cx, cy, radius, color);
+                var fontSize = radius;
+                using var format = new CanvasTextFormat
+                {
+                    FontSize = fontSize,
+                    FontWeight = Microsoft.UI.Text.FontWeights.Bold,
+                    HorizontalAlignment = CanvasHorizontalAlignment.Center,
+                    VerticalAlignment = CanvasVerticalAlignment.Center,
+                };
+                ds.DrawText(ann.Number.ToString(), new Rect(b.X, b.Y, b.Width, b.Height), ann.TextColor, format);
+                break;
+            }
+        }
+    }
+
+    private static void DrawArrowToSession(CanvasDrawingSession ds, Annotation ann, Color color, float thickness)
+    {
+        var (start, end) = Segment(ann);
+        var shape = BuildArrow(start, end, thickness, ann.ArrowStyle);
+        var strokeStyle = new CanvasStrokeStyle { StartCap = CanvasCapStyle.Round, EndCap = CanvasCapStyle.Round };
+
+        if (shape.Curved)
+        {
+            using var pb = new CanvasPathBuilder(ds.Device);
+            pb.BeginFigure(shape.ShaftStart);
+            pb.AddQuadraticBezier(shape.ShaftControl, shape.ShaftEnd);
+            pb.EndFigure(CanvasFigureLoop.Open);
+            using var geo = CanvasGeometry.CreatePath(pb);
+            ds.DrawGeometry(geo, color, thickness, strokeStyle);
+        }
+        else
+        {
+            ds.DrawLine(shape.ShaftStart, shape.ShaftEnd, color, thickness, strokeStyle);
+        }
+
+        using var head = CanvasGeometry.CreatePolygon(ds.Device, new[] { shape.Tip, shape.Head1, shape.Head2 });
+        ds.FillGeometry(head, color);
+    }
+
+    // -- Output ---------------------------------------------------------------
+
+    private async void OnSave(object sender, RoutedEventArgs e)
+    {
+        if (_bitmap is null)
+        {
+            return;
+        }
+
+        await EncodeToFileAsync(_filePath);
+        Close();
+    }
+
+    private async void OnSaveCopy(object sender, RoutedEventArgs e)
+    {
+        if (_bitmap is null)
+        {
+            return;
+        }
+
+        var picker = new FileSavePicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
+        picker.FileTypeChoices.Add("PNG image", new[] { ".png" });
+        picker.FileTypeChoices.Add("JPEG image", new[] { ".jpg" });
+        picker.SuggestedFileName = System.IO.Path.GetFileNameWithoutExtension(_filePath) + " (edited)";
+
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+
+        var file = await picker.PickSaveFileAsync();
+        if (file is not null)
+        {
+            await EncodeToFileAsync(file.Path);
+        }
+    }
+
+    private async void OnCopy(object sender, RoutedEventArgs e)
+    {
+        if (_bitmap is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var flattened = await RenderToBitmapAsync();
+            using var stream = new InMemoryRandomAccessStream();
+            var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);
+            encoder.SetSoftwareBitmap(flattened);
+            await encoder.FlushAsync();
+
+            var package = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
+            package.SetBitmap(RandomAccessStreamReference.CreateFromStream(stream));
+            Clipboard.SetContent(package);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Copy failed: {ex}");
+        }
+    }
+
+    private async Task EncodeToFileAsync(string path)
+    {
+        if (_bitmap is null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var flattened = await RenderToBitmapAsync();
+            var isPng = path.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
+            var encoderId = isPng ? BitmapEncoder.PngEncoderId : BitmapEncoder.JpegEncoderId;
+
+            var folder = await StorageFolder.GetFolderFromPathAsync(System.IO.Path.GetDirectoryName(path)!);
+            var file = await folder.CreateFileAsync(System.IO.Path.GetFileName(path), CreationCollisionOption.ReplaceExisting);
+            using var stream = await file.OpenAsync(FileAccessMode.ReadWrite);
+            var encoder = await BitmapEncoder.CreateAsync(encoderId, stream);
+
+            SoftwareBitmap toEncode = flattened;
+            SoftwareBitmap? converted = null;
+            if (!isPng && flattened.BitmapAlphaMode != BitmapAlphaMode.Ignore)
+            {
+                converted = SoftwareBitmap.Convert(flattened, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore);
+                toEncode = converted;
+            }
+
+            encoder.SetSoftwareBitmap(toEncode);
+            await encoder.FlushAsync();
+            converted?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Save failed: {ex}");
+        }
+    }
+}

@@ -67,7 +67,7 @@ jobs:
       - name: Resolve Swift packages
         run: |
           xcodebuild -resolvePackageDependencies \
-            -project ${{ env.SCHEME }}.xcodeproj \
+            -project mac/${{ env.SCHEME }}.xcodeproj \
             -scheme ${{ env.SCHEME }}
 
       - name: Set Version Numbers
@@ -84,8 +84,8 @@ jobs:
           echo "Setting MARKETING_VERSION to: $VERSION"
           echo "Setting CURRENT_PROJECT_VERSION to: $BUILD_NUMBER"
 
-          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" TinyClips/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" TinyClips/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" mac/TinyClips/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" mac/TinyClips/Info.plist
 
           echo "MARKETING_VERSION=$VERSION" >> $GITHUB_ENV
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
@@ -96,7 +96,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           xcodebuild archive \
-            -project ${{ env.SCHEME }}.xcodeproj \
+            -project mac/${{ env.SCHEME }}.xcodeproj \
             -scheme ${{ env.SCHEME }} \
             -configuration Release \
             -archivePath $RUNNER_TEMP/${{ env.PRODUCT_NAME }}.xcarchive \
@@ -202,7 +202,7 @@ jobs:
 
           $RUNNER_TEMP/Sparkle/bin/generate_appcast \
             --ed-key-file $RUNNER_TEMP/sparkle_private_key \
-            --download-url-prefix "https://github.com/jamesmontemagno/tiny-clips-mac/releases/download/${{ env.RELEASE_TAG }}/" \
+            --download-url-prefix "https://github.com/jamesmontemagno/tiny-clips/releases/download/${{ env.RELEASE_TAG }}/" \
             $RUNNER_TEMP/release-files
 
           mv $RUNNER_TEMP/release-files/appcast.xml $RUNNER_TEMP/appcast.xml
